@@ -1,0 +1,43 @@
+# Environnement
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node
+node_modules/
+*/node_modules/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build
+dist/
+coverage/
+.vite/
+
+# Stockage (données utilisateurs)
+storage/
+backend/storage/
+temp_zips/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+
+# md
+*.md

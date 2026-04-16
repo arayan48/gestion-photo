@@ -1,0 +1,39 @@
+import { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './stores/auth.store.js'
+import Setup from './pages/Setup.jsx'
+import Login from './pages/Login.jsx'
+import Register from './pages/Register.jsx'
+import Explorer from './pages/Explorer.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import Profile from './pages/Profile.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
+import ProtectedRoute from './components/shared/ProtectedRoute.jsx'
+import Layout from './components/shared/Layout.jsx'
+
+export default function App() {
+  const { user, accessToken } = useAuthStore()
+
+  return (
+    <Routes>
+      <Route path="/setup" element={<Setup />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Navigate to="/explorer" replace />} />
+          <Route path="/explorer" element={<Explorer />} />
+          <Route path="/explorer/:folderId" element={<Explorer />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
