@@ -25,6 +25,17 @@ git clone https://github.com/wubal/wubalstore
 cd wubalstore
 cp .env.example .env
 # Éditer .env avec vos valeurs
+```
+
+Générer des secrets JWT sécurisés :
+
+```bash
+openssl rand -base64 64
+```
+
+Lancer la commande deux fois et copier les valeurs dans `.env` pour `JWT_ACCESS_SECRET` et `JWT_REFRESH_SECRET`.
+
+```bash
 docker-compose up -d
 ```
 

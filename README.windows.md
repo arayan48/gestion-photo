@@ -63,6 +63,18 @@ JWT_REFRESH_SECRET=une_autre_chaine_aleatoire_longue
 APP_URL=http://localhost
 ```
 
+Générer des secrets JWT sécurisés (Git Bash ou PowerShell avec OpenSSL) :
+
+```powershell
+openssl rand -base64 64
+```
+
+Lancer la commande deux fois et copier les valeurs dans `.env`. Alternative si OpenSSL n'est pas disponible :
+
+```powershell
+[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
 Démarrer les conteneurs :
 
 ```powershell
