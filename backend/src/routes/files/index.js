@@ -322,6 +322,34 @@ export default async function fileRoutes(fastify) {
     return reply.send({ message: 'Fichier déplacé dans la corbeille.' })
   })
 
+  // ─── Suppression permanente ───────────────────────────────────────────────
+  fastify.delete('/:id/permanent', { preHandler: [authenticate] }, async (request, reply) => {
+    const { id } = request.params
+    const user = request.currentUser
+
+    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = true', [id])
+    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable dans la corbeille' })
+
+    const file = rows[0]
+    if (file.owner_id !== user.id && !user.is_super_admin) {
+      return reply.code(403).send({ error: 'Permission refusée' })
+    }
+
+    const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
+    const { deleteFile } = await import('../../services/storage.service.js')
+    await deleteFile(file.stored_name, subdir)
+    if (file.thumbnail_path) {
+      const thumbName = file.thumbnail_path.split('/').pop()
+      await deleteFile(thumbName, 'thumbnails')
+    }
+
+    await pool.query('DELETE FROM files WHERE id = $1', [id])
+    await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [file.size, file.owner_id])
+    await log({ category: 'files', level: 'warning', action: 'file_permanently_deleted', userId: user.id, metadata: { fileId: id, name: file.original_name } })
+
+    return reply.send({ message: 'Fichier supprimé définitivement.' })
+  })
+
   // ─── Toggle lien ──────────────────────────────────────────────────────────
   fastify.post('/:id/toggle-link', {
     preHandler: [authenticate, requirePermission('files.toggle_link')],

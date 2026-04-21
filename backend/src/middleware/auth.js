@@ -51,10 +51,9 @@ export function requirePermission(permissionKey) {
   }
 }
 
-export function requireSuperAdmin(request, reply, done) {
+export async function requireSuperAdmin(request, reply) {
   const user = request.currentUser
   if (!user?.is_super_admin) {
     return reply.code(403).send({ error: 'Accès réservé au Super Admin' })
   }
-  done()
 }

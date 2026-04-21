@@ -306,6 +306,18 @@ const migrations = [
       );
     `,
   },
+  {
+    name: '021_create_password_reset_tokens',
+    sql: `
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        token_hash VARCHAR(255) PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_reset_tokens_email ON password_reset_tokens(email);
+    `,
+  },
 ]
 
 async function runMigrations() {

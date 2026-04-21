@@ -43,7 +43,7 @@ export async function processImage(inputBuffer, qualityPreset) {
   let pipeline = sharp(inputBuffer)
 
   if (qualityPreset === 'standard') {
-    pipeline = pipeline.jpeg({ quality: 85 }).webp({ quality: 85 })
+    pipeline = pipeline.jpeg({ quality: 85 })
   } else if (qualityPreset === 'thumbnail') {
     pipeline = pipeline.resize(300, 300, { fit: 'inside' }).jpeg({ quality: 70 })
   }
@@ -77,7 +77,7 @@ export function getVideoMetadata(filePath) {
         width: videoStream?.width || null,
         height: videoStream?.height || null,
         fps: videoStream?.r_frame_rate
-          ? eval(videoStream.r_frame_rate)
+          ? videoStream.r_frame_rate.split('/').reduce((a, b) => parseFloat(a) / parseFloat(b))
           : null,
         codec: videoStream?.codec_name || null,
         format: metadata.format.format_name || null,

@@ -78,21 +78,27 @@ export async function revokeAllUserTokens(userId) {
   )
 }
 
-// Mot de passe oublié
-const resetTokens = new Map() // En prod, stocker en DB ou Redis
-
+// Mot de passe oublié — stocké en base
 export async function generatePasswordResetToken(email) {
   const token = nanoid(48)
-  const expiresAt = Date.now() + 30 * 60 * 1000 // 30 minutes
-  resetTokens.set(token, { email, expiresAt })
+  const tokenHash = hashToken(token)
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
+
+  await pool.query('DELETE FROM password_reset_tokens WHERE email = $1', [email])
+  await pool.query(
+    'INSERT INTO password_reset_tokens (token_hash, email, expires_at) VALUES ($1, $2, $3)',
+    [tokenHash, email, expiresAt]
+  )
   return token
 }
 
 export async function verifyPasswordResetToken(token) {
-  const entry = resetTokens.get(token)
-  if (!entry || entry.expiresAt < Date.now()) return null
-  resetTokens.delete(token)
-  return entry.email
+  const tokenHash = hashToken(token)
+  const { rows } = await pool.query(
+    'DELETE FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW() RETURNING email',
+    [tokenHash]
+  )
+  return rows[0]?.email || null
 }
 
 // TOTP

@@ -33,7 +33,7 @@ export function broadcast(payload) {
 
 export function registerWebsocketRoutes(fastify) {
   fastify.get('/ws', { websocket: true }, (socket, request) => {
-    const userId = request.user?.id
+    const userId = request.currentUser?.id
     if (!userId) {
       socket.close(4001, 'Non authentifié')
       return

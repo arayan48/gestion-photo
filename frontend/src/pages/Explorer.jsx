@@ -87,6 +87,23 @@ export default function Explorer() {
         await api.post(`/files/${file.id}/restore`)
         queryClient.invalidateQueries({ queryKey })
         break
+      case 'delete-permanent':
+        if (confirm(`Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`)) {
+          await api.delete(`/files/${file.id}/permanent`)
+          queryClient.invalidateQueries({ queryKey })
+        }
+        break
+      case 'rename': {
+        const newName = prompt('Nouveau nom :', file.original_name)
+        if (newName && newName !== file.original_name) {
+          await api.patch(`/files/${file.id}`, { name: newName })
+          queryClient.invalidateQueries({ queryKey })
+        }
+        break
+      }
+      case 'info':
+        setSelectedFile(file)
+        break
       case 'download':
         window.open(`/api/files/${file.id}/download`, '_blank')
         break
