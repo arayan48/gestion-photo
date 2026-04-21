@@ -22,7 +22,7 @@ export default function FileViewer({ file, onClose, onAction }) {
 
         {isImage && (
           <img
-            src={`/storage/images/${file.stored_name}`}
+            src={mediaUrl}
             alt={file.original_name}
             className="max-w-full max-h-full object-contain rounded-lg"
           />
@@ -35,7 +35,7 @@ export default function FileViewer({ file, onClose, onAction }) {
             poster={file.thumbnail_path}
             autoPlay={false}
           >
-            <source src={`/storage/videos/${file.stored_name}`} type={file.mime_type} />
+            <source src={mediaUrl} type={file.mime_type} />
             Votre navigateur ne supporte pas la lecture vidéo.
           </video>
         )}
