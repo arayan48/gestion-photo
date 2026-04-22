@@ -1,6 +1,4 @@
-import { Folder, FileImage, FileVideo, File, Link2, Unlink, Heart } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { Folder, FileImage, FileVideo, File, Unlink, Heart } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 function formatSize(bytes) {
@@ -12,10 +10,10 @@ function formatSize(bytes) {
 function FileIcon({ mime }) {
   if (mime?.startsWith('image/')) return <FileImage size={20} className="text-blue-400" />
   if (mime?.startsWith('video/')) return <FileVideo size={20} className="text-purple-400" />
-  return <File size={20} className="text-gray-400" />
+  return <File size={20} className="text-slate-400" />
 }
 
-export default function FileGrid({ files, folders, onFileClick, onContextMenu, isTrash }) {
+export default function FileGrid({ files, folders, onFileClick, onContextMenu, isTrash, selectedFiles = [], onToggleSelect }) {
   const navigate = useNavigate()
 
   return (
@@ -24,57 +22,81 @@ export default function FileGrid({ files, folders, onFileClick, onContextMenu, i
       {folders.map((folder) => (
         <div
           key={folder.id}
-          className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg p-3 cursor-pointer transition-colors group"
+          className="bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 border border-slate-200 dark:border-gray-800 rounded-xl p-3 cursor-pointer transition-colors"
           onDoubleClick={() => navigate(`/explorer/${folder.id}`)}
           onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
         >
           <div className="flex items-center justify-center h-16 mb-2">
             <Folder size={36} className="text-yellow-500/80" />
           </div>
-          <p className="text-xs text-gray-300 truncate text-center font-medium">{folder.name}</p>
+          <p className="text-xs text-slate-700 dark:text-gray-300 truncate text-center font-medium">{folder.name}</p>
         </div>
       ))}
 
       {/* Fichiers */}
-      {files.map((file) => (
-        <div
-          key={file.id}
-          className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg overflow-hidden cursor-pointer transition-colors group relative"
-          onClick={() => onFileClick(file)}
-          onContextMenu={(e) => onContextMenu(e, file)}
-        >
-          {/* Thumbnail ou icône */}
-          <div className="h-28 bg-gray-800 flex items-center justify-center overflow-hidden relative">
-            {file.thumbnail_path ? (
-              <img
-                src={file.thumbnail_path}
-                alt={file.original_name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <FileIcon mime={file.mime_type} />
+      {files.map((file) => {
+        const isSelected = selectedFiles.includes(file.id)
+        return (
+          <div
+            key={file.id}
+            className={`relative rounded-xl overflow-hidden cursor-pointer transition-all group border ${
+              isSelected
+                ? 'ring-2 ring-violet-500 border-violet-400 dark:border-violet-500 bg-violet-50/50 dark:bg-violet-900/10'
+                : 'bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700'
+            }`}
+            onClick={() => onFileClick(file)}
+            onContextMenu={(e) => onContextMenu(e, file)}
+          >
+            {/* Checkbox multi-select */}
+            {onToggleSelect && (
+              <div
+                className={`absolute top-2 left-2 z-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(file.id) }}
+              >
+                <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
+                  isSelected
+                    ? 'bg-violet-600 border-violet-600'
+                    : 'bg-white/90 dark:bg-gray-900/90 border-slate-300 dark:border-gray-600'
+                }`}>
+                  {isSelected && (
+                    <svg viewBox="0 0 12 12" className="w-3 h-3 text-white fill-current">
+                      <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                  )}
+                </div>
+              </div>
             )}
 
-            {/* Badges */}
-            <div className="absolute top-1 right-1 flex gap-1">
-              {file.is_favorite && <Heart size={12} className="text-pink-400 fill-pink-400" />}
-              {file.link_active === false && <Unlink size={12} className="text-red-400" />}
-            </div>
-          </div>
+            {/* Thumbnail ou icône */}
+            <div className="h-28 bg-slate-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+              {file.thumbnail_path ? (
+                <img
+                  src={file.thumbnail_path}
+                  alt={file.original_name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <FileIcon mime={file.mime_type} />
+              )}
 
-          <div className="p-2">
-            <p className="text-xs text-gray-300 truncate font-medium">{file.original_name}</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-gray-500">{formatSize(file.size)}</span>
-              <FileIcon mime={file.mime_type} />
+              {/* Badges */}
+              <div className="absolute top-1 right-1 flex gap-1">
+                {file.is_favorite && <Heart size={12} className="text-pink-400 fill-pink-400" />}
+                {file.link_active === false && <Unlink size={12} className="text-red-400" />}
+              </div>
+            </div>
+
+            <div className="p-2">
+              <p className="text-xs text-slate-700 dark:text-gray-300 truncate font-medium">{file.original_name}</p>
+              <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">{formatSize(file.size)}</p>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       {files.length === 0 && folders.length === 0 && (
-        <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500">
+        <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400 dark:text-gray-500">
           <FileImage size={40} className="mb-3 opacity-30" />
           <p className="text-sm">Aucun fichier ici</p>
         </div>

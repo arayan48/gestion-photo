@@ -1,6 +1,6 @@
 import { join, extname } from 'path'
-import { readFile, unlink } from 'fs/promises'
-import { createReadStream } from 'fs'
+import { readFile, unlink, mkdir } from 'fs/promises'
+import { createReadStream, createWriteStream } from 'fs'
 import { nanoid } from 'nanoid'
 import pool from '../../config/database.js'
 import { authenticate } from '../../middleware/auth.js'
@@ -446,6 +446,60 @@ export default async function fileRoutes(fastify) {
   fastify.get('/folders/:id/breadcrumb', { preHandler: [authenticate] }, async (request, reply) => {
     const chain = await getFolderBreadcrumb(request.params.id)
     return reply.send(chain)
+  })
+
+  // ─── Téléchargement ZIP de plusieurs fichiers ─────────────────────────────
+  fastify.post('/zip', { preHandler: [authenticate] }, async (request, reply) => {
+    const { fileIds } = request.body
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      return reply.code(400).send({ error: 'Liste de fichiers requise' })
+    }
+
+    const user = request.currentUser
+    const { rows: files } = await pool.query(
+      `SELECT * FROM files WHERE id = ANY($1) AND is_deleted = false AND owner_id = $2`,
+      [fileIds, user.id]
+    )
+    if (!files.length) return reply.code(404).send({ error: 'Aucun fichier trouvé' })
+
+    const zipDir = join(config.storage.path, 'zips')
+    await mkdir(zipDir, { recursive: true })
+    const zipName = `archive_${nanoid(12)}.zip`
+    const zipPath = join(zipDir, zipName)
+
+    let archiverLib
+    try {
+      archiverLib = (await import('archiver')).default
+    } catch {
+      return reply.code(501).send({ error: 'Fonctionnalité ZIP non disponible. Redémarrez le serveur après mise à jour.' })
+    }
+
+    await new Promise((resolve, reject) => {
+      const output = createWriteStream(zipPath)
+      const archive = archiverLib('zip', { zlib: { level: 6 } })
+
+      output.on('close', resolve)
+      archive.on('error', reject)
+      archive.pipe(output)
+
+      for (const file of files) {
+        const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
+        const filePath = getFilePath(subdir, file.stored_name)
+        archive.file(filePath, { name: file.original_name })
+      }
+
+      archive.finalize()
+    })
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+    await pool.query(
+      'INSERT INTO temp_zips (path, user_id, expires_at) VALUES ($1, $2, $3)',
+      [zipPath, user.id, expiresAt]
+    )
+
+    reply.header('Content-Disposition', `attachment; filename="archive.zip"`)
+    reply.header('Content-Type', 'application/zip')
+    return reply.send(createReadStream(zipPath))
   })
 
   // ─── Tags ──────────────────────────────────────────────────────────────────

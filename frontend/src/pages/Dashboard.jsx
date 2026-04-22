@@ -3,9 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
 import {
   Users, HardDrive, FileImage, AlertTriangle, Shield, Plus, Trash2,
-  UserCheck, UserX, ChevronUp, ChevronDown, Search, Filter,
-  CheckSquare, Square, MoreHorizontal, Activity, Info, AlertCircle,
-  XCircle, Clock,
+  UserCheck, UserX, Search, Activity, Info, AlertCircle,
+  XCircle, Key, Save, X, Edit2, Database, Download, RefreshCw, Lock,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -70,6 +69,190 @@ const LOG_LEVELS = {
   info:    { icon: Info,         color: 'text-blue-500',  bg: '',                                  badge: 'gray',   label: 'Info' },
 }
 
+const LOG_CATEGORIES = ['auth', 'files', 'users', 'security', 'system']
+
+// ── Permission matrix categories ─────────────────────────────────────────────
+const PERM_CATEGORY_ORDER = ['Fichiers & Médias', 'Utilisateurs', 'Sécurité', 'Système']
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800 shrink-0">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-gray-100">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Role modal ────────────────────────────────────────────────────────────────
+function RoleModal({ role, allPermissions, onClose, onSave }) {
+  const [name, setName] = useState(role?.name || '')
+  const [selected, setSelected] = useState(new Set(role?.permissions?.map((p) => p.key) || []))
+
+  const grouped = useMemo(() => {
+    const map = {}
+    for (const p of allPermissions) {
+      if (!map[p.category]) map[p.category] = []
+      map[p.category].push(p)
+    }
+    return map
+  }, [allPermissions])
+
+  const togglePerm = (key) => {
+    const next = new Set(selected)
+    next.has(key) ? next.delete(key) : next.add(key)
+    setSelected(next)
+  }
+
+  const toggleCategory = (cat) => {
+    const keys = grouped[cat]?.map((p) => p.key) || []
+    const allSelected = keys.every((k) => selected.has(k))
+    const next = new Set(selected)
+    if (allSelected) keys.forEach((k) => next.delete(k))
+    else keys.forEach((k) => next.add(k))
+    setSelected(next)
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onSave({ name, permissionKeys: [...selected] })
+  }
+
+  return (
+    <Modal title={role ? `Modifier "${role.name}"` : 'Créer un rôle'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nom du rôle</label>
+          <input
+            className="input w-full"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex: Modérateur"
+            required
+          />
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-slate-700 dark:text-gray-300 mb-3">Permissions</p>
+          <div className="space-y-4">
+            {PERM_CATEGORY_ORDER.filter((c) => grouped[c]).map((cat) => {
+              const perms = grouped[cat]
+              const allSel = perms.every((p) => selected.has(p.key))
+              const someSel = perms.some((p) => selected.has(p.key)) && !allSel
+              return (
+                <div key={cat} className="border border-slate-200 dark:border-gray-800 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(cat)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors text-left"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allSel}
+                      ref={(el) => el && (el.indeterminate = someSel)}
+                      onChange={() => {}}
+                      className="w-4 h-4 rounded text-violet-600 cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold text-slate-700 dark:text-gray-300">{cat}</span>
+                    <Badge color="gray">{perms.filter((p) => selected.has(p.key)).length}/{perms.length}</Badge>
+                  </button>
+                  <div className="divide-y divide-slate-100 dark:divide-gray-800">
+                    {perms.map((p) => (
+                      <label key={p.key} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(p.key)}
+                          onChange={() => togglePerm(p.key)}
+                          className="w-4 h-4 rounded text-violet-600"
+                        />
+                        <div>
+                          <span className="text-sm text-slate-700 dark:text-gray-300">{p.label}</span>
+                          <code className="ml-2 text-[10px] text-slate-400 dark:text-gray-600 font-mono">{p.key}</code>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors">
+            Annuler
+          </button>
+          <button type="submit" className="btn-primary flex items-center gap-2 text-sm">
+            <Save size={14} /> {role ? 'Enregistrer' : 'Créer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ── User action modal ─────────────────────────────────────────────────────────
+function UserActionModal({ user, type, roles, onClose, onSave }) {
+  const [roleId, setRoleId] = useState(user.role_id || '')
+  const [quota, setQuota] = useState(Math.round(user.storage_quota / 1e9))
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (type === 'role') onSave({ roleId })
+    if (type === 'quota') onSave({ storageQuota: quota * 1e9 })
+  }
+
+  const titles = { role: `Changer le rôle de ${user.pseudo}`, quota: `Modifier le quota de ${user.pseudo}` }
+
+  return (
+    <Modal title={titles[type]} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {type === 'role' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">Rôle</label>
+            <select className="input w-full" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+              <option value="">Aucun rôle</option>
+              {roles?.filter((r) => !r.is_super_admin).map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {type === 'quota' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">Quota (Go)</label>
+            <input
+              type="number"
+              min="1"
+              max="500"
+              className="input w-full"
+              value={quota}
+              onChange={(e) => setQuota(e.target.value)}
+            />
+          </div>
+        )}
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors">
+            Annuler
+          </button>
+          <button type="submit" className="btn-primary flex items-center gap-2 text-sm">
+            <Save size={14} /> Enregistrer
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
@@ -77,18 +260,25 @@ export default function Dashboard() {
   // Users state
   const [selectedUsers, setSelectedUsers] = useState(new Set())
   const [userSearch, setUserSearch] = useState('')
+  const [userModal, setUserModal] = useState(null) // { type: 'role'|'quota', user }
 
   // Requests state
   const [selectedRequests, setSelectedRequests] = useState(new Set())
 
-  // Logs state
-  const [logLevel, setLogLevel] = useState('all')
-  const [logSearch, setLogSearch] = useState('')
+  // Roles state
+  const [roleModal, setRoleModal] = useState(null) // null | 'create' | roleObject
+
+  // Log filters (sent to API)
+  const [logFilters, setLogFilters] = useState({ level: '', category: '', search: '', from: '', to: '' })
+
+  // Backups state
+  const [backupType, setBackupType] = useState('local')
+  const [backupRunning, setBackupRunning] = useState(false)
 
   // IP whitelist state
   const [newIp, setNewIp] = useState({ ip: '', label: '' })
 
-  // Queries
+  // ── Queries ──
   const { data: stats } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: () => api.get('/admin/stats').then((r) => r.data),
@@ -104,22 +294,46 @@ export default function Dashboard() {
     queryFn: () => api.get('/users').then((r) => r.data),
     enabled: activeTab === 'users',
   })
+  const { data: roles } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => api.get('/roles').then((r) => r.data),
+  })
+  const { data: allPermissions } = useQuery({
+    queryKey: ['permissions'],
+    queryFn: () => api.get('/roles/permissions').then((r) => r.data),
+    enabled: activeTab === 'roles',
+  })
   const { data: whitelist } = useQuery({
     queryKey: ['whitelist'],
     queryFn: () => api.get('/admin/whitelist').then((r) => r.data),
     enabled: activeTab === 'whitelist',
   })
-  const { data: logs } = useQuery({
-    queryKey: ['logs'],
-    queryFn: () => api.get('/admin/logs').then((r) => r.data),
+  const { data: logs, isLoading: logsLoading } = useQuery({
+    queryKey: ['logs', logFilters],
+    queryFn: () => {
+      const params = {}
+      if (logFilters.level) params.level = logFilters.level
+      if (logFilters.category) params.category = logFilters.category
+      if (logFilters.search) params.search = logFilters.search
+      if (logFilters.from) params.from = logFilters.from
+      if (logFilters.to) params.to = logFilters.to
+      return api.get('/admin/logs', { params }).then((r) => r.data)
+    },
     enabled: activeTab === 'logs',
+  })
+  const { data: backups } = useQuery({
+    queryKey: ['backups'],
+    queryFn: () => api.get('/admin/backups').then((r) => r.data),
+    enabled: activeTab === 'backups',
   })
 
   const tabs = [
     { key: 'overview',   label: 'Vue d\'ensemble' },
     { key: 'requests',   label: `Demandes${stats?.pendingRequests ? ` (${stats.pendingRequests})` : ''}` },
     { key: 'users',      label: 'Utilisateurs' },
+    { key: 'roles',      label: 'Rôles' },
     { key: 'whitelist',  label: 'Liste blanche IP' },
+    { key: 'backups',    label: 'Sauvegardes' },
     { key: 'logs',       label: 'Logs' },
   ]
 
@@ -154,6 +368,17 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ['users'] })
   }
 
+  const handleSuspendUser = async (user) => {
+    await api.patch(`/users/${user.id}`, { suspend: !user.is_banned })
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+  }
+
+  const handleUserModalSave = async (data) => {
+    await api.patch(`/users/${userModal.user.id}`, data)
+    setUserModal(null)
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+  }
+
   const handleAddIp = async (e) => {
     e.preventDefault()
     await api.post('/admin/whitelist', newIp)
@@ -167,6 +392,34 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ['whitelist'] })
   }
 
+  const handleCreateRole = async ({ name, permissionKeys }) => {
+    await api.post('/roles', { name, permissionKeys })
+    setRoleModal(null)
+    queryClient.invalidateQueries({ queryKey: ['roles'] })
+  }
+
+  const handleUpdateRole = async ({ name, permissionKeys }) => {
+    await api.put(`/roles/${roleModal.id}`, { name, permissionKeys })
+    setRoleModal(null)
+    queryClient.invalidateQueries({ queryKey: ['roles'] })
+  }
+
+  const handleDeleteRole = async (id) => {
+    if (!confirm('Supprimer ce rôle ?')) return
+    await api.delete(`/roles/${id}`)
+    queryClient.invalidateQueries({ queryKey: ['roles'] })
+  }
+
+  const handleRunBackup = async () => {
+    setBackupRunning(true)
+    try {
+      await api.post('/admin/backups/run', { type: backupType })
+      queryClient.invalidateQueries({ queryKey: ['backups'] })
+    } finally {
+      setBackupRunning(false)
+    }
+  }
+
   // ── Filtered data ──
   const filteredUsers = useMemo(() => {
     if (!usersData?.users) return []
@@ -177,31 +430,12 @@ export default function Dashboard() {
     )
   }, [usersData, userSearch])
 
-  const filteredLogs = useMemo(() => {
-    if (!logs) return []
-    return logs.filter((l) => {
-      if (logLevel !== 'all' && l.level !== logLevel) return false
-      if (logSearch) {
-        const q = logSearch.toLowerCase()
-        return (
-          l.action?.toLowerCase().includes(q) ||
-          l.category?.toLowerCase().includes(q) ||
-          l.user_pseudo?.toLowerCase().includes(q)
-        )
-      }
-      return true
-    })
-  }, [logs, logLevel, logSearch])
-
   // ── Select helpers ──
   const allUsersSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedUsers.has(u.id))
   const someUsersSelected = filteredUsers.some((u) => selectedUsers.has(u.id)) && !allUsersSelected
   const toggleAllUsers = () => {
-    if (allUsersSelected) {
-      setSelectedUsers(new Set())
-    } else {
-      setSelectedUsers(new Set(filteredUsers.map((u) => u.id)))
-    }
+    if (allUsersSelected) setSelectedUsers(new Set())
+    else setSelectedUsers(new Set(filteredUsers.map((u) => u.id)))
   }
 
   const allRequestsSelected = requests?.length > 0 && requests.every((r) => selectedRequests.has(r.id))
@@ -211,12 +445,14 @@ export default function Dashboard() {
     else setSelectedRequests(new Set(requests.map((r) => r.id)))
   }
 
+  const setLogFilter = (key, val) => setLogFilters((prev) => ({ ...prev, [key]: val }))
+
   return (
     <div className="space-y-5 max-w-screen-xl">
       <h2 className="text-xl font-semibold text-slate-900 dark:text-gray-100">Dashboard</h2>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-200/60 dark:bg-gray-900 rounded-xl p-1 w-fit border border-slate-200 dark:border-gray-800">
+      <div className="flex flex-wrap gap-1 bg-slate-200/60 dark:bg-gray-900 rounded-xl p-1 w-fit border border-slate-200 dark:border-gray-800">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -255,28 +491,18 @@ export default function Dashboard() {
       {/* ── Demandes ── */}
       {activeTab === 'requests' && (
         <div className="space-y-3">
-          {/* Bulk actions bar */}
           {selectedRequests.size > 0 && (
             <div className="flex items-center gap-3 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl dark:bg-violet-900/20 dark:border-violet-800">
               <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
                 {selectedRequests.size} sélectionné(s)
               </span>
-              <button
-                onClick={() => handleBulkRequests('accept')}
-                className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-              >
+              <button onClick={() => handleBulkRequests('accept')} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
                 <UserCheck size={12} /> Accepter tout
               </button>
-              <button
-                onClick={() => handleBulkRequests('refuse')}
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-              >
+              <button onClick={() => handleBulkRequests('refuse')} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
                 <UserX size={12} /> Refuser tout
               </button>
-              <button
-                onClick={() => setSelectedRequests(new Set())}
-                className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300"
-              >
+              <button onClick={() => setSelectedRequests(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300">
                 Désélectionner
               </button>
             </div>
@@ -295,11 +521,7 @@ export default function Dashboard() {
                 <thead className="bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800">
                   <tr>
                     <th className="th w-10 pr-0">
-                      <Checkbox
-                        checked={allRequestsSelected}
-                        indeterminate={someRequestsSelected}
-                        onChange={toggleAllRequests}
-                      />
+                      <Checkbox checked={allRequestsSelected} indeterminate={someRequestsSelected} onChange={toggleAllRequests} />
                     </th>
                     <th className="th">Utilisateur</th>
                     <th className="th hidden md:table-cell">Raison</th>
@@ -340,16 +562,10 @@ export default function Dashboard() {
                       </td>
                       <td className="td">
                         <div className="flex items-center gap-2 justify-end">
-                          <button
-                            onClick={() => handleReviewRequest(req.id, 'accept')}
-                            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-                          >
+                          <button onClick={() => handleReviewRequest(req.id, 'accept')} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
                             <UserCheck size={12} /> Accepter
                           </button>
-                          <button
-                            onClick={() => handleReviewRequest(req.id, 'refuse')}
-                            className="flex items-center gap-1.5 bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs px-3 py-1.5 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                          >
+                          <button onClick={() => handleReviewRequest(req.id, 'refuse')} className="flex items-center gap-1.5 bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs px-3 py-1.5 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400">
                             <UserX size={12} /> Refuser
                           </button>
                         </div>
@@ -366,7 +582,6 @@ export default function Dashboard() {
       {/* ── Utilisateurs ── */}
       {activeTab === 'users' && (
         <div className="space-y-3">
-          {/* Toolbar */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 flex-1 max-w-xs dark:bg-gray-800 dark:border-gray-700">
               <Search size={14} className="text-slate-400 dark:text-gray-500 shrink-0" />
@@ -379,22 +594,15 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Bulk actions bar */}
           {selectedUsers.size > 0 && (
             <div className="flex items-center gap-3 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl dark:bg-violet-900/20 dark:border-violet-800">
               <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
                 {selectedUsers.size} sélectionné(s)
               </span>
-              <button
-                onClick={handleBulkDeleteUsers}
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-              >
+              <button onClick={handleBulkDeleteUsers} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
                 <Trash2 size={12} /> Supprimer
               </button>
-              <button
-                onClick={() => setSelectedUsers(new Set())}
-                className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300"
-              >
+              <button onClick={() => setSelectedUsers(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300">
                 Désélectionner
               </button>
             </div>
@@ -405,11 +613,7 @@ export default function Dashboard() {
               <thead className="bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800">
                 <tr>
                   <th className="th w-10 pr-0">
-                    <Checkbox
-                      checked={allUsersSelected}
-                      indeterminate={someUsersSelected}
-                      onChange={toggleAllUsers}
-                    />
+                    <Checkbox checked={allUsersSelected} indeterminate={someUsersSelected} onChange={toggleAllUsers} />
                   </th>
                   <th className="th">Utilisateur</th>
                   <th className="th hidden sm:table-cell">Rôle</th>
@@ -448,9 +652,7 @@ export default function Dashboard() {
                     </td>
                     <td className="td hidden md:table-cell">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge color={u.is_active ? 'green' : 'yellow'}>
-                          {u.is_active ? 'Actif' : 'Inactif'}
-                        </Badge>
+                        <Badge color={u.is_active ? 'green' : 'yellow'}>{u.is_active ? 'Actif' : 'Inactif'}</Badge>
                         {u.is_banned && <Badge color="red">Suspendu</Badge>}
                       </div>
                     </td>
@@ -458,13 +660,38 @@ export default function Dashboard() {
                       {Math.round(u.storage_used / 1e6)} Mo / {Math.round(u.storage_quota / 1e9)} Go
                     </td>
                     <td className="td text-right">
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => setUserModal({ type: 'role', user: u })}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                          title="Changer le rôle"
+                        >
+                          <Key size={14} />
+                        </button>
+                        <button
+                          onClick={() => setUserModal({ type: 'quota', user: u })}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          title="Modifier le quota"
+                        >
+                          <HardDrive size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleSuspendUser(u)}
+                          className={`p-1.5 rounded-lg transition-colors ${u.is_banned
+                            ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                            : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                          title={u.is_banned ? 'Réactiver' : 'Suspendre'}
+                        >
+                          {u.is_banned ? <UserCheck size={14} /> : <UserX size={14} />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -476,6 +703,80 @@ export default function Dashboard() {
                 <p className="text-slate-500 dark:text-gray-500 text-sm">
                   {userSearch ? 'Aucun résultat' : 'Aucun utilisateur'}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Rôles ── */}
+      {activeTab === 'roles' && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <button
+              onClick={() => setRoleModal('create')}
+              className="btn-primary flex items-center gap-2 text-sm"
+            >
+              <Plus size={14} /> Nouveau rôle
+            </button>
+          </div>
+
+          <div className="table-wrapper">
+            <table className="w-full">
+              <thead className="bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800">
+                <tr>
+                  <th className="th">Rôle</th>
+                  <th className="th hidden sm:table-cell">Permissions</th>
+                  <th className="th hidden md:table-cell">Créé le</th>
+                  <th className="th text-right w-20">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+                {roles?.map((role) => (
+                  <tr key={role.id} className="tr-hover">
+                    <td className="td">
+                      <div className="flex items-center gap-2">
+                        {role.is_super_admin && <Lock size={13} className="text-violet-500 shrink-0" />}
+                        <span className="font-medium text-slate-800 dark:text-gray-200 text-sm">{role.name}</span>
+                        {role.is_super_admin && <Badge color="violet">Super Admin</Badge>}
+                      </div>
+                    </td>
+                    <td className="td hidden sm:table-cell">
+                      <Badge color="gray">
+                        {role.permissions?.length || 0} permission{(role.permissions?.length || 0) !== 1 ? 's' : ''}
+                      </Badge>
+                    </td>
+                    <td className="td hidden md:table-cell text-xs text-slate-400 dark:text-gray-500">
+                      {format(new Date(role.created_at), 'dd/MM/yyyy')}
+                    </td>
+                    <td className="td text-right">
+                      {!role.is_super_admin && (
+                        <div className="flex items-center gap-1 justify-end">
+                          <button
+                            onClick={() => setRoleModal(role)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                            title="Modifier"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRole(role.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!roles?.length && (
+              <div className="text-center py-12">
+                <Key size={28} className="mx-auto text-slate-300 dark:text-gray-700 mb-2" />
+                <p className="text-sm text-slate-500 dark:text-gray-500">Aucun rôle</p>
               </div>
             )}
           </div>
@@ -532,27 +833,117 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Sauvegardes ── */}
+      {activeTab === 'backups' && (
+        <div className="space-y-4">
+          <div className="card flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-800 dark:text-gray-200 mb-1">Lancer une sauvegarde</p>
+              <p className="text-xs text-slate-500 dark:text-gray-500">La sauvegarde crée une copie compressée des données.</p>
+            </div>
+            <select
+              className="input w-36"
+              value={backupType}
+              onChange={(e) => setBackupType(e.target.value)}
+            >
+              <option value="local">Locale</option>
+              <option value="backblaze">Backblaze B2</option>
+            </select>
+            <button
+              onClick={handleRunBackup}
+              disabled={backupRunning}
+              className="btn-primary flex items-center gap-2 text-sm shrink-0 disabled:opacity-60"
+            >
+              {backupRunning ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+              {backupRunning ? 'En cours...' : 'Lancer'}
+            </button>
+          </div>
+
+          <div className="table-wrapper">
+            <table className="w-full">
+              <thead className="bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800">
+                <tr>
+                  <th className="th">Type</th>
+                  <th className="th">Statut</th>
+                  <th className="th hidden sm:table-cell">Taille</th>
+                  <th className="th hidden md:table-cell text-right">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+                {backups?.map((b) => (
+                  <tr key={b.id} className="tr-hover">
+                    <td className="td">
+                      <div className="flex items-center gap-2">
+                        <Database size={14} className="text-violet-500 shrink-0" />
+                        <span className="text-sm font-medium text-slate-800 dark:text-gray-200 capitalize">{b.type}</span>
+                      </div>
+                    </td>
+                    <td className="td">
+                      <Badge color={b.status === 'success' ? 'green' : 'red'}>
+                        {b.status === 'success' ? 'Succès' : 'Échec'}
+                      </Badge>
+                      {b.error_message && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-0.5 max-w-xs truncate">{b.error_message}</p>
+                      )}
+                    </td>
+                    <td className="td hidden sm:table-cell text-xs text-slate-500 dark:text-gray-500">
+                      {b.size ? `${Math.round(b.size / 1e6)} Mo` : '—'}
+                    </td>
+                    <td className="td hidden md:table-cell text-right">
+                      <span className="text-xs text-slate-400 dark:text-gray-600" title={format(new Date(b.created_at), 'dd/MM/yyyy HH:mm')}>
+                        {formatDistanceToNow(new Date(b.created_at), { locale: fr, addSuffix: true })}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {backups?.length === 0 && (
+              <div className="text-center py-12">
+                <Database size={28} className="mx-auto text-slate-300 dark:text-gray-700 mb-2" />
+                <p className="text-sm text-slate-500 dark:text-gray-500">Aucune sauvegarde</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Logs ── */}
       {activeTab === 'logs' && (
         <div className="space-y-3">
           {/* Filtres */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 flex-1 min-w-0 max-w-xs dark:bg-gray-800 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Recherche */}
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 w-52 dark:bg-gray-800 dark:border-gray-700">
               <Search size={13} className="text-slate-400 dark:text-gray-500 shrink-0" />
               <input
-                placeholder="Rechercher dans les logs..."
-                value={logSearch}
-                onChange={(e) => setLogSearch(e.target.value)}
+                placeholder="Rechercher..."
+                value={logFilters.search}
+                onChange={(e) => setLogFilter('search', e.target.value)}
                 className="bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none w-full dark:text-gray-300 dark:placeholder:text-gray-500"
               />
             </div>
+
+            {/* Catégorie */}
+            <select
+              className="input text-sm py-1.5"
+              value={logFilters.category}
+              onChange={(e) => setLogFilter('category', e.target.value)}
+            >
+              <option value="">Toutes catégories</option>
+              {LOG_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              ))}
+            </select>
+
+            {/* Niveau */}
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 dark:bg-gray-900 dark:border-gray-800">
-              {['all', 'error', 'warning', 'info'].map((lvl) => (
+              {['', 'error', 'warning', 'info'].map((lvl) => (
                 <button
                   key={lvl}
-                  onClick={() => setLogLevel(lvl)}
+                  onClick={() => setLogFilter('level', lvl)}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                    logLevel === lvl
+                    logFilters.level === lvl
                       ? lvl === 'error'   ? 'bg-red-600 text-white'
                       : lvl === 'warning' ? 'bg-amber-500 text-white'
                       : lvl === 'info'    ? 'bg-blue-600 text-white'
@@ -560,10 +951,39 @@ export default function Dashboard() {
                       : 'text-slate-500 hover:text-slate-800 dark:text-gray-500 dark:hover:text-gray-300'
                   }`}
                 >
-                  {lvl === 'all' ? 'Tous' : lvl === 'error' ? 'Erreurs' : lvl === 'warning' ? 'Alertes' : 'Info'}
+                  {lvl === '' ? 'Tous' : lvl === 'error' ? 'Erreurs' : lvl === 'warning' ? 'Alertes' : 'Info'}
                 </button>
               ))}
             </div>
+
+            {/* Date de */}
+            <input
+              type="datetime-local"
+              className="input text-sm py-1.5 w-48"
+              value={logFilters.from}
+              onChange={(e) => setLogFilter('from', e.target.value)}
+              title="Depuis"
+              placeholder="Depuis"
+            />
+
+            {/* Date à */}
+            <input
+              type="datetime-local"
+              className="input text-sm py-1.5 w-48"
+              value={logFilters.to}
+              onChange={(e) => setLogFilter('to', e.target.value)}
+              title="Jusqu'à"
+            />
+
+            {/* Reset */}
+            {(logFilters.level || logFilters.category || logFilters.search || logFilters.from || logFilters.to) && (
+              <button
+                onClick={() => setLogFilters({ level: '', category: '', search: '', from: '', to: '' })}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+              >
+                <X size={12} /> Réinitialiser
+              </button>
+            )}
           </div>
 
           <div className="table-wrapper">
@@ -578,7 +998,11 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
-                {filteredLogs.map((log) => {
+                {logsLoading ? (
+                  <tr><td colSpan={5} className="td text-center py-8">
+                    <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  </td></tr>
+                ) : logs?.map((log) => {
                   const lvl = LOG_LEVELS[log.level] || LOG_LEVELS.info
                   const LvlIcon = lvl.icon
                   return (
@@ -599,10 +1023,7 @@ export default function Dashboard() {
                         {log.user_pseudo || '—'}
                       </td>
                       <td className="td text-right">
-                        <span
-                          className="text-xs text-slate-400 dark:text-gray-600"
-                          title={format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss')}
-                        >
+                        <span className="text-xs text-slate-400 dark:text-gray-600" title={format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss')}>
                           {formatDistanceToNow(new Date(log.created_at), { locale: fr, addSuffix: true })}
                         </span>
                       </td>
@@ -611,16 +1032,34 @@ export default function Dashboard() {
                 })}
               </tbody>
             </table>
-            {filteredLogs.length === 0 && (
+            {!logsLoading && logs?.length === 0 && (
               <div className="text-center py-12">
                 <Activity size={28} className="mx-auto text-slate-300 dark:text-gray-700 mb-2" />
-                <p className="text-sm text-slate-500 dark:text-gray-500">
-                  {logSearch || logLevel !== 'all' ? 'Aucun log correspondant' : 'Aucun log disponible'}
-                </p>
+                <p className="text-sm text-slate-500 dark:text-gray-500">Aucun log correspondant</p>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Modals ── */}
+      {roleModal && (
+        <RoleModal
+          role={roleModal === 'create' ? null : roleModal}
+          allPermissions={allPermissions || []}
+          onClose={() => setRoleModal(null)}
+          onSave={roleModal === 'create' ? handleCreateRole : handleUpdateRole}
+        />
+      )}
+
+      {userModal && (
+        <UserActionModal
+          user={userModal.user}
+          type={userModal.type}
+          roles={roles}
+          onClose={() => setUserModal(null)}
+          onSave={handleUserModalSave}
+        />
       )}
     </div>
   )

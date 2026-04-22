@@ -19,6 +19,7 @@ import roleRoutes from './routes/roles/index.js'
 import fileRoutes from './routes/files/index.js'
 import adminRoutes from './routes/admin/index.js'
 import { authenticate } from './middleware/auth.js'
+import { seedPermissions } from './models/seed.js'
 
 if (config.nodeEnv === 'production') {
   if (config.jwt.accessSecret.length < 32 || config.jwt.refreshSecret.length < 32) {
@@ -91,6 +92,9 @@ async function start() {
     // Vérifier la connexion DB
     await pool.query('SELECT 1')
     console.log('✅ Base de données connectée')
+
+    // Auto-seed permissions au démarrage
+    await seedPermissions()
 
     // Initialiser le stockage
     await ensureStorageDirs()

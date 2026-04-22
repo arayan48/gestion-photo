@@ -161,13 +161,16 @@ export default function Topbar() {
                   <User size={14} className="text-slate-400 dark:text-gray-500" />
                   Mon profil
                 </Link>
-                <button
-                  onClick={() => setShowUser(false)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
-                >
-                  <Settings size={14} className="text-slate-400 dark:text-gray-500" />
-                  Paramètres
-                </button>
+                {(user?.isSuperAdmin || user?.roleId) && (
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setShowUser(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    <Settings size={14} className="text-slate-400 dark:text-gray-500" />
+                    Dashboard
+                  </Link>
+                )}
               </div>
 
               <div className="p-1.5 border-t border-slate-100 dark:border-gray-800">

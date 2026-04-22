@@ -31,12 +31,11 @@ const PERMISSIONS = [
   { key: 'system.manage_storage', label: 'Modifier les seuils de stockage', category: 'Système' },
 ]
 
-async function seed() {
+export async function seedPermissions() {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
 
-    // Insérer les permissions
     for (const perm of PERMISSIONS) {
       await client.query(
         `INSERT INTO permissions (key, label, category)
@@ -45,42 +44,34 @@ async function seed() {
         [perm.key, perm.label, perm.category]
       )
     }
-    console.log(`✅ ${PERMISSIONS.length} permissions insérées`)
 
-    // Créer le rôle Super Admin s'il n'existe pas
-    const { rows: existing } = await client.query(
-      'SELECT id FROM roles WHERE is_super_admin = true'
-    )
-
+    const { rows: existing } = await client.query('SELECT id FROM roles WHERE is_super_admin = true')
     if (existing.length === 0) {
       await client.query(
-        `INSERT INTO roles (name, is_super_admin) VALUES ($1, true)
-         ON CONFLICT (name) DO NOTHING`,
+        `INSERT INTO roles (name, is_super_admin) VALUES ($1, true) ON CONFLICT (name) DO NOTHING`,
         ['Super Admin']
       )
-      console.log('✅ Rôle Super Admin créé')
     }
 
-    // Config email par défaut
     await client.query(
-      `INSERT INTO system_config (key, value) VALUES ($1, $2)
-       ON CONFLICT (key) DO NOTHING`,
+      `INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
       ['email.provider', process.env.EMAIL_PROVIDER || 'brevo']
     )
 
     await client.query('COMMIT')
-    console.log('✅ Seed terminé.')
+    console.log(`✅ Seed: ${PERMISSIONS.length} permissions insérées/mises à jour`)
   } catch (err) {
     await client.query('ROLLBACK')
     console.error('❌ Erreur seed:', err.message)
     throw err
   } finally {
     client.release()
-    await pool.end()
   }
 }
 
-seed().catch((err) => {
-  console.error('Erreur fatale seed:', err)
-  process.exit(1)
-})
+// Exécution directe via CLI
+if (process.argv[1].endsWith('seed.js')) {
+  seedPermissions()
+    .then(() => { console.log('✅ Seed terminé.'); process.exit(0) })
+    .catch((err) => { console.error('Erreur fatale seed:', err); process.exit(1) })
+}
