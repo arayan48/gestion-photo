@@ -1,4 +1,4 @@
-import { Folder, FileImage, FileVideo, File, Heart, LinkOff } from 'lucide-react'
+import { Folder, FileImage, FileVideo, File, Heart, Unlink } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
@@ -49,7 +49,7 @@ export default function FileList({ files, folders, onFileClick, onContextMenu, i
 
           <div className="flex items-center gap-2 shrink-0">
             {file.is_favorite && <Heart size={12} className="text-pink-400 fill-pink-400" />}
-            {file.link_active === false && <LinkOff size={12} className="text-red-400" />}
+            {file.link_active === false && <Unlink size={12} className="text-red-400" />}
             <span className="text-xs text-gray-500">{formatSize(file.size)}</span>
             <span className="text-xs text-gray-600 w-28 text-right">
               {formatDistanceToNow(new Date(file.created_at), { locale: fr, addSuffix: true })}

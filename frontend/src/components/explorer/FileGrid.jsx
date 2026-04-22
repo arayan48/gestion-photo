@@ -1,4 +1,4 @@
-import { Folder, FileImage, FileVideo, File, Link2, LinkOff, Heart } from 'lucide-react'
+import { Folder, FileImage, FileVideo, File, Link2, Unlink, Heart } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
@@ -59,7 +59,7 @@ export default function FileGrid({ files, folders, onFileClick, onContextMenu, i
             {/* Badges */}
             <div className="absolute top-1 right-1 flex gap-1">
               {file.is_favorite && <Heart size={12} className="text-pink-400 fill-pink-400" />}
-              {file.link_active === false && <LinkOff size={12} className="text-red-400" />}
+              {file.link_active === false && <Unlink size={12} className="text-red-400" />}
             </div>
           </div>
 

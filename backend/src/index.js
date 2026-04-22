@@ -20,12 +20,16 @@ import fileRoutes from './routes/files/index.js'
 import adminRoutes from './routes/admin/index.js'
 import { authenticate } from './middleware/auth.js'
 
+if (config.nodeEnv === 'production') {
+  if (config.jwt.accessSecret.length < 32 || config.jwt.refreshSecret.length < 32) {
+    console.error('FATAL: JWT_ACCESS_SECRET et JWT_REFRESH_SECRET doivent faire au moins 32 caractères en production')
+    process.exit(1)
+  }
+}
+
 const fastify = Fastify({
   logger: {
     level: config.nodeEnv === 'development' ? 'info' : 'warn',
-    transport: config.nodeEnv === 'development'
-      ? { target: 'pino-pretty', options: { colorize: true } }
-      : undefined,
   },
   trustProxy: true,
 })

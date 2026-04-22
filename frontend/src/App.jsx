@@ -1,4 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import axios from 'axios'
 import { useAuthStore } from './stores/auth.store.js'
 import Setup from './pages/Setup.jsx'
 import Login from './pages/Login.jsx'
@@ -13,6 +15,24 @@ import Layout from './components/shared/Layout.jsx'
 
 export default function App() {
   const { user, accessToken } = useAuthStore()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [setupChecked, setSetupChecked] = useState(false)
+
+  useEffect(() => {
+    if (location.pathname === '/setup') {
+      setSetupChecked(true)
+      return
+    }
+    axios.get('/api/auth/setup/status', { withCredentials: true })
+      .then(({ data }) => {
+        if (!data.isCompleted) navigate('/setup', { replace: true })
+      })
+      .catch(() => {})
+      .finally(() => setSetupChecked(true))
+  }, [])
+
+  if (!setupChecked) return null
 
   return (
     <Routes>

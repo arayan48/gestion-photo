@@ -39,9 +39,15 @@ export default async function authRoutes(fastify) {
       return reply.code(400).send({ error: 'Email, pseudo et mot de passe requis' })
     }
 
+    let roleId
     const { rows: roleRows } = await pool.query('SELECT id FROM roles WHERE is_super_admin = true LIMIT 1')
-    if (!roleRows.length) {
-      return reply.code(500).send({ error: 'Rôle Super Admin introuvable. Lancez le seed d\'abord.' })
+    if (roleRows.length) {
+      roleId = roleRows[0].id
+    } else {
+      const { rows: newRole } = await pool.query(
+        `INSERT INTO roles (name, is_super_admin) VALUES ('Super Admin', true) RETURNING id`
+      )
+      roleId = newRole[0].id
     }
 
     const passwordHash = await hashPassword(password)
@@ -50,7 +56,7 @@ export default async function authRoutes(fastify) {
     await pool.query(
       `INSERT INTO users (id, email, password_hash, pseudo, first_name, last_name, role_id, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
-      [userId, email.toLowerCase(), passwordHash, pseudo, firstName || null, lastName || null, roleRows[0].id]
+      [userId, email.toLowerCase(), passwordHash, pseudo, firstName || null, lastName || null, roleId]
     )
 
     await pool.query('UPDATE setup SET is_completed = true, completed_at = NOW() WHERE id = 1')
@@ -388,7 +394,7 @@ export default async function authRoutes(fastify) {
     const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()])
     if (!rows.length) return reply.send({ message: 'Code OTP envoyé si le compte existe.' })
 
-    const code = generateOtp(email.toLowerCase())
+    const code = await generateOtp(email.toLowerCase())
     await sendEmail({ type: 'otp', to: email, data: { code } })
 
     return reply.send({ message: 'Code OTP envoyé.' })
@@ -398,7 +404,7 @@ export default async function authRoutes(fastify) {
     const { email, code } = request.body
     if (!email || !code) return reply.code(400).send({ error: 'Email et code requis' })
 
-    const valid = verifyOtp(email.toLowerCase(), code)
+    const valid = await verifyOtp(email.toLowerCase(), code)
     if (!valid) return reply.code(401).send({ error: 'Code OTP invalide ou expiré' })
 
     return reply.send({ valid: true })

@@ -24,4 +24,9 @@ export const config = {
   storage: {
     path: process.env.STORAGE_PATH || '/app/storage',
   },
+
+  totp: {
+    // Clé AES-256 : 64 caractères hex (32 octets). Générer avec : openssl rand -hex 32
+    encryptionKey: process.env.TOTP_ENCRYPTION_KEY || '',
+  },
 }

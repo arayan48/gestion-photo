@@ -115,19 +115,24 @@ export function verifyTotp(secret, token) {
   return authenticator.verify({ token, secret })
 }
 
-// OTP email (6 chiffres)
-const otpStore = new Map()
-
-export function generateOtp(email) {
+// OTP email (6 chiffres) — persisté en base, code hashé
+export async function generateOtp(email) {
   const code = Math.floor(100000 + Math.random() * 900000).toString()
-  otpStore.set(email, { code, expiresAt: Date.now() + 10 * 60 * 1000 })
+  const codeHash = hashToken(code)
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+  await pool.query('DELETE FROM otp_codes WHERE email = $1', [email])
+  await pool.query(
+    'INSERT INTO otp_codes (email, code_hash, expires_at) VALUES ($1, $2, $3)',
+    [email, codeHash, expiresAt]
+  )
   return code
 }
 
-export function verifyOtp(email, code) {
-  const entry = otpStore.get(email)
-  if (!entry || entry.expiresAt < Date.now()) return false
-  if (entry.code !== code) return false
-  otpStore.delete(email)
-  return true
+export async function verifyOtp(email, code) {
+  const codeHash = hashToken(code)
+  const { rows } = await pool.query(
+    'DELETE FROM otp_codes WHERE email = $1 AND code_hash = $2 AND expires_at > NOW() RETURNING id',
+    [email, codeHash]
+  )
+  return rows.length > 0
 }

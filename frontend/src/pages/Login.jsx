@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth.store.js'
+import api from '../utils/api.js'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -9,6 +10,12 @@ export default function Login() {
   const [requireTotp, setRequireTotp] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    api.get('/auth/setup/status').then(({ data }) => {
+      if (!data.isCompleted) navigate('/setup', { replace: true })
+    }).catch(() => {})
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

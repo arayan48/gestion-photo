@@ -11,7 +11,7 @@ CMD ["npm", "run", "dev"]
 
 # Production build
 FROM base AS builder
-RUN npm ci
+RUN npm install
 COPY . .
 RUN npm run build
 

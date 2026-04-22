@@ -1,4 +1,4 @@
-import { X, Download, Link2, LinkOff, Heart, HeartOff, Copy, ExternalLink } from 'lucide-react'
+import { X, Download, Link2, Unlink, Heart, HeartOff, Copy, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 

@@ -43,3 +43,6 @@ Thumbs.db
 *.md
 !README.md
 !README.windows.md
+
+# Claude
+.claude/

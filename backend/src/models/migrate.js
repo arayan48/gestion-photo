@@ -318,6 +318,19 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_reset_tokens_email ON password_reset_tokens(email);
     `,
   },
+  {
+    name: '022_create_otp_codes',
+    sql: `
+      CREATE TABLE IF NOT EXISTS otp_codes (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email VARCHAR(255) NOT NULL,
+        code_hash VARCHAR(64) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
+    `,
+  },
 ]
 
 async function runMigrations() {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Eye, Download, Trash2, RotateCcw, Link2, LinkOff, Heart, HeartOff, Copy, Info, Pencil } from 'lucide-react'
+import { Eye, Download, Trash2, RotateCcw, Link2, Unlink, Heart, HeartOff, Copy, Info, Pencil } from 'lucide-react'
 
 export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) {
   const ref = useRef(null)
@@ -53,7 +53,7 @@ export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) 
         <MenuItem icon={Heart} label="Ajouter aux favoris" onClick={() => onAction('favorite', file)} />
       )}
       {file.link_active ? (
-        <MenuItem icon={LinkOff} label="Désactiver le lien" onClick={() => onAction('toggle-link', file)} />
+        <MenuItem icon={Unlink} label="Désactiver le lien" onClick={() => onAction('toggle-link', file)} />
       ) : (
         <MenuItem icon={Link2} label="Activer le lien" onClick={() => onAction('toggle-link', file)} />
       )}

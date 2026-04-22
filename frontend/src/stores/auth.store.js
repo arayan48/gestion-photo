@@ -27,10 +27,22 @@ export const useAuthStore = create(
         set({ user: data })
         return data
       },
+
+      // Restaure la session depuis le cookie httpOnly refresh_token (sans localStorage)
+      initAuth: async () => {
+        if (get().accessToken) return true
+        try {
+          await get().fetchMe()
+          return true
+        } catch {
+          return false
+        }
+      },
     }),
     {
       name: 'wubalstore-auth',
-      partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
+      // On ne persiste que l'objet user (UI), jamais le token (sécurité XSS)
+      partialize: (state) => ({ user: state.user }),
     }
   )
 )

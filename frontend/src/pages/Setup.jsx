@@ -4,7 +4,7 @@ import api from '../utils/api.js'
 
 export default function Setup() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', pseudo: '', password: '', firstName: '', lastName: '' })
+  const [form, setForm] = useState({ email: '', pseudo: '', password: '', confirmPassword: '', firstName: '', lastName: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -17,9 +17,14 @@ export default function Setup() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    if (form.password !== form.confirmPassword) {
+      setError('Les mots de passe ne correspondent pas')
+      return
+    }
     setLoading(true)
     try {
-      await api.post('/auth/setup', form)
+      const { confirmPassword, ...payload } = form
+      await api.post('/auth/setup', payload)
       navigate('/login?setup=done')
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors du setup')
@@ -74,6 +79,17 @@ export default function Setup() {
                 className="input"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                minLength={8}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Confirmer le mot de passe *</label>
+              <input
+                type="password"
+                className="input"
+                value={form.confirmPassword}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                 required
                 minLength={8}
               />
