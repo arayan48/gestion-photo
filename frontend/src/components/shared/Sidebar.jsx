@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FolderOpen, Clock, Heart, Trash2, Globe, LayoutDashboard } from 'lucide-react'
+import { FolderOpen, Clock, Heart, Trash2, Globe, LayoutDashboard, Settings } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth.store.js'
 
 const navItems = [
@@ -55,25 +55,38 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Section admin */}
-      {(user?.isSuperAdmin || user?.roleId) && (
-        <div className="px-3 pt-3 mt-2 border-t border-slate-100 dark:border-gray-800 space-y-0.5">
-          <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-gray-600">
-            Admin
-          </p>
-          <Link
-            to="/dashboard"
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-              isDashActive
-                ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
-            }`}
-          >
-            <LayoutDashboard size={15} strokeWidth={isDashActive ? 2.5 : 1.75} />
-            Dashboard
-          </Link>
-        </div>
-      )}
+      {/* Section bas */}
+      <div className="px-3 pt-3 mt-2 border-t border-slate-100 dark:border-gray-800 space-y-0.5">
+        {(user?.isSuperAdmin || user?.roleId) && (
+          <>
+            <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-gray-600">
+              Admin
+            </p>
+            <Link
+              to="/dashboard"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                isDashActive
+                  ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+              }`}
+            >
+              <LayoutDashboard size={15} strokeWidth={isDashActive ? 2.5 : 1.75} />
+              Dashboard
+            </Link>
+          </>
+        )}
+        <Link
+          to="/settings"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+            pathname === '/settings'
+              ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+          }`}
+        >
+          <Settings size={15} strokeWidth={pathname === '/settings' ? 2.5 : 1.75} />
+          Paramètres
+        </Link>
+      </div>
     </aside>
   )
 }

@@ -34,6 +34,12 @@ export const useThemeStore = create(
         applyTheme(next)
         set({ theme: next, resolvedTheme: next })
       },
+
+      setTheme(theme) {
+        const resolved = theme === 'system' ? getSystemPreference() : theme
+        applyTheme(resolved)
+        set({ theme, resolvedTheme: resolved })
+      },
     }),
     {
       name: 'wubal-theme',

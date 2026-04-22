@@ -1,4 +1,4 @@
-import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown } from 'lucide-react'
+import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth.store.js'
@@ -167,10 +167,18 @@ export default function Topbar() {
                     onClick={() => setShowUser(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
                   >
-                    <Settings size={14} className="text-slate-400 dark:text-gray-500" />
+                    <LayoutDashboard size={14} className="text-slate-400 dark:text-gray-500" />
                     Dashboard
                   </Link>
                 )}
+                <Link
+                  to="/settings"
+                  onClick={() => setShowUser(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  <Settings size={14} className="text-slate-400 dark:text-gray-500" />
+                  Paramètres
+                </Link>
               </div>
 
               <div className="p-1.5 border-t border-slate-100 dark:border-gray-800">

@@ -8,6 +8,7 @@ import Register from './pages/Register.jsx'
 import Explorer from './pages/Explorer.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Profile from './pages/Profile.jsx'
+import Settings from './pages/Settings.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import ResetPassword from './pages/ResetPassword.jsx'
 import ProtectedRoute from './components/shared/ProtectedRoute.jsx'
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/explorer/:folderId" element={<Explorer />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Route>
 
