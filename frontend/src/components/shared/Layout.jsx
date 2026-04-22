@@ -19,7 +19,7 @@ export default function Layout() {
   }, [accessToken])
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 dark:bg-gray-950 overflow-hidden">
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0">
         <Topbar />
