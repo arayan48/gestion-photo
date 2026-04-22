@@ -40,7 +40,7 @@ Thumbs.db
 .idea/
 
 # md
-*.md
+#*.md
 !README.md
 !README.windows.md
 
