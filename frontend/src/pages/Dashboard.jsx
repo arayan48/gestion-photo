@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
+import { toast } from '../stores/toast.store.js'
 import {
   Users, HardDrive, FileImage, AlertTriangle, Shield, Plus, Trash2,
   UserCheck, UserX, Search, Activity, Info, AlertCircle,
@@ -339,28 +340,35 @@ export default function Dashboard() {
 
   // ── Handlers ──
   const handleReviewRequest = async (id, action) => {
-    await api.post(`/users/requests/${id}/review`, { action })
-    queryClient.invalidateQueries({ queryKey: ['account-requests'] })
-    queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
+    try {
+      await api.post(`/users/requests/${id}/review`, { action })
+      toast.success(action === 'accept' ? 'Demande acceptée' : 'Demande refusée')
+      queryClient.invalidateQueries({ queryKey: ['account-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
+    } catch { toast.error('Erreur lors du traitement') }
   }
 
   const handleBulkRequests = async (action) => {
     await Promise.all([...selectedRequests].map((id) =>
       api.post(`/users/requests/${id}/review`, { action }).catch(() => {})
     ))
+    toast.success(`${selectedRequests.size} demande(s) ${action === 'accept' ? 'acceptée(s)' : 'refusée(s)'}`)
     setSelectedRequests(new Set())
     queryClient.invalidateQueries({ queryKey: ['account-requests'] })
     queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
   }
 
   const handleDeleteUser = async (id) => {
-    if (!confirm('Supprimer cet utilisateur définitivement ?')) return
-    await api.delete(`/users/${id}`).catch(() => {})
-    queryClient.invalidateQueries({ queryKey: ['users'] })
+    if (!window.confirm('Supprimer cet utilisateur définitivement ?')) return
+    try {
+      await api.delete(`/users/${id}`)
+      toast.success('Utilisateur supprimé')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    } catch { toast.error('Erreur lors de la suppression') }
   }
 
   const handleBulkDeleteUsers = async () => {
-    if (!confirm(`Supprimer ${selectedUsers.size} utilisateur(s) définitivement ?`)) return
+    if (!window.confirm(`Supprimer ${selectedUsers.size} utilisateur(s) définitivement ?`)) return
     await Promise.all([...selectedUsers].map((id) =>
       api.delete(`/users/${id}`).catch(() => {})
     ))
@@ -369,52 +377,74 @@ export default function Dashboard() {
   }
 
   const handleSuspendUser = async (user) => {
-    await api.patch(`/users/${user.id}`, { suspend: !user.is_banned })
-    queryClient.invalidateQueries({ queryKey: ['users'] })
+    try {
+      await api.patch(`/users/${user.id}`, { suspend: !user.is_banned })
+      toast.success(user.is_banned ? 'Utilisateur réactivé' : 'Utilisateur suspendu')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    } catch { toast.error('Erreur') }
   }
 
   const handleUserModalSave = async (data) => {
-    await api.patch(`/users/${userModal.user.id}`, data)
-    setUserModal(null)
-    queryClient.invalidateQueries({ queryKey: ['users'] })
+    try {
+      await api.patch(`/users/${userModal.user.id}`, data)
+      toast.success('Utilisateur mis à jour')
+      setUserModal(null)
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
   const handleAddIp = async (e) => {
     e.preventDefault()
-    await api.post('/admin/whitelist', newIp)
-    setNewIp({ ip: '', label: '' })
-    queryClient.invalidateQueries({ queryKey: ['whitelist'] })
+    try {
+      await api.post('/admin/whitelist', newIp)
+      toast.success(`IP ${newIp.ip} ajoutée à la liste blanche`)
+      setNewIp({ ip: '', label: '' })
+      queryClient.invalidateQueries({ queryKey: ['whitelist'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
-  const handleRemoveIp = async (id) => {
-    if (!confirm('Retirer cette IP de la liste blanche ?')) return
+  const handleRemoveIp = async (id, ip) => {
+    if (!window.confirm(`Retirer ${ip} de la liste blanche ?`)) return
     await api.delete(`/admin/whitelist/${id}`)
+    toast.success('IP retirée')
     queryClient.invalidateQueries({ queryKey: ['whitelist'] })
   }
 
   const handleCreateRole = async ({ name, permissionKeys }) => {
-    await api.post('/roles', { name, permissionKeys })
-    setRoleModal(null)
-    queryClient.invalidateQueries({ queryKey: ['roles'] })
+    try {
+      await api.post('/roles', { name, permissionKeys })
+      toast.success(`Rôle "${name}" créé`)
+      setRoleModal(null)
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
   const handleUpdateRole = async ({ name, permissionKeys }) => {
-    await api.put(`/roles/${roleModal.id}`, { name, permissionKeys })
-    setRoleModal(null)
-    queryClient.invalidateQueries({ queryKey: ['roles'] })
+    try {
+      await api.put(`/roles/${roleModal.id}`, { name, permissionKeys })
+      toast.success('Rôle mis à jour')
+      setRoleModal(null)
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
-  const handleDeleteRole = async (id) => {
-    if (!confirm('Supprimer ce rôle ?')) return
-    await api.delete(`/roles/${id}`)
-    queryClient.invalidateQueries({ queryKey: ['roles'] })
+  const handleDeleteRole = async (id, name) => {
+    if (!window.confirm(`Supprimer le rôle "${name}" ?`)) return
+    try {
+      await api.delete(`/roles/${id}`)
+      toast.success('Rôle supprimé')
+      queryClient.invalidateQueries({ queryKey: ['roles'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
   const handleRunBackup = async () => {
     setBackupRunning(true)
     try {
       await api.post('/admin/backups/run', { type: backupType })
+      toast.success(`Sauvegarde ${backupType} lancée`)
       queryClient.invalidateQueries({ queryKey: ['backups'] })
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la sauvegarde')
     } finally {
       setBackupRunning(false)
     }
@@ -656,8 +686,23 @@ export default function Dashboard() {
                         {u.is_banned && <Badge color="red">Suspendu</Badge>}
                       </div>
                     </td>
-                    <td className="td hidden lg:table-cell text-xs text-slate-500 dark:text-gray-500">
-                      {Math.round(u.storage_used / 1e6)} Mo / {Math.round(u.storage_quota / 1e9)} Go
+                    <td className="td hidden lg:table-cell">
+                      {(() => {
+                        const pct = Math.min(100, Math.round((u.storage_used / u.storage_quota) * 100))
+                        const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-violet-500'
+                        return (
+                          <div className="w-28">
+                            <div className="flex justify-between text-[10px] text-slate-500 dark:text-gray-500 mb-1">
+                              <span>{Math.round(u.storage_used / 1e6)} Mo</span>
+                              <span>{Math.round(u.storage_quota / 1e9)} Go</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <p className={`text-[10px] mt-0.5 font-medium ${pct >= 90 ? 'text-red-500' : 'text-slate-400 dark:text-gray-600'}`}>{pct}%</p>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="td text-right">
                       <div className="flex items-center gap-1 justify-end">
@@ -760,7 +805,7 @@ export default function Dashboard() {
                             <Edit2 size={14} />
                           </button>
                           <button
-                            onClick={() => handleDeleteRole(role.id)}
+                            onClick={() => handleDeleteRole(role.id, role.name)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             title="Supprimer"
                           >
@@ -815,7 +860,7 @@ export default function Dashboard() {
                     <td className="td hidden sm:table-cell text-slate-500 dark:text-gray-500">{entry.label || '—'}</td>
                     <td className="td hidden md:table-cell text-xs text-slate-400 dark:text-gray-500">{entry.added_by_pseudo}</td>
                     <td className="td text-right">
-                      <button onClick={() => handleRemoveIp(entry.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <button onClick={() => handleRemoveIp(entry.id, entry.ip_address)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                         <Trash2 size={14} />
                       </button>
                     </td>

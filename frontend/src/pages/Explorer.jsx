@@ -9,6 +9,7 @@ import FileViewer from '../components/viewer/FileViewer.jsx'
 import ContextMenu from '../components/explorer/ContextMenu.jsx'
 import Breadcrumb from '../components/explorer/Breadcrumb.jsx'
 import { Grid3X3, List, Upload, Search, Download, X, Calendar } from 'lucide-react'
+import { toast } from '../stores/toast.store.js'
 
 export default function Explorer() {
   const [searchParams] = useSearchParams()
@@ -71,9 +72,10 @@ export default function Explorer() {
         setSelectedFile(file)
         break
       case 'delete':
-        if (confirm(`Supprimer "${file.original_name}" ?`)) {
+        if (window.confirm(`Supprimer "${file.original_name}" ?`)) {
           await api.delete(`/files/${file.id}`)
           queryClient.invalidateQueries({ queryKey })
+          toast.success(`"${file.original_name}" déplacé dans la corbeille`)
         }
         break
       case 'toggle-link':
@@ -93,9 +95,10 @@ export default function Explorer() {
         queryClient.invalidateQueries({ queryKey })
         break
       case 'delete-permanent':
-        if (confirm(`Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`)) {
+        if (window.confirm(`Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`)) {
           await api.delete(`/files/${file.id}/permanent`)
           queryClient.invalidateQueries({ queryKey })
+          toast.success('Fichier supprimé définitivement')
         }
         break
       case 'rename': {
@@ -114,6 +117,7 @@ export default function Explorer() {
         break
       case 'copy-link':
         navigator.clipboard.writeText(`${window.location.origin}/media/${file.link_token}`)
+        toast.success('Lien copié dans le presse-papiers')
         break
     }
   }, [queryClient, queryKey])
@@ -128,8 +132,9 @@ export default function Explorer() {
       a.download = 'archive.zip'
       a.click()
       URL.revokeObjectURL(url)
+      toast.success('Archive ZIP téléchargée')
     } catch {
-      alert('Erreur lors de la création du ZIP')
+      toast.error('Erreur lors de la création du ZIP')
     }
   }
 
@@ -284,6 +289,7 @@ export default function Explorer() {
               isTrash={view === 'trash'}
               selectedFiles={selectedFiles}
               onToggleSelect={toggleSelectFile}
+              onAction={handleFileAction}
             />
           ) : (
             <FileList

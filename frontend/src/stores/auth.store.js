@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import axios from 'axios'
 import api from '../utils/api.js'
 
 export const useAuthStore = create(
@@ -28,20 +29,23 @@ export const useAuthStore = create(
         return data
       },
 
-      // Restaure la session depuis le cookie httpOnly refresh_token (sans localStorage)
+      // Restaure la session depuis le cookie httpOnly refresh_token sans passer par /auth/me sans token
+      // (évite le 401 console noise au rechargement de page)
       initAuth: async () => {
         if (get().accessToken) return true
         try {
+          const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
+          set({ accessToken: data.accessToken })
           await get().fetchMe()
           return true
         } catch {
+          set({ user: null, accessToken: null })
           return false
         }
       },
     }),
     {
       name: 'wubalstore-auth',
-      // On ne persiste que l'objet user (UI), jamais le token (sécurité XSS)
       partialize: (state) => ({ user: state.user }),
     }
   )

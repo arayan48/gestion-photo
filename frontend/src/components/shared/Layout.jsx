@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar.jsx'
 import Topbar from './Topbar.jsx'
+import ToastContainer from './Toast.jsx'
 import { useEffect } from 'react'
 import { useAuthStore } from '../../stores/auth.store.js'
 import { useNotificationStore } from '../../stores/notification.store.js'
@@ -27,6 +28,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <ToastContainer />
     </div>
   )
 }

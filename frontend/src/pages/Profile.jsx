@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useAuthStore } from '../stores/auth.store.js'
 import api from '../utils/api.js'
-import { Camera, Shield, Link2, Unlink, Check } from 'lucide-react'
+import { Camera, Shield, Link2, Unlink, HardDrive } from 'lucide-react'
+import { toast } from '../stores/toast.store.js'
 
 export default function Profile() {
   const { user, fetchMe } = useAuthStore()
@@ -13,15 +14,7 @@ export default function Profile() {
   })
   const [totpQr, setTotpQr] = useState(null)
   const [totpCode, setTotpCode] = useState('')
-  const [msg, setMsg] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  const flash = (ok, txt) => {
-    if (ok) { setMsg(txt); setError('') }
-    else { setError(txt); setMsg('') }
-    setTimeout(() => { setMsg(''); setError('') }, 4000)
-  }
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault()
@@ -34,10 +27,10 @@ export default function Profile() {
         password: form.password || undefined,
       })
       await fetchMe()
-      flash(true, 'Profil mis à jour !')
+      toast.success('Profil mis à jour !')
       setForm((f) => ({ ...f, password: '' }))
     } catch (err) {
-      flash(false, err.response?.data?.error || 'Erreur')
+      toast.error(err.response?.data?.error || 'Erreur')
     } finally {
       setLoading(false)
     }
@@ -53,9 +46,9 @@ export default function Profile() {
       await api.post('/auth/totp/confirm', { code: totpCode })
       await fetchMe()
       setTotpQr(null)
-      flash(true, '2FA TOTP activé !')
+      toast.success('2FA TOTP activé !')
     } catch {
-      flash(false, 'Code invalide')
+      toast.error('Code invalide')
     }
   }
 
@@ -64,17 +57,17 @@ export default function Profile() {
     try {
       await api.post('/auth/totp/disable', { code: totpCode })
       await fetchMe()
-      flash(true, '2FA désactivé.')
+      toast.success('2FA désactivé')
       setTotpCode('')
     } catch {
-      flash(false, 'Code invalide')
+      toast.error('Code invalide')
     }
   }
 
   const handleUnlinkDiscord = async () => {
     await api.delete('/users/me/discord')
     await fetchMe()
-    flash(true, 'Compte Discord délié.')
+    toast.success('Compte Discord délié')
   }
 
   return (
@@ -108,7 +101,7 @@ export default function Profile() {
             />
           </label>
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-900 dark:text-gray-100">{user?.pseudo}</p>
           <p className="text-sm text-slate-500 dark:text-gray-400">{user?.email}</p>
           {user?.role_name && (
@@ -116,6 +109,28 @@ export default function Profile() {
               {user.role_name}
             </span>
           )}
+          {/* Quota */}
+          {user?.storage_quota > 0 && (() => {
+            const pct = Math.min(100, Math.round((user.storage_used / user.storage_quota) * 100))
+            const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-violet-500'
+            const usedMo = (user.storage_used / 1e6).toFixed(0)
+            const totalGo = (user.storage_quota / 1e9).toFixed(1)
+            return (
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1 text-slate-500 dark:text-gray-500">
+                    <HardDrive size={11} /> Stockage
+                  </span>
+                  <span className={`font-medium ${pct >= 90 ? 'text-red-500' : 'text-slate-500 dark:text-gray-500'}`}>
+                    {usedMo} Mo / {totalGo} Go ({pct}%)
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -148,13 +163,6 @@ export default function Profile() {
               minLength={8}
             />
           </div>
-
-          {msg && (
-            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
-              <Check size={14} /> {msg}
-            </div>
-          )}
-          {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <button type="submit" className="btn-primary text-sm" disabled={loading}>
             {loading ? 'Enregistrement...' : 'Enregistrer'}
