@@ -58,6 +58,20 @@ export async function seedPermissions() {
       ['email.provider', process.env.EMAIL_PROVIDER || 'brevo']
     )
 
+    // IPs locales auto-whitelistées
+    const localIps = [
+      { ip: '127.0.0.1',   label: 'Localhost (IPv4)' },
+      { ip: '::1',         label: 'Localhost (IPv6)' },
+      { ip: '172.17.0.1',  label: 'Docker bridge (eth0)' },
+      { ip: '172.18.0.1',  label: 'Docker compose bridge' },
+    ]
+    for (const { ip, label } of localIps) {
+      await client.query(
+        `INSERT INTO ip_whitelist (ip_address, label) VALUES ($1, $2) ON CONFLICT (ip_address) DO NOTHING`,
+        [ip, label]
+      )
+    }
+
     await client.query('COMMIT')
     console.log(`✅ Seed: ${PERMISSIONS.length} permissions insérées/mises à jour`)
   } catch (err) {

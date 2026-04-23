@@ -385,6 +385,23 @@ export default async function fileRoutes(fastify) {
     return reply.sendFile(file.stored_name, join(config.storage.path, subdir))
   })
 
+  // ─── Visionner un fichier (authentifié, sans whitelist IP) ──────────────
+  fastify.get('/:id/view', { preHandler: [authenticate] }, async (request, reply) => {
+    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [request.params.id])
+    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+
+    const file = rows[0]
+    const isVideo = file.mime_type.startsWith('video/')
+    const subdir = isVideo ? 'videos' : 'images'
+    const filePath = getFilePath(subdir, file.stored_name)
+
+    reply.header('Content-Disposition', `inline; filename="${file.original_name}"`)
+    reply.header('Content-Type', file.mime_type)
+    reply.header('Cache-Control', 'private, max-age=3600')
+
+    return reply.send(createReadStream(filePath))
+  })
+
   // ─── Télécharger un fichier ───────────────────────────────────────────────
   fastify.get('/:id/download', { preHandler: [authenticate] }, async (request, reply) => {
     const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [request.params.id])

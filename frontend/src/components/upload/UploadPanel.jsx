@@ -67,7 +67,6 @@ export default function UploadPanel({ folderId, onClose, onDone }) {
 
       try {
         await api.post('/files/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (e) => {
             const progress = Math.round((e.loaded / e.total) * 100)
             updateFile(i, { progress })

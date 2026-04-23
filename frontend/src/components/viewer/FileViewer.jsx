@@ -1,6 +1,7 @@
-import { X, Download, Link2, Unlink, Heart, HeartOff, Copy, ExternalLink } from 'lucide-react'
+import { X, Download, Heart, HeartOff, Copy, Link2, Unlink } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useAuthStore } from '../../stores/auth.store.js'
 
 function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
@@ -8,9 +9,11 @@ function formatSize(bytes) {
 }
 
 export default function FileViewer({ file, onClose, onAction }) {
+  const { accessToken } = useAuthStore()
   const isImage = file.mime_type?.startsWith('image/')
   const isVideo = file.mime_type?.startsWith('video/')
-  const mediaUrl = `/api/files/public/${file.link_token}`
+  // Endpoint authentifié (sans whitelist IP) — token en query param car <img>/<video> n'envoient pas de headers
+  const mediaUrl = `/api/files/${file.id}/view?token=${encodeURIComponent(accessToken || '')}`
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex" onClick={(e) => e.target === e.currentTarget && onClose()}>

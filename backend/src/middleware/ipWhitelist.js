@@ -1,8 +1,25 @@
 import pool from '../config/database.js'
 import { extractIp } from '../utils/fingerprint.js'
 
+function isLocalOrPrivateIp(ip) {
+  if (!ip) return false
+  // Loopback
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return true
+  // Docker bridge et réseaux privés courants (172.16.0.0/12)
+  const dockerMatch = ip.match(/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/)
+  if (dockerMatch) return true
+  // Réseau local 192.168.x.x
+  if (ip.startsWith('192.168.')) return true
+  // Réseau local 10.x.x.x
+  if (ip.startsWith('10.')) return true
+  return false
+}
+
 export async function checkIpWhitelist(request, reply) {
   const ip = extractIp(request)
+
+  // IPs locales et réseau privé toujours autorisés
+  if (isLocalOrPrivateIp(ip)) return
 
   const { rows } = await pool.query(
     'SELECT 1 FROM ip_whitelist WHERE ip_address = $1',
