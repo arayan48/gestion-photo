@@ -2,6 +2,10 @@ import pool from '../config/database.js'
 
 export async function authenticate(request, reply) {
   try {
+    // WebSocket et autres clients passent le token en query param (?token=...)
+    if (!request.headers.authorization && request.query?.token) {
+      request.headers.authorization = `Bearer ${request.query.token}`
+    }
     await request.jwtVerify()
 
     const { rows } = await pool.query(

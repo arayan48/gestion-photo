@@ -6,11 +6,8 @@ export const useNotificationStore = create((set, get) => ({
   ws: null,
 
   connect: (token) => {
-    const ws = new WebSocket(`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`)
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'auth', token }))
-    }
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws?token=${encodeURIComponent(token)}`)
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
