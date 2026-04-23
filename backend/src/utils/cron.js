@@ -1,6 +1,7 @@
 import cron from 'node-cron'
 import { join } from 'path'
 import { unlink, readdir } from 'fs/promises'
+import { totalmem, freemem, cpus, loadavg } from 'os'
 import pool from '../config/database.js'
 import { config } from '../config/env.js'
 import { log } from './logger.js'
@@ -66,6 +67,41 @@ export function startCronJobs() {
     try {
       await pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = true')
     } catch {}
+  })
+
+  // Métriques système : toutes les heures
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const totalMem = totalmem()
+      const freeMem = freemem()
+      const usedMem = totalMem - freeMem
+      const load = loadavg()
+      const cpuCount = cpus().length
+      const { rows: diskRows } = await pool.query(
+        'SELECT COALESCE(SUM(size), 0) AS media_bytes FROM files WHERE is_deleted = false'
+      )
+      const { rows: userRows } = await pool.query('SELECT COUNT(*) AS count FROM users WHERE is_active = true')
+      const { rows: fileRows } = await pool.query('SELECT COUNT(*) AS count FROM files WHERE is_deleted = false')
+
+      await log({
+        category: 'system',
+        level: 'info',
+        action: 'system_metrics',
+        metadata: {
+          ram_total_mb: Math.round(totalMem / 1e6),
+          ram_used_mb: Math.round(usedMem / 1e6),
+          ram_pct: Math.round((usedMem / totalMem) * 100),
+          cpu_load_1m: load[0].toFixed(2),
+          cpu_load_5m: load[1].toFixed(2),
+          cpu_cores: cpuCount,
+          media_gb: (parseInt(diskRows[0].media_bytes) / 1e9).toFixed(2),
+          active_users: parseInt(userRows[0].count),
+          total_files: parseInt(fileRows[0].count),
+        }
+      })
+    } catch (err) {
+      console.error('Erreur métriques système:', err)
+    }
   })
 
   console.log('✅ Cron jobs démarrés')

@@ -2,13 +2,194 @@ import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
 import { toast } from '../stores/toast.store.js'
+import { confirm } from '../stores/confirm.store.js'
 import {
   Users, HardDrive, FileImage, AlertTriangle, Shield, Plus, Trash2,
   UserCheck, UserX, Search, Activity, Info, AlertCircle,
   XCircle, Key, Save, X, Edit2, Database, Download, RefreshCw, Lock,
+  Eye, EyeOff, Server, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+
+// ── Modal générique ──────────────────────────────────────────────────────────
+function Modal({ title, onClose, children, wide }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div
+        className={`bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-slate-200 dark:border-gray-800 ${wide ? 'w-full max-w-2xl' : 'w-full max-w-lg'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800 shrink-0">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-gray-100">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// ── Log detail modal ──────────────────────────────────────────────────────────
+function LogModal({ log: l, onClose }) {
+  const LEVEL = { error: 'text-red-500', warning: 'text-amber-500', info: 'text-blue-500' }
+  const CAT_COLORS = { auth: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', files: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300', users: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', security: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300', system: 'bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300' }
+
+  let meta = null
+  try { meta = typeof l.metadata === 'string' ? JSON.parse(l.metadata) : l.metadata } catch {}
+
+  return (
+    <Modal title="Détails du log" onClose={onClose} wide>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Catégorie</p>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${CAT_COLORS[l.category] || CAT_COLORS.system}`}>{l.category}</span>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Niveau</p>
+            <span className={`text-sm font-semibold ${LEVEL[l.level]}`}>{l.level}</span>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Utilisateur</p>
+            <p className="text-sm text-slate-800 dark:text-gray-200">{l.user_pseudo || '—'}</p>
+            {l.user_email && <p className="text-xs text-slate-400 dark:text-gray-600">{l.user_email}</p>}
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Adresse IP</p>
+            <p className="text-sm font-mono text-slate-800 dark:text-gray-200">{l.ip_address || '—'}</p>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg col-span-2">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Action</p>
+            <p className="text-sm font-mono text-slate-800 dark:text-gray-200">{l.action}</p>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-gray-800 rounded-lg col-span-2">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-1">Date</p>
+            <p className="text-sm text-slate-800 dark:text-gray-200">{format(new Date(l.created_at), 'dd/MM/yyyy HH:mm:ss')}</p>
+          </div>
+        </div>
+
+        {meta && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-widest mb-2">Métadonnées</p>
+            <div className="bg-slate-950 dark:bg-black rounded-xl p-4 overflow-auto max-h-48">
+              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">{JSON.stringify(meta, null, 2)}</pre>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+// ── Whitelist edit modal ──────────────────────────────────────────────────────
+function WhitelistEditModal({ entry, onClose, onSave }) {
+  const [ip, setIp] = useState(entry.ip_address)
+  const [label, setLabel] = useState(entry.label || '')
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onSave({ ip, label })
+  }
+
+  return (
+    <Modal title="Modifier l'entrée" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Adresse IP</label>
+          <input className="input font-mono" value={ip} onChange={(e) => setIp(e.target.value)} required placeholder="192.168.1.1" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Étiquette</label>
+          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Serveur FiveM..." />
+        </div>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 rounded-lg transition-colors">Annuler</button>
+          <button type="submit" className="btn-primary text-sm flex items-center gap-2"><Save size={14} /> Enregistrer</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ── Add user modal ────────────────────────────────────────────────────────────
+function AddUserModal({ roles, onClose, onDone }) {
+  const [form, setForm] = useState({ email: '', pseudo: '', password: '', firstName: '', lastName: '', roleId: '', storageQuota: 1 })
+  const [showPwd, setShowPwd] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await api.post('/users', { ...form, storageQuota: form.storageQuota * 1024 * 1024 * 1024 })
+      toast.success(`Utilisateur "${form.pseudo}" créé`)
+      onClose()
+      onDone()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal title="Créer un utilisateur" onClose={onClose} wide>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Email *</label>
+            <input type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} required placeholder="user@exemple.com" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Pseudo *</label>
+            <input className="input" value={form.pseudo} onChange={(e) => set('pseudo', e.target.value)} required placeholder="monpseudo" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Prénom</label>
+            <input className="input" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} placeholder="Optionnel" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nom</label>
+            <input className="input" value={form.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="Optionnel" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Mot de passe *</label>
+          <div className="relative">
+            <input type={showPwd ? 'text' : 'password'} className="input pr-10" value={form.password} onChange={(e) => set('password', e.target.value)} required minLength={8} placeholder="Min. 8 caractères" />
+            <button type="button" onClick={() => setShowPwd((v) => !v)} tabIndex={-1} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Rôle</label>
+            <select className="input" value={form.roleId} onChange={(e) => set('roleId', e.target.value)}>
+              <option value="">Rôle par défaut</option>
+              {roles?.filter((r) => !r.is_super_admin).map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Quota (Go)</label>
+            <input type="number" min="1" max="500" className="input" value={form.storageQuota} onChange={(e) => set('storageQuota', e.target.value)} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 rounded-lg transition-colors">Annuler</button>
+          <button type="submit" disabled={loading} className="btn-primary text-sm flex items-center gap-2">
+            <Plus size={14} /> {loading ? 'Création...' : 'Créer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 // ── Stat Card ──────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, color = 'violet' }) {
@@ -75,24 +256,6 @@ const LOG_CATEGORIES = ['auth', 'files', 'users', 'security', 'system']
 // ── Permission matrix categories ─────────────────────────────────────────────
 const PERM_CATEGORY_ORDER = ['Fichiers & Médias', 'Utilisateurs', 'Sécurité', 'Système']
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-gray-800 shrink-0">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-gray-100">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6">
-          {children}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── Role modal ────────────────────────────────────────────────────────────────
 function RoleModal({ role, allPermissions, onClose, onSave }) {
@@ -262,6 +425,7 @@ export default function Dashboard() {
   const [selectedUsers, setSelectedUsers] = useState(new Set())
   const [userSearch, setUserSearch] = useState('')
   const [userModal, setUserModal] = useState(null) // { type: 'role'|'quota', user }
+  const [showAddUser, setShowAddUser] = useState(false)
 
   // Requests state
   const [selectedRequests, setSelectedRequests] = useState(new Set())
@@ -269,8 +433,9 @@ export default function Dashboard() {
   // Roles state
   const [roleModal, setRoleModal] = useState(null) // null | 'create' | roleObject
 
-  // Log filters (sent to API)
+  // Log state
   const [logFilters, setLogFilters] = useState({ level: '', category: '', search: '', from: '', to: '' })
+  const [selectedLog, setSelectedLog] = useState(null)
 
   // Backups state
   const [backupType, setBackupType] = useState('local')
@@ -278,6 +443,7 @@ export default function Dashboard() {
 
   // IP whitelist state
   const [newIp, setNewIp] = useState({ ip: '', label: '' })
+  const [editingIp, setEditingIp] = useState(null)
 
   // ── Queries ──
   const { data: stats } = useQuery({
@@ -309,7 +475,7 @@ export default function Dashboard() {
     queryFn: () => api.get('/admin/whitelist').then((r) => r.data),
     enabled: activeTab === 'whitelist',
   })
-  const { data: logs, isLoading: logsLoading } = useQuery({
+  const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['logs', logFilters],
     queryFn: () => {
       const params = {}
@@ -322,6 +488,7 @@ export default function Dashboard() {
     },
     enabled: activeTab === 'logs',
   })
+  const logs = logsData?.logs
   const { data: backups } = useQuery({
     queryKey: ['backups'],
     queryFn: () => api.get('/admin/backups').then((r) => r.data),
@@ -404,10 +571,20 @@ export default function Dashboard() {
   }
 
   const handleRemoveIp = async (id, ip) => {
-    if (!window.confirm(`Retirer ${ip} de la liste blanche ?`)) return
+    const ok = await confirm(`Retirer ${ip} de la liste blanche ?`, { danger: true, confirmLabel: 'Retirer', title: 'Supprimer l\'IP' })
+    if (!ok) return
     await api.delete(`/admin/whitelist/${id}`)
     toast.success('IP retirée')
     queryClient.invalidateQueries({ queryKey: ['whitelist'] })
+  }
+
+  const handleEditIpSave = async ({ ip, label }) => {
+    try {
+      await api.put(`/admin/whitelist/${editingIp.id}`, { ip, label })
+      toast.success('Entrée mise à jour')
+      setEditingIp(null)
+      queryClient.invalidateQueries({ queryKey: ['whitelist'] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
   }
 
   const handleCreateRole = async ({ name, permissionKeys }) => {
@@ -622,6 +799,9 @@ export default function Dashboard() {
                 className="bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none w-full dark:text-gray-300 dark:placeholder:text-gray-500"
               />
             </div>
+            <button onClick={() => setShowAddUser(true)} className="btn-primary flex items-center gap-2 text-sm shrink-0">
+              <Plus size={14} /> Ajouter
+            </button>
           </div>
 
           {selectedUsers.size > 0 && (
@@ -787,15 +967,21 @@ export default function Dashboard() {
                       </div>
                     </td>
                     <td className="td hidden sm:table-cell">
-                      <Badge color="gray">
-                        {role.permissions?.length || 0} permission{(role.permissions?.length || 0) !== 1 ? 's' : ''}
-                      </Badge>
+                      {role.is_super_admin ? (
+                        <Badge color="violet">Toutes (accès total)</Badge>
+                      ) : (
+                        <Badge color="gray">
+                          {role.permissions?.length || 0} permission{(role.permissions?.length || 0) !== 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </td>
                     <td className="td hidden md:table-cell text-xs text-slate-400 dark:text-gray-500">
                       {format(new Date(role.created_at), 'dd/MM/yyyy')}
                     </td>
                     <td className="td text-right">
-                      {!role.is_super_admin && (
+                      {role.is_super_admin ? (
+                        <Badge color="violet">Toutes</Badge>
+                      ) : (
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             onClick={() => setRoleModal(role)}
@@ -860,9 +1046,14 @@ export default function Dashboard() {
                     <td className="td hidden sm:table-cell text-slate-500 dark:text-gray-500">{entry.label || '—'}</td>
                     <td className="td hidden md:table-cell text-xs text-slate-400 dark:text-gray-500">{entry.added_by_pseudo}</td>
                     <td className="td text-right">
-                      <button onClick={() => handleRemoveIp(entry.id, entry.ip_address)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => setEditingIp(entry)} className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors" title="Modifier">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => handleRemoveIp(entry.id, entry.ip_address)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1051,7 +1242,12 @@ export default function Dashboard() {
                   const lvl = LOG_LEVELS[log.level] || LOG_LEVELS.info
                   const LvlIcon = lvl.icon
                   return (
-                    <tr key={log.id} className={`tr-hover ${lvl.bg}`}>
+                    <tr
+                      key={log.id}
+                      className={`tr-hover cursor-pointer ${lvl.bg}`}
+                      onClick={() => setSelectedLog(log)}
+                      title="Cliquer pour les détails"
+                    >
                       <td className="td">
                         <div className="flex items-center gap-1.5">
                           <LvlIcon size={13} className={lvl.color} />
@@ -1064,8 +1260,11 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="td text-slate-700 dark:text-gray-300 text-sm">{log.action}</td>
-                      <td className="td hidden md:table-cell text-xs text-slate-400 dark:text-gray-500">
-                        {log.user_pseudo || '—'}
+                      <td className="td hidden md:table-cell">
+                        <div>
+                          <p className="text-xs text-slate-600 dark:text-gray-400">{log.user_pseudo || '—'}</p>
+                          {log.ip_address && <p className="text-[10px] text-slate-400 dark:text-gray-600 font-mono">{log.ip_address}</p>}
+                        </div>
                       </td>
                       <td className="td text-right">
                         <span className="text-xs text-slate-400 dark:text-gray-600" title={format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss')}>
@@ -1104,6 +1303,26 @@ export default function Dashboard() {
           roles={roles}
           onClose={() => setUserModal(null)}
           onSave={handleUserModalSave}
+        />
+      )}
+
+      {selectedLog && (
+        <LogModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      )}
+
+      {editingIp && (
+        <WhitelistEditModal
+          entry={editingIp}
+          onClose={() => setEditingIp(null)}
+          onSave={handleEditIpSave}
+        />
+      )}
+
+      {showAddUser && (
+        <AddUserModal
+          roles={roles}
+          onClose={() => setShowAddUser(false)}
+          onDone={() => queryClient.invalidateQueries({ queryKey: ['users'] })}
         />
       )}
     </div>

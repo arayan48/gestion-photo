@@ -1,4 +1,4 @@
-import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown } from 'lucide-react'
+import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown, Trash2 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth.store.js'
@@ -10,7 +10,7 @@ import { fr } from 'date-fns/locale'
 
 export default function Topbar() {
   const { user, logout } = useAuthStore()
-  const { notifications, unreadCount, markRead, markAllRead } = useNotificationStore()
+  const { notifications, unreadCount, markRead, markAllRead, remove: removeNotif, clearAll } = useNotificationStore()
   const { resolvedTheme, toggle: toggleTheme } = useThemeStore()
   const navigate = useNavigate()
 
@@ -42,6 +42,16 @@ export default function Topbar() {
   const handleMarkAllRead = async () => {
     await api.post('/admin/notifications/read-all')
     markAllRead()
+  }
+
+  const handleDeleteNotif = async (id) => {
+    await api.delete(`/admin/notifications/${id}`).catch(() => {})
+    removeNotif(id)
+  }
+
+  const handleClearAll = async () => {
+    await api.delete('/admin/notifications').catch(() => {})
+    clearAll()
   }
 
   return (
@@ -82,33 +92,52 @@ export default function Topbar() {
           </button>
 
           {showNotif && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden dark:bg-gray-900 dark:border-gray-800">
+            <div className="absolute right-0 top-full mt-2 w-88 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden dark:bg-gray-900 dark:border-gray-800" style={{ width: 340 }}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-gray-800">
-                <span className="text-sm font-semibold text-slate-800 dark:text-gray-200">Notifications</span>
-                {unreadCount > 0 && (
-                  <button onClick={handleMarkAllRead} className="text-xs text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 transition-colors">
-                    Tout marquer lu
-                  </button>
-                )}
+                <span className="text-sm font-semibold text-slate-800 dark:text-gray-200">
+                  Notifications
+                  {unreadCount > 0 && <span className="ml-2 px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[10px] rounded-full font-bold">{unreadCount}</span>}
+                </span>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button onClick={handleMarkAllRead} className="text-xs text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 transition-colors">
+                      Tout lire
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button onClick={handleClearAll} className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors flex items-center gap-1">
+                      <Trash2 size={11} /> Tout supprimer
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-gray-800">
                 {notifications.length === 0 ? (
                   <p className="text-center text-slate-400 dark:text-gray-500 text-sm py-10">Aucune notification</p>
                 ) : (
                   notifications.slice(0, 20).map((n) => (
-                    <button
+                    <div
                       key={n.id}
-                      onClick={() => handleMarkRead(n.id)}
-                      className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors flex items-start gap-2 ${!n.is_read ? 'bg-violet-50/50 dark:bg-violet-900/10' : ''}`}
+                      className={`flex items-start gap-2 px-4 py-3 group ${!n.is_read ? 'bg-violet-50/50 dark:bg-violet-900/10' : ''}`}
                     >
                       {!n.is_read && <span className="mt-1.5 w-2 h-2 rounded-full bg-violet-500 shrink-0" />}
-                      <div className={!n.is_read ? '' : 'pl-4'}>
-                        <p className="text-sm text-slate-700 dark:text-gray-300 text-left">{n.message}</p>
+                      <button
+                        onClick={() => handleMarkRead(n.id)}
+                        className={`flex-1 text-left ${!n.is_read ? '' : 'pl-4'}`}
+                      >
+                        <p className="text-sm text-slate-700 dark:text-gray-300">{n.message}</p>
                         <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
                           {formatDistanceToNow(new Date(n.created_at), { locale: fr, addSuffix: true })}
                         </p>
-                      </div>
-                    </button>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteNotif(n.id) }}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-all shrink-0"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   ))
                 )}
               </div>

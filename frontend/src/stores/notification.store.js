@@ -41,4 +41,11 @@ export const useNotificationStore = create((set, get) => ({
     notifications: state.notifications.map((n) => ({ ...n, is_read: true })),
     unreadCount: 0,
   })),
+
+  remove: (id) => set((state) => ({
+    notifications: state.notifications.filter((n) => n.id !== id),
+    unreadCount: Math.max(0, state.unreadCount - (state.notifications.find((n) => n.id === id && !n.is_read) ? 1 : 0)),
+  })),
+
+  clearAll: () => set({ notifications: [], unreadCount: 0 }),
 }))

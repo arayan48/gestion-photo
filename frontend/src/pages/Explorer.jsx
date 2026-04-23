@@ -8,8 +8,9 @@ import UploadPanel from '../components/upload/UploadPanel.jsx'
 import FileViewer from '../components/viewer/FileViewer.jsx'
 import ContextMenu from '../components/explorer/ContextMenu.jsx'
 import Breadcrumb from '../components/explorer/Breadcrumb.jsx'
-import { Grid3X3, List, Upload, Search, Download, X, Calendar } from 'lucide-react'
+import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash2, CheckSquare } from 'lucide-react'
 import { toast } from '../stores/toast.store.js'
+import { confirm } from '../stores/confirm.store.js'
 
 export default function Explorer() {
   const [searchParams] = useSearchParams()
@@ -25,6 +26,8 @@ export default function Explorer() {
   const [showDateFilter, setShowDateFilter] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [selectedFiles, setSelectedFiles] = useState([])
+  const [newFolderMode, setNewFolderMode] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
   const queryClient = useQueryClient()
 
   const queryKey = ['files', view, folderId, search, dateFrom, dateTo]
@@ -71,13 +74,15 @@ export default function Explorer() {
       case 'view':
         setSelectedFile(file)
         break
-      case 'delete':
-        if (window.confirm(`Supprimer "${file.original_name}" ?`)) {
+      case 'delete': {
+        const ok = await confirm(`Supprimer "${file.original_name}" ?`, { danger: true, confirmLabel: 'Supprimer', title: 'Supprimer le fichier' })
+        if (ok) {
           await api.delete(`/files/${file.id}`)
           queryClient.invalidateQueries({ queryKey })
           toast.success(`"${file.original_name}" déplacé dans la corbeille`)
         }
         break
+      }
       case 'toggle-link':
         await api.post(`/files/${file.id}/toggle-link`)
         queryClient.invalidateQueries({ queryKey })
@@ -94,13 +99,15 @@ export default function Explorer() {
         await api.post(`/files/${file.id}/restore`)
         queryClient.invalidateQueries({ queryKey })
         break
-      case 'delete-permanent':
-        if (window.confirm(`Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`)) {
+      case 'delete-permanent': {
+        const ok = await confirm(`Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`, { danger: true, confirmLabel: 'Supprimer définitivement', title: 'Suppression permanente' })
+        if (ok) {
           await api.delete(`/files/${file.id}/permanent`)
           queryClient.invalidateQueries({ queryKey })
           toast.success('Fichier supprimé définitivement')
         }
         break
+      }
       case 'rename': {
         const newName = prompt('Nouveau nom :', file.original_name)
         if (newName && newName !== file.original_name) {
@@ -145,6 +152,27 @@ export default function Explorer() {
   }, [])
 
   const clearSelection = () => setSelectedFiles([])
+
+  const handleEmptyTrash = async () => {
+    const ok = await confirm('Vider la corbeille ? Cette action est irréversible.', { danger: true, confirmLabel: 'Vider', title: 'Vider la corbeille' })
+    if (!ok) return
+    try {
+      const { data } = await api.delete('/files/trash')
+      toast.success(data.message)
+      queryClient.invalidateQueries({ queryKey })
+    } catch { toast.error('Erreur lors de la suppression') }
+  }
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+    try {
+      await api.post('/files/folders', { name: newFolderName.trim(), parentId: folderId || null })
+      toast.success(`Dossier "${newFolderName}" créé`)
+      setNewFolderName('')
+      setNewFolderMode(false)
+      queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
+  }
 
   const clearDateFilter = () => { setDateFrom(''); setDateTo(''); setShowDateFilter(false) }
 
@@ -244,9 +272,36 @@ export default function Explorer() {
           </div>
 
           {view === 'mine' && (
-            <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-2 text-sm py-1.5">
-              <Upload size={15} />
-              Uploader
+            <>
+              {newFolderMode ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    className="input text-sm py-1.5 w-40"
+                    placeholder="Nom du dossier"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') { setNewFolderMode(false); setNewFolderName('') } }}
+                    autoFocus
+                  />
+                  <button onClick={handleCreateFolder} className="btn-primary text-sm py-1.5">Créer</button>
+                  <button onClick={() => { setNewFolderMode(false); setNewFolderName('') }} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300">
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setNewFolderMode(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
+                  <FolderPlus size={14} /> Dossier
+                </button>
+              )}
+              <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-2 text-sm py-1.5">
+                <Upload size={15} />
+                Uploader
+              </button>
+            </>
+          )}
+          {view === 'trash' && (
+            <button onClick={handleEmptyTrash} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
+              <Trash2 size={14} /> Vider la corbeille
             </button>
           )}
         </div>

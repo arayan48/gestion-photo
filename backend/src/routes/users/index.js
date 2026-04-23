@@ -97,13 +97,54 @@ export default async function userRoutes(fastify) {
     }
   })
 
+  // ─── Créer un utilisateur manuellement (admin) ───────────────────────────
+  fastify.post('/', {
+    preHandler: [authenticate, requirePermission('users.accept_requests')],
+  }, async (request, reply) => {
+    const { email, pseudo, password, firstName, lastName, roleId, storageQuota } = request.body
+    if (!email || !pseudo || !password) {
+      return reply.code(400).send({ error: 'Email, pseudo et mot de passe requis' })
+    }
+
+    const { rows: existing } = await pool.query('SELECT id FROM users WHERE email = $1 OR pseudo = $2', [email, pseudo])
+    if (existing.length) return reply.code(409).send({ error: 'Email ou pseudo déjà utilisé' })
+
+    const { hashPassword } = await import('../services/auth.service.js')
+    const hash = await hashPassword(password)
+
+    let finalRoleId = roleId
+    if (!finalRoleId) {
+      const { rows: roleRows } = await pool.query('SELECT id FROM roles WHERE is_super_admin = false LIMIT 1')
+      finalRoleId = roleRows[0]?.id
+    }
+
+    const quota = storageQuota || 1073741824
+    await pool.query(
+      `INSERT INTO users (email, pseudo, first_name, last_name, password_hash, role_id, storage_quota, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
+      [email.toLowerCase(), pseudo, firstName || null, lastName || null, hash, finalRoleId, quota]
+    )
+
+    await log({ category: 'users', level: 'info', action: 'user_created_by_admin', userId: request.currentUser.id, metadata: { email, pseudo } })
+    return reply.code(201).send({ message: 'Utilisateur créé.' })
+  })
+
   // ─── Modifier un utilisateur ──────────────────────────────────────────────
   fastify.patch('/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params
     const user = request.currentUser
-    const isSelf = user.id === id
 
     const { roleId, storageQuota, suspend } = request.body
+
+    // Protéger le Super Admin de toute modification de suspension
+    if (typeof suspend === 'boolean') {
+      const { rows: targetRows } = await pool.query(
+        'SELECT r.is_super_admin FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.id = $1', [id]
+      )
+      if (targetRows[0]?.is_super_admin) {
+        return reply.code(403).send({ error: 'Impossible de suspendre le Super Admin' })
+      }
+    }
 
     if (roleId && !user.is_super_admin) {
       return reply.code(403).send({ error: 'Permission refusée' })
@@ -134,7 +175,7 @@ export default async function userRoutes(fastify) {
     params.push(id)
     await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params)
 
-    await log({ category: 'users', level: 'info', action: 'user_updated', userId: user.id, metadata: { targetId: id } })
+    await log({ category: 'users', level: 'info', action: 'user_updated', userId: user.id, metadata: { targetId: id, changes: request.body } })
 
     return reply.send({ message: 'Utilisateur mis à jour.' })
   })
@@ -145,6 +186,14 @@ export default async function userRoutes(fastify) {
   }, async (request, reply) => {
     const { id } = request.params
     if (id === request.currentUser.id) return reply.code(400).send({ error: 'Impossible de se supprimer soi-même' })
+
+    // Protéger le Super Admin
+    const { rows: targetRows } = await pool.query(
+      'SELECT r.is_super_admin FROM users u LEFT JOIN roles r ON u.role_id = r.id WHERE u.id = $1', [id]
+    )
+    if (targetRows[0]?.is_super_admin) {
+      return reply.code(403).send({ error: 'Impossible de supprimer le Super Admin' })
+    }
 
     await pool.query('DELETE FROM users WHERE id = $1', [id])
     await log({ category: 'users', level: 'warning', action: 'user_deleted', userId: request.currentUser.id, metadata: { targetId: id } })

@@ -22,6 +22,7 @@ import {
 } from '../../services/storage.service.js'
 import { checkMediaStorageLimit } from '../../config/storage.js'
 import { config } from '../../config/env.js'
+import { extractIp } from '../../utils/fingerprint.js'
 
 export default async function fileRoutes(fastify) {
   // ─── Upload ───────────────────────────────────────────────────────────────
@@ -52,8 +53,14 @@ export default async function fileRoutes(fastify) {
       }
     }
 
-    if (!fileBuffer.buffer) return reply.code(400).send({ error: 'Fichier requis' })
-    if (!validateMime(fileBuffer.mimetype)) return reply.code(400).send({ error: 'Type de fichier non supporté' })
+    if (!fileBuffer.buffer) {
+      await log({ category: 'files', level: 'warning', action: 'upload_failed', userId: user.id, ipAddress: extractIp(request), metadata: { reason: 'Fichier manquant' } })
+      return reply.code(400).send({ error: 'Fichier requis' })
+    }
+    if (!validateMime(fileBuffer.mimetype)) {
+      await log({ category: 'files', level: 'warning', action: 'upload_failed', userId: user.id, ipAddress: extractIp(request), metadata: { reason: 'Type MIME refusé', mime: fileBuffer.mimetype, filename: fileBuffer.filename } })
+      return reply.code(400).send({ error: 'Type de fichier non supporté' })
+    }
 
     // Vérifier quota utilisateur
     const fileSize = fileBuffer.buffer.length
@@ -120,7 +127,7 @@ export default async function fileRoutes(fastify) {
     }
 
     await notify({ userId: user.id, type: 'upload_done', message: `Fichier "${originalName}" uploadé avec succès` })
-    await log({ category: 'files', level: 'info', action: 'file_uploaded', userId: user.id, metadata: { fileId: fileRows[0].id, name: originalName } })
+    await log({ category: 'files', level: 'info', action: 'file_uploaded', userId: user.id, ipAddress: extractIp(request), metadata: { fileId: fileRows[0].id, name: originalName, size: fileSize, mime: fileBuffer.mimetype, qualityPreset } })
 
     return reply.code(201).send(fileRows[0])
   })
@@ -241,6 +248,30 @@ export default async function fileRoutes(fastify) {
       [request.params.id, request.currentUser.id]
     )
     return reply.send({ message: 'Fichier restauré' })
+  })
+
+  // ─── Vider la corbeille ───────────────────────────────────────────────────
+  fastify.delete('/trash', { preHandler: [authenticate] }, async (request, reply) => {
+    const user = request.currentUser
+    const { rows: files } = await pool.query(
+      'SELECT id, stored_name, mime_type, size FROM files WHERE owner_id = $1 AND is_deleted = true',
+      [user.id]
+    )
+
+    const { deleteFile } = await import('../../services/storage.service.js')
+    for (const file of files) {
+      const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
+      await deleteFile(file.stored_name, subdir).catch(() => {})
+    }
+
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+    await pool.query('DELETE FROM files WHERE owner_id = $1 AND is_deleted = true', [user.id])
+    if (totalSize > 0) {
+      await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [totalSize, user.id])
+    }
+
+    await log({ category: 'files', level: 'info', action: 'trash_emptied', userId: user.id, metadata: { count: files.length } })
+    return reply.send({ message: `Corbeille vidée (${files.length} fichier(s))` })
   })
 
   // ─── Infos d'un fichier ───────────────────────────────────────────────────

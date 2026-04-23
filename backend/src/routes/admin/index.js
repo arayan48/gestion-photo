@@ -48,7 +48,22 @@ export default async function adminRoutes(fastify) {
     )
 
     await log({ category: 'security', level: 'info', action: 'ip_whitelisted', userId: request.currentUser.id, metadata: { ip, label } })
-    return reply.code(201).send(rows[0])
+    return reply.code(201).send(rows[0] || { message: 'IP déjà présente' })
+  })
+
+  fastify.put('/whitelist/:id', {
+    preHandler: [authenticate, requirePermission('security.manage_whitelist')],
+  }, async (request, reply) => {
+    const { ip, label } = request.body
+    const { id } = request.params
+    if (!ip) return reply.code(400).send({ error: 'IP requise' })
+
+    await pool.query(
+      'UPDATE ip_whitelist SET ip_address = $1, label = $2 WHERE id = $3',
+      [ip, label || null, id]
+    )
+    await log({ category: 'security', level: 'info', action: 'ip_whitelist_updated', userId: request.currentUser.id, metadata: { id, ip, label } })
+    return reply.send({ message: 'Entrée mise à jour.' })
   })
 
   fastify.delete('/whitelist/:id', {
@@ -83,21 +98,21 @@ export default async function adminRoutes(fastify) {
   fastify.get('/logs', {
     preHandler: [authenticate, requirePermission('system.view_logs')],
   }, async (request, reply) => {
-    const { category, level, userId, search, from, to, page = 1, limit = 50 } = request.query
+    const { category, level, userId, search, from, to, page = 1, limit = 100 } = request.query
     const offset = (page - 1) * limit
 
     let where = 'WHERE 1=1'
     const params = []
 
-    if (category) { params.push(category); where += ` AND category = $${params.length}` }
-    if (level) { params.push(level); where += ` AND level = $${params.length}` }
+    if (category) { params.push(category); where += ` AND l.category = $${params.length}` }
+    if (level) { params.push(level); where += ` AND l.level = $${params.length}` }
     if (userId) { params.push(userId); where += ` AND l.user_id = $${params.length}` }
-    if (search) { params.push(`%${search}%`); where += ` AND action ILIKE $${params.length}` }
+    if (search) { params.push(`%${search}%`); where += ` AND (l.action ILIKE $${params.length} OR l.metadata::text ILIKE $${params.length})` }
     if (from) { params.push(from); where += ` AND l.created_at >= $${params.length}` }
     if (to) { params.push(to); where += ` AND l.created_at <= $${params.length}` }
 
     const { rows } = await pool.query(
-      `SELECT l.*, u.pseudo AS user_pseudo FROM logs l
+      `SELECT l.*, u.pseudo AS user_pseudo, u.email AS user_email FROM logs l
        LEFT JOIN users u ON l.user_id = u.id
        ${where}
        ORDER BY l.created_at DESC
@@ -105,7 +120,12 @@ export default async function adminRoutes(fastify) {
       [...params, limit, offset]
     )
 
-    return reply.send(rows)
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*) FROM logs l ${where}`,
+      params
+    )
+
+    return reply.send({ logs: rows, total: parseInt(countRows[0].count), page: parseInt(page), limit: parseInt(limit) })
   })
 
   // ─── Notifications ─────────────────────────────────────────────────────────
@@ -127,6 +147,16 @@ export default async function adminRoutes(fastify) {
     return reply.send({ message: 'Toutes les notifications marquées lues.' })
   })
 
+  fastify.delete('/notifications/:id', { preHandler: [authenticate] }, async (request, reply) => {
+    await pool.query('DELETE FROM notifications WHERE id = $1 AND user_id = $2', [request.params.id, request.currentUser.id])
+    return reply.send({ message: 'Notification supprimée.' })
+  })
+
+  fastify.delete('/notifications', { preHandler: [authenticate] }, async (request, reply) => {
+    await pool.query('DELETE FROM notifications WHERE user_id = $1', [request.currentUser.id])
+    return reply.send({ message: 'Toutes les notifications supprimées.' })
+  })
+
   // ─── Configuration système ────────────────────────────────────────────────
   fastify.get('/config', {
     preHandler: [authenticate, requirePermission('system.manage_config')],
@@ -138,7 +168,7 @@ export default async function adminRoutes(fastify) {
   fastify.patch('/config', {
     preHandler: [authenticate, requirePermission('system.manage_config')],
   }, async (request, reply) => {
-    const updates = request.body // { key: value, ... }
+    const updates = request.body
     for (const [key, value] of Object.entries(updates)) {
       await pool.query(
         'INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()',

@@ -91,7 +91,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* Quota stockage */}
+      {/* Quota stockage + copyright */}
       <div className="px-4 pt-3 mt-2 border-t border-slate-100 dark:border-gray-800">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-medium text-slate-500 dark:text-gray-500">Stockage</span>
@@ -107,6 +107,10 @@ export default function Sidebar() {
         </div>
         <p className="text-[10px] text-slate-400 dark:text-gray-600 mt-1.5">
           {formatBytes(used)} / {formatBytes(quota)}
+        </p>
+        <p className="text-[9px] text-slate-300 dark:text-gray-700 mt-3 text-center">
+          by <a href="https://arayan.fr" target="_blank" rel="noreferrer" className="hover:text-violet-400 transition-colors">arayan.fr</a>
+          {' '}© {new Date().getFullYear()}
         </p>
       </div>
     </aside>

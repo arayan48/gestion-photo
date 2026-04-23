@@ -60,14 +60,14 @@ export async function seedPermissions() {
 
     // IPs locales auto-whitelistées
     const localIps = [
-      { ip: '127.0.0.1',   label: 'Localhost (IPv4)' },
-      { ip: '::1',         label: 'Localhost (IPv6)' },
-      { ip: '172.17.0.1',  label: 'Docker bridge (eth0)' },
-      { ip: '172.18.0.1',  label: 'Docker compose bridge' },
+      { ip: '127.0.0.1',   label: 'Localhost IPv4 — Système' },
+      { ip: '::1',         label: 'Localhost IPv6 — Système' },
+      { ip: '172.17.0.1',  label: 'Docker bridge eth0 — Système' },
+      { ip: '172.18.0.1',  label: 'Docker Compose bridge — Système' },
     ]
     for (const { ip, label } of localIps) {
       await client.query(
-        `INSERT INTO ip_whitelist (ip_address, label) VALUES ($1, $2) ON CONFLICT (ip_address) DO NOTHING`,
+        `INSERT INTO ip_whitelist (ip_address, label) VALUES ($1, $2) ON CONFLICT (ip_address) DO UPDATE SET label = EXCLUDED.label WHERE ip_whitelist.added_by IS NULL`,
         [ip, label]
       )
     }
