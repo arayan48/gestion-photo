@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useSearchParams, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
@@ -36,7 +36,10 @@ export default function Explorer() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  const queryKey = ['files', view, folderId, search, dateFrom, dateTo]
+  const queryKey = useMemo(
+    () => ['files', view, folderId, search, dateFrom, dateTo],
+    [view, folderId, search, dateFrom, dateTo]
+  )
 
   const handleDragStart = useCallback((event) => {
     const { data } = event.active

@@ -46,7 +46,7 @@ function DroppableFolder({ folder, onDoubleClick, onContextMenu }) {
       onDoubleClick={() => onDoubleClick(folder)}
       onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
     >
-      <div className="flex items-center justify-center h-16 mb-2">
+      <div className="relative flex items-center justify-center h-16 mb-2">
         <Folder size={36} className={isOver ? 'text-violet-500' : 'text-yellow-500/80'} />
         {isOver && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -147,7 +147,7 @@ function DraggableFile({ file, isSelected, onToggleSelect, onFileClick, onContex
   )
 }
 
-export default function FileGrid({ files, folders, onFileClick, onContextMenu, isTrash, selectedFiles = [], onToggleSelect, onAction, onNavigateFolder }) {
+export default function FileGrid({ files, folders, onFileClick, onContextMenu, isTrash, selectedFiles = [], onToggleSelect, onAction }) {
   const navigate = useNavigate()
 
   return (

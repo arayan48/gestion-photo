@@ -548,11 +548,18 @@ export default async function fileRoutes(fastify) {
     reply.header('Content-Disposition', `attachment; filename="archive.zip"`)
     reply.header('Content-Type', 'application/zip')
 
-    // Supprimer le zip dès que le téléchargement est terminé
-    reply.raw.on('finish', () => {
-      unlink(zipPath).catch(() => {})
-      pool.query('DELETE FROM temp_zips WHERE path = $1', [zipPath]).catch(() => {})
-    })
+    // Supprimer le zip après téléchargement (finish) ou abandon de connexion (close)
+    const cleanupZip = (() => {
+      let done = false
+      return () => {
+        if (done) return
+        done = true
+        unlink(zipPath).catch(() => {})
+        pool.query('DELETE FROM temp_zips WHERE path = $1', [zipPath]).catch(() => {})
+      }
+    })()
+    reply.raw.on('finish', cleanupZip)
+    reply.raw.on('close', cleanupZip)
 
     return reply.send(createReadStream(zipPath))
   })

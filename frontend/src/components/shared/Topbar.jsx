@@ -1,5 +1,5 @@
 import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown, Trash2 } from 'lucide-react'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth.store.js'
 import { useNotificationStore } from '../../stores/notification.store.js'
