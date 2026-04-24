@@ -1,7 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
-import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle } from 'lucide-react'
+import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, ToggleLeft, ToggleRight } from 'lucide-react'
+
+function Toggle({ checked, onChange, label }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <button type="button" onClick={() => onChange(!checked)}
+        className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-violet-600' : 'bg-slate-300 dark:bg-gray-700'}`}>
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+      </button>
+      {label && <span className="text-sm text-slate-700 dark:text-gray-300">{label}</span>}
+    </label>
+  )
+}
+
+function Tooltip({ text }) {
+  return (
+    <span className="group relative inline-flex items-center">
+      <Info size={14} className="text-slate-400 dark:text-gray-600 cursor-help" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-72 bg-slate-900 dark:bg-black text-white text-xs rounded-lg px-3 py-2 shadow-xl z-50 leading-relaxed pointer-events-none">
+        {text}
+      </span>
+    </span>
+  )
+}
 
 // ── Helpers UI ────────────────────────────────────────────────────────────────
 function Section({ title, children }) {
@@ -16,7 +39,7 @@ function Section({ title, children }) {
 function Field({ label, hint, children }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">{label}</label>
+      <div className="text-sm font-medium text-slate-700 dark:text-gray-300 mb-1 flex items-center gap-1">{label}</div>
       {children}
       {hint && <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">{hint}</p>}
     </div>
@@ -266,6 +289,93 @@ function TabDiscord({ config }) {
   )
 }
 
+// ── Onglet Notifications ──────────────────────────────────────────────────────
+const NOTIF_EVENTS = [
+  { key: 'new_request',    label: 'Nouvelle demande de compte',  desc: 'Un utilisateur soumet une demande' },
+  { key: 'storage_alert',  label: 'Alerte stockage (90%)',        desc: 'Espace disque presque saturé' },
+  { key: 'backup_done',    label: 'Sauvegarde terminée',          desc: 'Succès ou échec d\'une sauvegarde' },
+  { key: 'backup_failed',  label: 'Échec de sauvegarde',          desc: 'Une sauvegarde a échoué' },
+  { key: 'login_alert',    label: 'Connexion suspecte détectée',  desc: 'Tentative de brute-force ou ban' },
+  { key: 'user_banned',    label: 'Utilisateur banni',            desc: 'Un utilisateur a été banni automatiquement' },
+  { key: 'system_error',   label: 'Erreur critique système',      desc: 'Erreur backend non gérée' },
+  { key: 'upload_done',    label: 'Upload terminé (bulk)',         desc: 'Quand un utilisateur termine un gros upload' },
+]
+
+function TabNotifications({ config }) {
+  const emailKeys = NOTIF_EVENTS.map((e) => `notif.email.${e.key}`)
+  const discordKeys = NOTIF_EVENTS.map((e) => `notif.discord.${e.key}`)
+  const keys = ['notif.email.enabled', 'notif.discord.enabled', 'notif.discord.webhook', ...emailKeys, ...discordKeys]
+  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+
+  const emailEnabled = form['notif.email.enabled'] === 'true'
+  const discordEnabled = form['notif.discord.enabled'] === 'true'
+
+  return (
+    <form onSubmit={save} className="space-y-6">
+      {/* Email notifications */}
+      <Section title="Notifications Email">
+        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">Notifications par email</p>
+            <p className="text-xs text-slate-400 dark:text-gray-600">Envoie un email aux admins pour les événements sélectionnés</p>
+          </div>
+          <Toggle checked={emailEnabled} onChange={(v) => set('notif.email.enabled', String(v))} />
+        </div>
+        {emailEnabled && (
+          <div className="space-y-2 mt-2">
+            {NOTIF_EVENTS.map(({ key, label, desc }) => (
+              <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                <input type="checkbox"
+                  checked={form[`notif.email.${key}`] === 'true'}
+                  onChange={(e) => set(`notif.email.${key}`, String(e.target.checked))}
+                  className="mt-0.5 w-4 h-4 rounded text-violet-600" />
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</p>
+                  <p className="text-xs text-slate-400 dark:text-gray-600">{desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Discord webhook */}
+      <Section title="Notifications Discord (Webhook)">
+        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">Notifications Discord</p>
+            <p className="text-xs text-slate-400 dark:text-gray-600">Envoie des messages dans un channel Discord via Webhook</p>
+          </div>
+          <Toggle checked={discordEnabled} onChange={(v) => set('notif.discord.enabled', String(v))} />
+        </div>
+        {discordEnabled && (
+          <div className="space-y-3 mt-2">
+            <Field label="URL du Webhook Discord" hint="Paramètres Discord → Intégrations → Créer un webhook → Copier l'URL">
+              <input className="input font-mono text-sm" value={form['notif.discord.webhook'] || ''} onChange={(e) => set('notif.discord.webhook', e.target.value)} placeholder="https://discord.com/api/webhooks/..." />
+            </Field>
+            <div className="space-y-2">
+              {NOTIF_EVENTS.map(({ key, label, desc }) => (
+                <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                  <input type="checkbox"
+                    checked={form[`notif.discord.${key}`] === 'true'}
+                    onChange={(e) => set(`notif.discord.${key}`, String(e.target.checked))}
+                    className="mt-0.5 w-4 h-4 rounded text-violet-600" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</p>
+                    <p className="text-xs text-slate-400 dark:text-gray-600">{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <SaveBar saving={saving} saved={saved} error={error} />
+    </form>
+  )
+}
+
 // ── Onglet Sauvegardes ────────────────────────────────────────────────────────
 const BACKUP_PROVIDERS = [
   { value: 'local',     label: 'Local',          desc: 'Disque du serveur' },
@@ -278,149 +388,146 @@ const BACKUP_PROVIDERS = [
   { value: 'rclone',    label: 'rclone custom',  desc: 'Remote rclone configuré' },
 ]
 
+function ProviderConfig({ name, form, set }) {
+  if (name === 'backblaze') return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 dark:text-amber-400">Gratuit jusqu'à 10 Go. Créez un bucket sur <strong>backblaze.com</strong>.</p>
+      </div>
+      <Field label="Key ID"><input className="input font-mono text-sm" value={form['b2.key_id'] || ''} onChange={(e) => set('b2.key_id', e.target.value)} placeholder="00xxxxxxxxxxxxxxxxxxxxxxx" /></Field>
+      <Field label="App Key"><PasswordInput value={form['b2.key'] || ''} onChange={(e) => set('b2.key', e.target.value)} placeholder="K00xxx..." /></Field>
+      <Field label="Bucket"><input className="input font-mono text-sm" value={form['b2.bucket'] || ''} onChange={(e) => set('b2.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
+    </div>
+  )
+  if (name === 's3') return (
+    <div className="space-y-3">
+      <Field label="Endpoint" hint="Vide=AWS. Wasabi: s3.wasabisys.com. MinIO: http://...">
+        <input className="input font-mono text-sm" value={form['s3.endpoint'] || ''} onChange={(e) => set('s3.endpoint', e.target.value)} placeholder="https://s3.wasabisys.com (optionnel)" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Région"><input className="input font-mono text-sm" value={form['s3.region'] || ''} onChange={(e) => set('s3.region', e.target.value)} placeholder="eu-west-1" /></Field>
+        <Field label="Bucket"><input className="input font-mono text-sm" value={form['s3.bucket'] || ''} onChange={(e) => set('s3.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
+      </div>
+      <Field label="Access Key"><input className="input font-mono text-sm" value={form['s3.access_key'] || ''} onChange={(e) => set('s3.access_key', e.target.value)} placeholder="AKIA..." /></Field>
+      <Field label="Secret Key"><PasswordInput value={form['s3.secret_key'] || ''} onChange={(e) => set('s3.secret_key', e.target.value)} placeholder="••••••••" /></Field>
+    </div>
+  )
+  if (name === 'ftp') return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Hôte"><input className="input text-sm" value={form['ftp.host'] || ''} onChange={(e) => set('ftp.host', e.target.value)} placeholder="ftp.exemple.com" /></Field>
+        <Field label="Port"><input className="input text-sm" type="number" value={form['ftp.port'] || '21'} onChange={(e) => set('ftp.port', e.target.value)} /></Field>
+      </div>
+      <Field label="Utilisateur"><input className="input text-sm" value={form['ftp.user'] || ''} onChange={(e) => set('ftp.user', e.target.value)} placeholder="ftpuser" /></Field>
+      <Field label="Mot de passe"><PasswordInput value={form['ftp.password'] || ''} onChange={(e) => set('ftp.password', e.target.value)} placeholder="••••••••" /></Field>
+      <Field label="Chemin"><input className="input font-mono text-sm" value={form['ftp.path'] || ''} onChange={(e) => set('ftp.path', e.target.value)} placeholder="/backups/wubalstore" /></Field>
+    </div>
+  )
+  if (name === 'sftp') return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Hôte"><input className="input text-sm" value={form['sftp.host'] || ''} onChange={(e) => set('sftp.host', e.target.value)} placeholder="ssh.exemple.com" /></Field>
+        <Field label="Port"><input className="input text-sm" type="number" value={form['sftp.port'] || '22'} onChange={(e) => set('sftp.port', e.target.value)} /></Field>
+      </div>
+      <Field label="Utilisateur"><input className="input text-sm" value={form['sftp.user'] || ''} onChange={(e) => set('sftp.user', e.target.value)} placeholder="sshuser" /></Field>
+      <Field label="Mot de passe"><PasswordInput value={form['sftp.password'] || ''} onChange={(e) => set('sftp.password', e.target.value)} placeholder="Laisser vide si clé SSH" /></Field>
+      <Field label="Clé SSH (contenu)"><textarea className="input resize-none font-mono text-xs" rows={3} value={form['sftp.key'] || ''} onChange={(e) => set('sftp.key', e.target.value)} placeholder="-----BEGIN RSA PRIVATE KEY-----..." /></Field>
+      <Field label="Chemin"><input className="input font-mono text-sm" value={form['sftp.path'] || ''} onChange={(e) => set('sftp.path', e.target.value)} placeholder="/home/user/backups" /></Field>
+    </div>
+  )
+  if (name === 'webdav') return (
+    <div className="space-y-3">
+      <Field label="URL WebDAV"><input className="input text-sm" value={form['webdav.url'] || ''} onChange={(e) => set('webdav.url', e.target.value)} placeholder="https://nextcloud.exemple.com/remote.php/dav/files/user" /></Field>
+      <Field label="Utilisateur"><input className="input text-sm" value={form['webdav.user'] || ''} onChange={(e) => set('webdav.user', e.target.value)} placeholder="user" /></Field>
+      <Field label="Mot de passe"><PasswordInput value={form['webdav.password'] || ''} onChange={(e) => set('webdav.password', e.target.value)} placeholder="••••••••" /></Field>
+    </div>
+  )
+  if (name === 'gdrive') return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <AlertTriangle size={12} className="text-blue-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-blue-700 dark:text-blue-400">Créez une app OAuth2 sur <strong>console.cloud.google.com</strong>.</p>
+      </div>
+      <Field label="Client ID"><input className="input font-mono text-sm" value={form['gdrive.client_id'] || ''} onChange={(e) => set('gdrive.client_id', e.target.value)} placeholder="xxx.apps.googleusercontent.com" /></Field>
+      <Field label="Client Secret"><PasswordInput value={form['gdrive.client_secret'] || ''} onChange={(e) => set('gdrive.client_secret', e.target.value)} placeholder="••••••••" /></Field>
+    </div>
+  )
+  if (name === 'rclone') return (
+    <Field label="Remote rclone" hint="Nom du remote dans rclone.conf suivi du chemin">
+      <input className="input font-mono text-sm" value={form['rclone.remote'] || ''} onChange={(e) => set('rclone.remote', e.target.value)} placeholder="myremote:bucket/path" />
+    </Field>
+  )
+  return null
+}
+
 function TabBackblaze({ config }) {
-  const keys = [
-    'backup.provider', 'backup.schedule', 'backup.keep_n',
+  const allKeys = [
+    'backup.schedule', 'backup.keep_n',
+    'backup.local.enabled', 'backup.backblaze.enabled', 'backup.s3.enabled',
+    'backup.ftp.enabled', 'backup.sftp.enabled', 'backup.webdav.enabled',
+    'backup.gdrive.enabled', 'backup.rclone.enabled',
     'b2.key_id', 'b2.key', 'b2.bucket',
     's3.endpoint', 's3.region', 's3.bucket', 's3.access_key', 's3.secret_key',
     'ftp.host', 'ftp.port', 'ftp.user', 'ftp.password', 'ftp.path',
     'sftp.host', 'sftp.port', 'sftp.user', 'sftp.password', 'sftp.path', 'sftp.key',
     'webdav.url', 'webdav.user', 'webdav.password',
-    'gdrive.client_id', 'gdrive.client_secret',
-    'rclone.remote',
+    'gdrive.client_id', 'gdrive.client_secret', 'rclone.remote',
   ]
-  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
-  const provider = form['backup.provider'] || 'local'
+  const { form, set, save, saving, saved, error } = useConfigForm(config, allKeys)
+
+  const providers = [
+    { value: 'local',     label: 'Local',          desc: 'Disque du serveur (toujours recommandé)' },
+    { value: 'backblaze', label: 'Backblaze B2',   desc: 'Gratuit jusqu\'à 10 Go' },
+    { value: 's3',        label: 'S3 / Wasabi / MinIO', desc: 'Compatible Amazon S3' },
+    { value: 'ftp',       label: 'FTP',            desc: 'Serveur FTP classique' },
+    { value: 'sftp',      label: 'SFTP',           desc: 'SSH sécurisé' },
+    { value: 'webdav',    label: 'WebDAV',         desc: 'Nextcloud, ownCloud…' },
+    { value: 'gdrive',    label: 'Google Drive',   desc: 'Via OAuth2' },
+    { value: 'rclone',    label: 'rclone custom',  desc: 'Remote rclone personnalisé' },
+  ]
+
+  const isOn = (v) => form[`backup.${v}.enabled`] === 'true'
+  const toggle = (v) => set(`backup.${v}.enabled`, isOn(v) ? 'false' : 'true')
 
   return (
     <form onSubmit={save} className="space-y-6">
-      <Section title="Destination de sauvegarde">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {BACKUP_PROVIDERS.map((p) => (
-            <button key={p.value} type="button" onClick={() => set('backup.provider', p.value)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-center transition-all ${
-                provider === p.value ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700'
-              }`}>
-              <span className={`text-sm font-semibold ${provider === p.value ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-gray-300'}`}>{p.label}</span>
-              <span className="text-[10px] text-slate-400 dark:text-gray-500">{p.desc}</span>
-            </button>
+      <Section title="Destinations">
+        <p className="text-xs text-slate-500 dark:text-gray-500">Activez plusieurs destinations pour sauvegarder simultanément sur différents supports.</p>
+        <div className="space-y-2">
+          {providers.map((p) => (
+            <div key={p.value} className={`rounded-xl border-2 overflow-hidden transition-all ${isOn(p.value) ? 'border-violet-500' : 'border-slate-200 dark:border-gray-800'}`}>
+              <div className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isOn(p.value) ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-white dark:bg-gray-900'}`} onClick={() => toggle(p.value)}>
+                <div>
+                  <p className={`text-sm font-semibold ${isOn(p.value) ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-gray-300'}`}>{p.label}</p>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">{p.desc}</p>
+                </div>
+                <Toggle checked={isOn(p.value)} onChange={() => toggle(p.value)} />
+              </div>
+              {isOn(p.value) && p.value !== 'local' && (
+                <div className="px-4 pb-4 pt-3 border-t border-slate-200 dark:border-gray-800 bg-slate-50/50 dark:bg-gray-900/50">
+                  <ProviderConfig name={p.value} form={form} set={set} />
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </Section>
 
-      {/* Backblaze B2 */}
-      {provider === 'backblaze' && (
-        <Section title="Backblaze B2">
-          <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl mb-3">
-            <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700 dark:text-amber-400">Gratuit jusqu'à 10 Go. Créez un bucket sur <strong>backblaze.com</strong>.</p>
-          </div>
-          <Field label="Application Key ID"><input className="input font-mono" value={form['b2.key_id'] || ''} onChange={(e) => set('b2.key_id', e.target.value)} placeholder="00xxxxxxxxxxxxxxxxxxxxxxx" /></Field>
-          <Field label="Application Key"><PasswordInput value={form['b2.key'] || ''} onChange={(e) => set('b2.key', e.target.value)} placeholder="K00xxx..." /></Field>
-          <Field label="Nom du bucket"><input className="input font-mono" value={form['b2.bucket'] || ''} onChange={(e) => set('b2.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
-        </Section>
-      )}
-
-      {/* S3 compatible */}
-      {provider === 's3' && (
-        <Section title="S3 / Wasabi / MinIO">
-          <Field label="Endpoint" hint="Laisser vide pour AWS S3 standard. Remplir pour Wasabi (s3.wasabisys.com) ou MinIO (http://...)">
-            <input className="input font-mono" value={form['s3.endpoint'] || ''} onChange={(e) => set('s3.endpoint', e.target.value)} placeholder="https://s3.wasabisys.com (optionnel)" />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Région"><input className="input font-mono" value={form['s3.region'] || ''} onChange={(e) => set('s3.region', e.target.value)} placeholder="eu-west-1" /></Field>
-            <Field label="Bucket"><input className="input font-mono" value={form['s3.bucket'] || ''} onChange={(e) => set('s3.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
-          </div>
-          <Field label="Access Key ID"><input className="input font-mono" value={form['s3.access_key'] || ''} onChange={(e) => set('s3.access_key', e.target.value)} placeholder="AKIA..." /></Field>
-          <Field label="Secret Access Key"><PasswordInput value={form['s3.secret_key'] || ''} onChange={(e) => set('s3.secret_key', e.target.value)} placeholder="••••••••" /></Field>
-        </Section>
-      )}
-
-      {/* FTP */}
-      {provider === 'ftp' && (
-        <Section title="FTP">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Hôte"><input className="input" value={form['ftp.host'] || ''} onChange={(e) => set('ftp.host', e.target.value)} placeholder="ftp.exemple.com" /></Field>
-            <Field label="Port"><input className="input" type="number" value={form['ftp.port'] || '21'} onChange={(e) => set('ftp.port', e.target.value)} /></Field>
-          </div>
-          <Field label="Utilisateur"><input className="input" value={form['ftp.user'] || ''} onChange={(e) => set('ftp.user', e.target.value)} placeholder="ftpuser" /></Field>
-          <Field label="Mot de passe"><PasswordInput value={form['ftp.password'] || ''} onChange={(e) => set('ftp.password', e.target.value)} placeholder="••••••••" /></Field>
-          <Field label="Chemin distant" hint="Dossier de destination sur le serveur FTP"><input className="input font-mono" value={form['ftp.path'] || ''} onChange={(e) => set('ftp.path', e.target.value)} placeholder="/backups/wubalstore" /></Field>
-        </Section>
-      )}
-
-      {/* SFTP */}
-      {provider === 'sftp' && (
-        <Section title="SFTP">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Hôte"><input className="input" value={form['sftp.host'] || ''} onChange={(e) => set('sftp.host', e.target.value)} placeholder="ssh.exemple.com" /></Field>
-            <Field label="Port"><input className="input" type="number" value={form['sftp.port'] || '22'} onChange={(e) => set('sftp.port', e.target.value)} /></Field>
-          </div>
-          <Field label="Utilisateur"><input className="input" value={form['sftp.user'] || ''} onChange={(e) => set('sftp.user', e.target.value)} placeholder="sshuser" /></Field>
-          <Field label="Mot de passe"><PasswordInput value={form['sftp.password'] || ''} onChange={(e) => set('sftp.password', e.target.value)} placeholder="Laisser vide si clé SSH" /></Field>
-          <Field label="Clé SSH privée (contenu)" hint="Collez le contenu de votre fichier ~/.ssh/id_rsa">
-            <textarea className="input resize-none font-mono text-xs" rows={4} value={form['sftp.key'] || ''} onChange={(e) => set('sftp.key', e.target.value)} placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..." />
-          </Field>
-          <Field label="Chemin distant"><input className="input font-mono" value={form['sftp.path'] || ''} onChange={(e) => set('sftp.path', e.target.value)} placeholder="/home/user/backups" /></Field>
-        </Section>
-      )}
-
-      {/* WebDAV */}
-      {provider === 'webdav' && (
-        <Section title="WebDAV">
-          <Field label="URL WebDAV" hint="URL complète du endpoint WebDAV (Nextcloud, ownCloud…)">
-            <input className="input" value={form['webdav.url'] || ''} onChange={(e) => set('webdav.url', e.target.value)} placeholder="https://nextcloud.exemple.com/remote.php/dav/files/user" />
-          </Field>
-          <Field label="Utilisateur"><input className="input" value={form['webdav.user'] || ''} onChange={(e) => set('webdav.user', e.target.value)} placeholder="user" /></Field>
-          <Field label="Mot de passe"><PasswordInput value={form['webdav.password'] || ''} onChange={(e) => set('webdav.password', e.target.value)} placeholder="••••••••" /></Field>
-        </Section>
-      )}
-
-      {/* Google Drive */}
-      {provider === 'gdrive' && (
-        <Section title="Google Drive (via rclone)">
-          <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl mb-3">
-            <AlertTriangle size={14} className="text-blue-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700 dark:text-blue-400">Nécessite une application Google OAuth2. Créez-la sur <strong>console.cloud.google.com</strong>.</p>
-          </div>
-          <Field label="Client ID"><input className="input font-mono" value={form['gdrive.client_id'] || ''} onChange={(e) => set('gdrive.client_id', e.target.value)} placeholder="xxx.apps.googleusercontent.com" /></Field>
-          <Field label="Client Secret"><PasswordInput value={form['gdrive.client_secret'] || ''} onChange={(e) => set('gdrive.client_secret', e.target.value)} placeholder="••••••••" /></Field>
-        </Section>
-      )}
-
-      {/* rclone custom */}
-      {provider === 'rclone' && (
-        <Section title="Remote rclone personnalisé">
-          <Field label="Nom du remote rclone" hint="Le nom du remote tel que configuré dans rclone.conf (ex: myremote)">
-            <input className="input font-mono" value={form['rclone.remote'] || ''} onChange={(e) => set('rclone.remote', e.target.value)} placeholder="myremote:bucket/path" />
-          </Field>
-        </Section>
-      )}
-
-      {/* Planification */}
       <Section title="Planification">
         <Field label="Fréquence">
           <div className="flex flex-wrap gap-2">
-            {[
-              { value: 'hourly',  label: 'Toutes les heures' },
-              { value: 'daily',   label: 'Quotidien (3h)' },
-              { value: 'weekly',  label: 'Hebdomadaire (lundi)' },
-              { value: 'manual',  label: 'Manuel uniquement' },
-            ].map((opt) => (
-              <label key={opt.value} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all ${
-                (form['backup.schedule'] || 'daily') === opt.value ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700'
-              }`}>
-                <input type="radio" name="schedule" value={opt.value} checked={(form['backup.schedule'] || 'daily') === opt.value} onChange={() => set('backup.schedule', opt.value)} className="text-violet-600" />
-                <span className="text-sm text-slate-700 dark:text-gray-300">{opt.label}</span>
+            {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3h)' }, { v: 'weekly', l: 'Hebdomadaire' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
+              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' : 'border-slate-200 dark:border-gray-800 text-slate-700 dark:text-gray-300 hover:border-slate-300'}`}>
+                <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-violet-600" />
+                {l}
               </label>
             ))}
           </div>
         </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Sauvegardes locales à conserver" hint="Les plus anciennes sont auto-supprimées">
-            <input type="number" min="1" max="30" className="input" value={form['backup.keep_n'] || '7'} onChange={(e) => set('backup.keep_n', e.target.value)} />
-          </Field>
-        </div>
+        <Field label="Sauvegardes à conserver" hint="Les plus anciennes sont auto-supprimées">
+          <input type="number" min="1" max="30" className="input w-28" value={form['backup.keep_n'] || '7'} onChange={(e) => set('backup.keep_n', e.target.value)} />
+        </Field>
       </Section>
 
       <SaveBar saving={saving} saved={saved} error={error} />
@@ -429,18 +536,71 @@ function TabBackblaze({ config }) {
 }
 
 // ── Onglet Général ────────────────────────────────────────────────────────────
+function StorageBar({ segments }) {
+  return (
+    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-bold shadow-inner">
+      {segments.map(({ color, pct, label, gb }) =>
+        pct > 0 ? (
+          <div
+            key={label}
+            className={`${color} flex items-center justify-center text-white transition-all duration-300 overflow-hidden`}
+            style={{ width: `${pct}%` }}
+            title={`${label} : ${pct}% ${gb ? `(${gb} Go)` : ''}`}
+          >
+            {pct >= 7 ? `${pct}%` : ''}
+          </div>
+        ) : null
+      )}
+    </div>
+  )
+}
+
+function StorageLegend({ segments, totalGb }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+      {segments.map(({ color, label, pct, gb, fixed }) => (
+        <div key={label} className="flex items-center gap-2">
+          <span className={`w-3 h-3 rounded-sm shrink-0 ${color}`} />
+          <span className="text-slate-600 dark:text-gray-400 flex-1 truncate">{label}</span>
+          <span className="font-semibold text-slate-700 dark:text-gray-300">
+            {fixed ? `${gb} Go` : totalGb ? `${((pct / 100) * totalGb).toFixed(1)} Go` : `${pct}%`}
+          </span>
+          {!fixed && <span className="text-slate-400 dark:text-gray-600">({pct}%)</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function TabGeneral({ config }) {
-  const keys = ['app.name', 'app.url', 'storage.media_pct', 'storage.backup_pct', 'storage.total_gb']
+  const keys = [
+    'app.name', 'app.url',
+    'storage.media_pct', 'storage.backup_pct',
+    'storage.total_gb', 'storage.logs_gb',
+  ]
   const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
 
-  const mediaPct = parseInt(form['storage.media_pct'] || 70)
-  const backupPct = parseInt(form['storage.backup_pct'] || 10)
-  const logsPct = 5
-  const zipsPct = 3
-  const systemPct = Math.max(0, 100 - mediaPct - backupPct - logsPct - zipsPct)
-  const total = mediaPct + backupPct
+  const totalGb    = parseFloat(form['storage.total_gb'] || 0) || null
+  const mediaPct   = parseInt(form['storage.media_pct']  || 70)
+  const backupPct  = parseInt(form['storage.backup_pct'] || 10)
+  const logsGb     = parseFloat(form['storage.logs_gb']  || 2)
+
+  const logsPct    = totalGb ? Math.round((logsGb / totalGb) * 100) : 5
+  const systemPct  = Math.max(0, 100 - mediaPct - backupPct - logsPct)
+  const overLimit  = mediaPct + backupPct + logsPct > 95
+
   const url = form['app.url'] || ''
   const isInsecure = url && !url.startsWith('https://')
+
+  const minRecommended = totalGb ? (logsGb + 1 + totalGb * 0.05).toFixed(1) : null
+  const maxMedia       = totalGb ? (totalGb * 0.85).toFixed(1) : null
+
+  const segments = [
+    { color: 'bg-violet-500', label: 'Médias',      pct: mediaPct,  gb: totalGb ? ((mediaPct / 100) * totalGb).toFixed(1) : null },
+    { color: 'bg-blue-400',   label: 'Sauvegardes', pct: backupPct, gb: totalGb ? ((backupPct / 100) * totalGb).toFixed(1) : null },
+    { color: 'bg-amber-400',  label: 'Logs',        pct: logsPct,   gb: logsGb, fixed: true },
+    { color: 'bg-slate-300 dark:bg-gray-600', label: 'Système',   pct: systemPct, gb: totalGb ? ((systemPct / 100) * totalGb).toFixed(1) : null },
+  ]
 
   return (
     <form onSubmit={save} className="space-y-6">
@@ -448,95 +608,117 @@ function TabGeneral({ config }) {
         <Field label="Nom du projet" hint="Affiché dans l'interface et les emails">
           <input className="input" value={form['app.name'] || ''} onChange={(e) => set('app.name', e.target.value)} placeholder="WubalStore" />
         </Field>
-        <Field label="URL publique de l'instance">
+        <Field label={
+          <span className="flex items-center gap-1.5">
+            URL publique de l'instance
+            <Tooltip text="Saisissez l'URL complète avec le protocole (ex: https://dashboard.example.com). Sans « https:// » au début, l'instance ne sera pas sécurisée." />
+          </span>
+        }>
           <input
-            className={`input ${isInsecure ? 'border-amber-400 dark:border-amber-600' : ''}`}
+            className={`input ${isInsecure ? 'border-amber-400 dark:border-amber-600 focus:ring-amber-400' : ''}`}
             value={url}
             onChange={(e) => set('app.url', e.target.value)}
             placeholder="https://dashboard.exemple.com"
           />
-          {!url && (
-            <div className="mt-2 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <AlertTriangle size={13} className="text-blue-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-700 dark:text-blue-400">
-                Saisissez l'URL complète de l'instance (par exemple : <code className="font-mono">https://dashboard.example.com</code>).<br/>
-                <strong>Important :</strong> pour que le tableau de bord soit accessible via HTTPS, vous devez impérativement inclure <code className="font-mono">https://</code> au début. Sans cela, le tableau de bord utilisera HTTP et ne sera pas sécurisé.
-              </p>
-            </div>
-          )}
           {isInsecure && (
-            <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                <strong>Attention :</strong> l'URL ne commence pas par <code className="font-mono">https://</code>. Le tableau de bord ne sera <strong>pas sécurisé</strong>. Ajoutez <code className="font-mono">https://</code> pour activer HTTPS.
-              </p>
-            </div>
+            <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+              <AlertTriangle size={11} /> HTTPS requis — ajoutez <code className="font-mono bg-amber-50 dark:bg-amber-900/20 px-1 rounded">https://</code> au début de l'URL
+            </p>
           )}
         </Field>
       </Section>
 
       <Section title="Allocation du stockage">
-        <Field label="Espace total alloué au projet (Go)" hint="Taille totale que WubalStore peut utiliser sur le disque">
+        {/* Espace total */}
+        <Field
+          label={
+            <span className="flex items-center gap-1.5">
+              Espace total alloué au projet
+              <Tooltip text="Taille maximale que WubalStore peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte (95% du disque disponible)." />
+            </span>
+          }
+          hint={totalGb ? `Min recommandé : ${minRecommended} Go — Max médias possible : ${maxMedia} Go` : 'Renseignez la taille pour voir les tailles en Go dans le graphe'}
+        >
           <div className="flex items-center gap-2">
-            <input type="number" min="1" className="input w-32" value={form['storage.total_gb'] || ''} onChange={(e) => set('storage.total_gb', e.target.value)} placeholder="Auto-détecté" />
+            <input
+              type="number" min="1" step="1"
+              className="input w-32"
+              value={form['storage.total_gb'] || ''}
+              onChange={(e) => set('storage.total_gb', e.target.value)}
+              placeholder="Auto"
+            />
             <span className="text-slate-500 dark:text-gray-500 text-sm">Go</span>
+            {totalGb && (
+              <span className="text-xs text-slate-400 dark:text-gray-600 ml-1">
+                = {(totalGb * 1024).toFixed(0)} Mo
+              </span>
+            )}
           </div>
         </Field>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Sliders */}
+        <div className="space-y-4">
           {[
-            { key: 'storage.media_pct',  label: 'Médias',       min: 10, max: 85, color: 'text-violet-600' },
-            { key: 'storage.backup_pct', label: 'Sauvegardes',  min: 5,  max: 40, color: 'text-blue-500' },
-          ].map(({ key, label, min, max, color }) => (
-            <Field key={key} label={`${label} (%)`}>
-              <div className="flex items-center gap-2">
-                <input type="range" min={min} max={max} className="flex-1 accent-violet-600" value={form[key] || (key === 'storage.media_pct' ? 70 : 10)}
-                  onChange={(e) => set(key, e.target.value)} />
-                <span className={`text-sm font-bold w-10 text-right ${color}`}>{form[key] || (key === 'storage.media_pct' ? 70 : 10)}%</span>
+            { key: 'storage.media_pct',  label: 'Médias',       min: 10, max: 85, default: 70, color: 'text-violet-600', hint: 'Images et vidéos uploadées' },
+            { key: 'storage.backup_pct', label: 'Sauvegardes',  min: 5,  max: 40, default: 10, color: 'text-blue-500',   hint: 'Sauvegardes locales (avant envoi cloud)' },
+          ].map(({ key, label, min, max, default: def, color, hint }) => {
+            const val = parseInt(form[key] || def)
+            const gb  = totalGb ? ((val / 100) * totalGb).toFixed(1) : null
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</span>
+                  <span className="flex items-center gap-2">
+                    {gb && <span className="text-xs text-slate-400 dark:text-gray-500">{gb} Go</span>}
+                    <span className={`text-sm font-bold w-10 text-right ${color}`}>{val}%</span>
+                  </span>
+                </div>
+                <input
+                  type="range" min={min} max={max}
+                  className="w-full accent-violet-600 h-2 rounded-full"
+                  value={val}
+                  onChange={(e) => set(key, e.target.value)}
+                />
+                <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">{hint} — min {min}%, max {max}%</p>
               </div>
-            </Field>
-          ))}
-        </div>
+            )
+          })}
 
-        {/* Barre visuelle */}
-        <div className="space-y-2 mt-2">
-          <div className="flex h-6 rounded-xl overflow-hidden text-[10px] font-bold">
-            <div className="bg-violet-500 flex items-center justify-center text-white transition-all" style={{ width: `${mediaPct}%` }} title={`Médias ${mediaPct}%`}>
-              {mediaPct >= 8 ? `${mediaPct}%` : ''}
+          {/* Logs en Go fixe */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Logs</span>
+              <span className={`text-sm font-bold text-amber-500`}>{logsGb} Go</span>
             </div>
-            <div className="bg-blue-400 flex items-center justify-center text-white transition-all" style={{ width: `${backupPct}%` }} title={`Sauvegardes ${backupPct}%`}>
-              {backupPct >= 6 ? `${backupPct}%` : ''}
+            <div className="flex items-center gap-3">
+              <input
+                type="number" min="0.5" max="20" step="0.5"
+                className="input w-24 text-sm"
+                value={form['storage.logs_gb'] || 2}
+                onChange={(e) => set('storage.logs_gb', e.target.value)}
+              />
+              <span className="text-sm text-slate-500 dark:text-gray-500">Go — rotation automatique</span>
             </div>
-            <div className="bg-amber-400 flex items-center justify-center text-white transition-all" style={{ width: `${logsPct}%` }} title="Logs 5%">
-              {logsPct >= 5 ? '5%' : ''}
-            </div>
-            <div className="bg-green-400 flex items-center justify-center text-white transition-all" style={{ width: `${zipsPct}%` }} title="Zips 3%">
-              {zipsPct >= 4 ? '3%' : ''}
-            </div>
-            <div className="bg-slate-200 dark:bg-gray-700 flex-1 flex items-center justify-center text-slate-500 dark:text-gray-400" title={`Système ${systemPct}%`}>
-              {systemPct >= 5 ? `${systemPct}%` : ''}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-gray-500">
-            {[
-              { color: 'bg-violet-500', label: 'Médias', pct: mediaPct },
-              { color: 'bg-blue-400',   label: 'Sauvegardes', pct: backupPct },
-              { color: 'bg-amber-400',  label: 'Logs', pct: logsPct },
-              { color: 'bg-green-400',  label: 'Zips temp.', pct: zipsPct },
-              { color: 'bg-slate-300 dark:bg-gray-700', label: 'Système', pct: systemPct },
-            ].map(({ color, label, pct }) => (
-              <span key={label} className="flex items-center gap-1">
-                <span className={`w-2.5 h-2.5 rounded-sm inline-block ${color}`} />
-                {label} <span className="font-medium">{pct}%</span>
-              </span>
-            ))}
           </div>
         </div>
 
-        {total > 90 && (
+        {/* Graphe visuel */}
+        <div className="space-y-3 mt-4 p-4 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-gray-500 mb-1">
+            <span>0 {totalGb ? 'Go' : '%'}</span>
+            <span className="font-semibold text-slate-700 dark:text-gray-300">
+              {totalGb ? `${totalGb} Go total` : 'Répartition (%)'}
+            </span>
+            <span>{totalGb ? `${totalGb} Go` : '100%'}</span>
+          </div>
+          <StorageBar segments={segments} />
+          <StorageLegend segments={segments} totalGb={totalGb} />
+        </div>
+
+        {overLimit && (
           <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <AlertTriangle size={14} className="text-red-500 shrink-0" />
-            <p className="text-xs text-red-600 dark:text-red-400">La somme médias + sauvegardes dépasse 90% — le système n'aura pas assez de marge.</p>
+            <p className="text-xs text-red-600 dark:text-red-400">La somme dépasse 95% — laissez une marge pour le système d'exploitation.</p>
           </div>
         )}
       </Section>
@@ -548,9 +730,10 @@ function TabGeneral({ config }) {
 
 // ── Page principale ───────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'email',      label: 'Email',        icon: Mail },
-  { key: 'discord',    label: 'Discord',      icon: MessageSquare },
-  { key: 'backblaze',  label: 'Sauvegardes',  icon: Database },
+  { key: 'email',     label: 'Email',        icon: Mail },
+  { key: 'discord',   label: 'Discord',      icon: MessageSquare },
+  { key: 'notifs',    label: 'Notifications', icon: Bell },
+  { key: 'backups',   label: 'Sauvegardes',  icon: Database },
   { key: 'general',   label: 'Général',      icon: Globe },
 ]
 
@@ -595,10 +778,11 @@ export default function AdminSettings() {
           </div>
         ) : (
           <>
-            {activeTab === 'email'     && <TabEmail     config={config} />}
-            {activeTab === 'discord'   && <TabDiscord   config={config} />}
-            {activeTab === 'backblaze' && <TabBackblaze config={config} />}
-            {activeTab === 'general'  && <TabGeneral   config={config} />}
+            {activeTab === 'email'   && <TabEmail         config={config} />}
+            {activeTab === 'discord' && <TabDiscord        config={config} />}
+            {activeTab === 'notifs'  && <TabNotifications  config={config} />}
+            {activeTab === 'backups' && <TabBackblaze      config={config} />}
+            {activeTab === 'general' && <TabGeneral        config={config} />}
           </>
         )}
       </div>

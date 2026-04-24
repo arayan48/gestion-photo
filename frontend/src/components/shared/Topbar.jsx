@@ -1,5 +1,5 @@
 import { Bell, Search, Sun, Moon, User, Settings, LogOut, ChevronDown, Trash2 } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth.store.js'
 import { useNotificationStore } from '../../stores/notification.store.js'
@@ -16,6 +16,7 @@ export default function Topbar() {
 
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
+  const [avatarError, setAvatarError] = useState(false)
   const notifRef = useRef(null)
   const userRef = useRef(null)
 
@@ -27,6 +28,8 @@ export default function Topbar() {
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
+
+  useEffect(() => { setAvatarError(false) }, [user?.avatar_path, user?.discord_avatar])
 
   const handleLogout = async () => {
     setShowUser(false)
@@ -154,11 +157,12 @@ export default function Topbar() {
             onClick={() => setShowUser((v) => !v)}
             className="flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
           >
-            {user?.avatar_path || user?.discord_avatar ? (
+            {(user?.avatar_path || user?.discord_avatar) && !avatarError ? (
               <img
                 src={user.avatar_path || user.discord_avatar}
                 alt={user.pseudo}
                 className="w-7 h-7 rounded-full object-cover ring-2 ring-violet-500/20"
+                onError={() => setAvatarError(true)}
               />
             ) : (
               <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold text-white ring-2 ring-violet-500/20">
@@ -183,19 +187,11 @@ export default function Topbar() {
               {/* Actions */}
               <div className="p-1.5 space-y-0.5">
                 <Link
-                  to="/profile"
-                  onClick={() => setShowUser(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
-                >
-                  <User size={14} className="text-slate-400 dark:text-gray-500" />
-                  Mon profil
-                </Link>
-                <Link
                   to="/settings"
                   onClick={() => setShowUser(false)}
                   className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-slate-700 hover:bg-slate-100 transition-colors dark:text-gray-300 dark:hover:bg-gray-800"
                 >
-                  <Settings size={14} className="text-slate-400 dark:text-gray-500" />
+                  <User size={14} className="text-slate-400 dark:text-gray-500" />
                   Paramètres
                 </Link>
               </div>

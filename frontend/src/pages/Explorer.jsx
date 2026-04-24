@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useSearchParams, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import api from '../utils/api.js'
 import FileGrid from '../components/explorer/FileGrid.jsx'
 import FileList from '../components/explorer/FileList.jsx'
@@ -8,7 +9,7 @@ import UploadPanel from '../components/upload/UploadPanel.jsx'
 import FileViewer from '../components/viewer/FileViewer.jsx'
 import ContextMenu from '../components/explorer/ContextMenu.jsx'
 import Breadcrumb from '../components/explorer/Breadcrumb.jsx'
-import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash2, CheckSquare } from 'lucide-react'
+import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash2, FileImage } from 'lucide-react'
 import { toast } from '../stores/toast.store.js'
 import { confirm } from '../stores/confirm.store.js'
 
@@ -28,9 +29,41 @@ export default function Explorer() {
   const [selectedFiles, setSelectedFiles] = useState([])
   const [newFolderMode, setNewFolderMode] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [activeDrag, setActiveDrag] = useState(null) // { fileId, fileName }
   const queryClient = useQueryClient()
 
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
   const queryKey = ['files', view, folderId, search, dateFrom, dateTo]
+
+  const handleDragStart = useCallback((event) => {
+    const { data } = event.active
+    if (data.current?.type === 'file') {
+      setActiveDrag({ fileId: data.current.fileId })
+    }
+  }, [])
+
+  const handleDragEnd = useCallback(async (event) => {
+    setActiveDrag(null)
+    const { active, over } = event
+    if (!over || !active) return
+
+    const dragData = active.data.current
+    const dropData = over.data.current
+
+    if (dragData?.type === 'file' && dropData?.type === 'folder') {
+      try {
+        await api.patch(`/files/${dragData.fileId}`, { folderId: dropData.folderId })
+        toast.success('Fichier déplacé dans le dossier')
+        queryClient.invalidateQueries({ queryKey })
+        queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+      } catch {
+        toast.error('Erreur lors du déplacement')
+      }
+    }
+  }, [queryClient, queryKey, folderId])
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
@@ -152,6 +185,15 @@ export default function Explorer() {
   }, [])
 
   const clearSelection = () => setSelectedFiles([])
+
+  const handleBulkDelete = async () => {
+    const ok = await confirm(`Supprimer ${selectedFiles.length} fichier(s) ?`, { danger: true, confirmLabel: 'Supprimer', title: 'Suppression multiple' })
+    if (!ok) return
+    await Promise.all(selectedFiles.map((id) => api.delete(`/files/${id}`).catch(() => {})))
+    toast.success(`${selectedFiles.length} fichier(s) déplacé(s) dans la corbeille`)
+    clearSelection()
+    queryClient.invalidateQueries({ queryKey })
+  }
 
   const handleEmptyTrash = async () => {
     const ok = await confirm('Vider la corbeille ? Cette action est irréversible.', { danger: true, confirmLabel: 'Vider', title: 'Vider la corbeille' })
@@ -320,6 +362,12 @@ export default function Explorer() {
             <Download size={12} /> Télécharger en ZIP
           </button>
           <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Trash2 size={12} /> Supprimer ({selectedFiles.length})
+          </button>
+          <button
             onClick={clearSelection}
             className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300"
           >
@@ -328,35 +376,50 @@ export default function Explorer() {
         </div>
       )}
 
-      {/* Contenu */}
+      {/* Contenu avec DnD */}
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
-          {viewMode === 'grid' ? (
-            <FileGrid
-              files={data?.files || []}
-              folders={folders || []}
-              onFileClick={(f) => setSelectedFile(f)}
-              onContextMenu={handleContextMenu}
-              isTrash={view === 'trash'}
-              selectedFiles={selectedFiles}
-              onToggleSelect={toggleSelectFile}
-              onAction={handleFileAction}
-            />
-          ) : (
-            <FileList
-              files={data?.files || []}
-              folders={folders || []}
-              onFileClick={(f) => setSelectedFile(f)}
-              onContextMenu={handleContextMenu}
-              isTrash={view === 'trash'}
-              selectedFiles={selectedFiles}
-              onToggleSelect={toggleSelectFile}
-            />
-          )}
+          <DndContext
+            sensors={dndSensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            {viewMode === 'grid' ? (
+              <FileGrid
+                files={data?.files || []}
+                folders={folders || []}
+                onFileClick={(f) => setSelectedFile(f)}
+                onContextMenu={handleContextMenu}
+                isTrash={view === 'trash'}
+                selectedFiles={selectedFiles}
+                onToggleSelect={toggleSelectFile}
+                onAction={handleFileAction}
+              />
+            ) : (
+              <FileList
+                files={data?.files || []}
+                folders={folders || []}
+                onFileClick={(f) => setSelectedFile(f)}
+                onContextMenu={handleContextMenu}
+                isTrash={view === 'trash'}
+                selectedFiles={selectedFiles}
+                onToggleSelect={toggleSelectFile}
+              />
+            )}
+            <DragOverlay>
+              {activeDrag && (
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-violet-500 shadow-2xl p-3 flex items-center gap-2 opacity-90">
+                  <FileImage size={16} className="text-violet-500" />
+                  <span className="text-sm text-slate-700 dark:text-gray-300">Déplacement...</span>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         </div>
       )}
 

@@ -7,7 +7,6 @@ import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Explorer from './pages/Explorer.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import Profile from './pages/Profile.jsx'
 import Settings from './pages/Settings.jsx'
 import AdminSettings from './pages/AdminSettings.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
@@ -22,14 +21,9 @@ export default function App() {
   const [setupChecked, setSetupChecked] = useState(false)
 
   useEffect(() => {
-    if (location.pathname === '/setup') {
-      setSetupChecked(true)
-      return
-    }
+    if (location.pathname === '/setup') { setSetupChecked(true); return }
     axios.get('/api/auth/setup/status', { withCredentials: true })
-      .then(({ data }) => {
-        if (!data.isCompleted) navigate('/setup', { replace: true })
-      })
+      .then(({ data }) => { if (!data.isCompleted) navigate('/setup', { replace: true }) })
       .catch(() => {})
       .finally(() => setSetupChecked(true))
   }, [])
@@ -50,7 +44,8 @@ export default function App() {
           <Route path="/explorer" element={<Explorer />} />
           <Route path="/explorer/:folderId" element={<Explorer />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
+          {/* /profile redirige vers /settings (page unifiée) */}
+          <Route path="/profile" element={<Navigate to="/settings" replace />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
         </Route>
