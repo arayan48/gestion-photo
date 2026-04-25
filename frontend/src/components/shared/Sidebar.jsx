@@ -26,7 +26,8 @@ export default function Sidebar() {
     return view === null ? !currentView : currentView === view
   }
 
-  const isAdmin = user?.is_super_admin || user?.role_id
+  // role_id peut être un UUID truthy ou 0/null — utiliser != null pour fiabilité
+  const isAdmin = user?.is_super_admin || user?.role_id != null
 
   const used  = user?.storage_used  ?? 0
   const quota = user?.storage_quota ?? 1

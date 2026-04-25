@@ -188,14 +188,16 @@ export default function Explorer() {
       try {
         await Promise.all(fileIds.map((id) => api.patch(`/files/${id}`, { folderId: targetFolderId })))
         toast.success(fileIds.length > 1 ? `${fileIds.length} fichiers déplacés` : 'Fichier déplacé')
+        // Vider la sélection seulement si tout a réussi
         if (isMulti) setSelectedFiles([])
         queryClient.invalidateQueries({ queryKey })
         queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+        queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
       } catch {
         toast.error('Erreur lors du déplacement')
       }
     }
-  }, [queryClient, queryKey, folderId, selectedFiles])
+  }, [queryClient, queryKey, folderId, parentFolderId, selectedFiles])
 
   const handleContextMenu = useCallback((e, file) => {
     e.preventDefault()
@@ -206,12 +208,15 @@ export default function Explorer() {
     setContextMenu(null)
     switch (action) {
 
+      // ── Dossiers ────────────────────────────────────────────────────────────
       case 'rename-folder': {
         const newName = prompt('Nouveau nom :', file.name)
         if (newName?.trim() && newName.trim() !== file.name) {
           try {
             await api.patch(`/files/folders/${file.id}`, { name: newName.trim() })
+            // Invalider le dossier courant ET le parent (le dossier renommé peut être visible depuis le parent)
             queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+            queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
             queryClient.invalidateQueries({ queryKey: ['breadcrumb', folderId] })
             toast.success('Dossier renommé')
           } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
@@ -227,39 +232,52 @@ export default function Explorer() {
           try {
             await api.delete(`/files/folders/${file.id}`)
             queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+            queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
             toast.success(`Dossier "${file.name}" supprimé`)
           } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
         }
         break
       }
 
+      // ── Fichiers ─────────────────────────────────────────────────────────────
       case 'view':
         setSelectedFile(file)
         break
       case 'delete': {
         const ok = await confirm(`Supprimer "${file.original_name}" ?`, { danger: true, confirmLabel: 'Supprimer', title: 'Supprimer le fichier' })
         if (ok) {
-          await api.delete(`/files/${file.id}`)
-          queryClient.invalidateQueries({ queryKey })
-          toast.success(`"${file.original_name}" déplacé dans la corbeille`)
+          try {
+            await api.delete(`/files/${file.id}`)
+            queryClient.invalidateQueries({ queryKey })
+            toast.success(`"${file.original_name}" déplacé dans la corbeille`)
+          } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de la suppression') }
         }
         break
       }
       case 'toggle-link':
-        await api.post(`/files/${file.id}/toggle-link`)
-        queryClient.invalidateQueries({ queryKey })
+        try {
+          await api.post(`/files/${file.id}/toggle-link`)
+          queryClient.invalidateQueries({ queryKey })
+        } catch { toast.error('Erreur lors de la modification du lien') }
         break
       case 'favorite':
-        await api.post(`/files/${file.id}/favorite`)
-        queryClient.invalidateQueries({ queryKey })
+        try {
+          await api.post(`/files/${file.id}/favorite`)
+          queryClient.invalidateQueries({ queryKey })
+        } catch { toast.error('Erreur') }
         break
       case 'unfavorite':
-        await api.delete(`/files/${file.id}/favorite`)
-        queryClient.invalidateQueries({ queryKey })
+        try {
+          await api.delete(`/files/${file.id}/favorite`)
+          queryClient.invalidateQueries({ queryKey })
+        } catch { toast.error('Erreur') }
         break
       case 'restore':
-        await api.post(`/files/${file.id}/restore`)
-        queryClient.invalidateQueries({ queryKey })
+        try {
+          await api.post(`/files/${file.id}/restore`)
+          queryClient.invalidateQueries({ queryKey })
+          toast.success('Fichier restauré')
+        } catch { toast.error('Erreur lors de la restauration') }
         break
       case 'delete-permanent': {
         const ok = await confirm(
@@ -267,17 +285,22 @@ export default function Explorer() {
           { danger: true, confirmLabel: 'Supprimer définitivement', title: 'Suppression permanente' }
         )
         if (ok) {
-          await api.delete(`/files/${file.id}/permanent`)
-          queryClient.invalidateQueries({ queryKey })
-          toast.success('Fichier supprimé définitivement')
+          try {
+            await api.delete(`/files/${file.id}/permanent`)
+            queryClient.invalidateQueries({ queryKey })
+            toast.success('Fichier supprimé définitivement')
+          } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
         }
         break
       }
       case 'rename': {
         const newName = prompt('Nouveau nom :', file.original_name)
-        if (newName && newName !== file.original_name) {
-          await api.patch(`/files/${file.id}`, { name: newName })
-          queryClient.invalidateQueries({ queryKey })
+        if (newName?.trim() && newName.trim() !== file.original_name) {
+          try {
+            await api.patch(`/files/${file.id}`, { name: newName.trim() })
+            queryClient.invalidateQueries({ queryKey })
+            toast.success('Fichier renommé')
+          } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors du renommage') }
         }
         break
       }
@@ -288,11 +311,15 @@ export default function Explorer() {
         window.open(`/api/files/${file.id}/download`, '_blank')
         break
       case 'copy-link':
-        navigator.clipboard.writeText(`${window.location.origin}/media/${file.link_token}`)
-        toast.success('Lien copié dans le presse-papiers')
+        navigator.clipboard
+          .writeText(`${window.location.origin}/media/${file.link_token}`)
+          .then(() => toast.success('Lien copié dans le presse-papiers'))
+          .catch(() => toast.error('Impossible de copier le lien'))
         break
+      default:
+        console.warn('[Explorer] Action inconnue:', action)
     }
-  }, [queryClient, queryKey, folderId])
+  }, [queryClient, queryKey, folderId, parentFolderId])
 
   const handleZipDownload = async () => {
     if (selectedFiles.length === 0) return

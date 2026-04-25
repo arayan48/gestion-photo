@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 
 function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} o`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
   return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
 }
@@ -98,9 +99,10 @@ function DraggableFileRow({ file, isSelected, onToggleSelect, onFileClick, onCon
     disabled: isTrash,
   })
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.3 : 1, zIndex: isDragging ? 999 : undefined }
-    : isDraggingGroup && !isDragging ? { opacity: 0.4 } : undefined
+  // Même principe : ne pas appliquer le transform, juste masquer l'original
+  const style = isDragging
+    ? { opacity: 0 }
+    : isDraggingGroup ? { opacity: 0.4 } : undefined
 
   return (
     <div

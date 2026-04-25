@@ -46,7 +46,8 @@ export const useAuthStore = create(
     }),
     {
       name: 'wubalstore-auth',
-      partialize: (state) => ({ user: state.user }),
+      // Persister le token évite un flash de redirection au rechargement
+      partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     }
   )
 )

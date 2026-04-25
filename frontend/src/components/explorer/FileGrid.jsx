@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Folder, FileImage, FileVideo, File, Unlink, Heart, Download, Copy, Eye, Trash2, CornerLeftUp, GripVertical } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
@@ -103,15 +104,18 @@ function DroppableFolder({ folder, onDoubleClick, onContextMenu, isTrash }) {
 
 // ── Fichier draggable ─────────────────────────────────────────────────────────
 function DraggableFile({ file, isSelected, onToggleSelect, onFileClick, onContextMenu, onAction, isTrash, isDraggingGroup }) {
+  const [thumbError, setThumbError] = useState(false)
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
     id: `file-${file.id}`,
     data: { type: 'file', fileId: file.id },
     disabled: isTrash,
   })
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: isDragging ? 999 : undefined, opacity: isDragging ? 0.2 : 1 }
-    : isDraggingGroup && !isDragging ? { opacity: 0.35 } : undefined
+  // Avec DragOverlay actif : masquer l'original (ne pas appliquer le transform,
+  // sinon on voit l'élément EN DOUBLE — l'original qui suit + l'overlay)
+  const style = isDragging
+    ? { opacity: 0 }
+    : isDraggingGroup ? { opacity: 0.4 } : undefined
 
   const copyLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/media/${file.link_token}`)
@@ -167,12 +171,13 @@ function DraggableFile({ file, isSelected, onToggleSelect, onFileClick, onContex
 
       {/* Thumbnail */}
       <div className="h-28 bg-slate-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden relative">
-        {file.thumbnail_path ? (
+        {file.thumbnail_path && !thumbError ? (
           <img
             src={file.thumbnail_path}
             alt={file.original_name}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
             loading="lazy"
+            onError={() => setThumbError(true)}
           />
         ) : (
           <div className="flex flex-col items-center gap-1.5 opacity-50">

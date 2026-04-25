@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 
+const MAX_TOASTS = 5
 let _id = 0
 
 export const useToastStore = create((set, get) => ({
@@ -7,7 +8,11 @@ export const useToastStore = create((set, get) => ({
 
   add(message, type = 'info', duration = 4000) {
     const id = ++_id
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }))
+    set((s) => {
+      const toasts = [...s.toasts, { id, message, type }]
+      // Garder seulement les MAX_TOASTS derniers pour éviter l'empilement
+      return { toasts: toasts.slice(-MAX_TOASTS) }
+    })
     if (duration > 0) setTimeout(() => get().remove(id), duration)
     return id
   },
