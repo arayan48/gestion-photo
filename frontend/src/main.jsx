@@ -4,7 +4,12 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.jsx'
 import { useThemeStore } from './stores/theme.store.js'
+import { useAuthStore } from './stores/auth.store.js'
+import { injectStore } from './utils/api.js'
 import './index.css'
+
+// Break circular dep: api.js needs the store but can't import it directly
+injectStore(useAuthStore)
 
 useThemeStore.getState().init()
 

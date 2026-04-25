@@ -1,14 +1,18 @@
 import axios from 'axios'
-import { useAuthStore } from '../stores/auth.store.js'
 
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
 })
 
+// Injected by main.jsx after both modules are initialized — breaks circular dep
+let store
+
+export const injectStore = (_store) => { store = _store }
+
 // Injecter le token dans chaque requête
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken
+  const token = store?.getState().accessToken
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -37,7 +41,7 @@ api.interceptors.response.use(
       try {
         const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
         const newToken = data.accessToken
-        useAuthStore.getState().setAccessToken(newToken)
+        store?.getState().setAccessToken(newToken)
         refreshQueue.forEach((p) => p.resolve(newToken))
         refreshQueue = []
         original.headers.Authorization = `Bearer ${newToken}`
@@ -45,7 +49,7 @@ api.interceptors.response.use(
       } catch {
         refreshQueue.forEach((p) => p.reject())
         refreshQueue = []
-        useAuthStore.getState().logout()
+        store?.getState().logout()
         window.location.href = '/login'
       } finally {
         isRefreshing = false
