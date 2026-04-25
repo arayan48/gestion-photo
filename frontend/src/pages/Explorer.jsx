@@ -90,6 +90,8 @@ export default function Explorer() {
   useEffect(() => {
     setSelectedFiles([])
     setContextMenu(null)
+    setNewFolderMode(false)
+    setNewFolderName('')
   }, [view, folderId])
 
   // PointerSensor (souris) + TouchSensor (mobile)
@@ -477,27 +479,27 @@ export default function Explorer() {
             {viewMode === 'grid' ? (
               <FileGrid
                 files={data?.files || []}
-                folders={folders || []}
+                folders={view === 'mine' ? (folders || []) : []}
                 onFileClick={(f) => setSelectedFile(f)}
                 onContextMenu={handleContextMenu}
                 isTrash={view === 'trash'}
                 selectedFiles={selectedFiles}
                 onToggleSelect={toggleSelectFile}
                 onAction={handleFileAction}
-                parentFolderId={parentFolderId}
+                parentFolderId={view === 'mine' ? parentFolderId : undefined}
                 onNavigateUp={handleNavigateUp}
                 draggingIds={activeDrag?.count > 1 ? selectedFiles : activeDrag ? [activeDrag.fileId] : []}
               />
             ) : (
               <FileList
                 files={data?.files || []}
-                folders={folders || []}
+                folders={view === 'mine' ? (folders || []) : []}
                 onFileClick={(f) => setSelectedFile(f)}
                 onContextMenu={handleContextMenu}
                 isTrash={view === 'trash'}
                 selectedFiles={selectedFiles}
                 onToggleSelect={toggleSelectFile}
-                parentFolderId={parentFolderId}
+                parentFolderId={view === 'mine' ? parentFolderId : undefined}
                 onNavigateUp={handleNavigateUp}
                 draggingIds={activeDrag?.count > 1 ? selectedFiles : activeDrag ? [activeDrag.fileId] : []}
               />
