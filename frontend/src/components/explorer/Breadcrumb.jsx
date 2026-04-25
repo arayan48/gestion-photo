@@ -1,37 +1,71 @@
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useDroppable } from '@dnd-kit/core'
 import { ChevronRight, Home } from 'lucide-react'
-import api from '../../utils/api.js'
 
-export default function Breadcrumb({ folderId }) {
-  const { data: chain } = useQuery({
-    queryKey: ['breadcrumb', folderId],
-    queryFn: async () => {
-      if (!folderId) return []
-      const { data } = await api.get(`/files/folders/${folderId}/breadcrumb`).catch(() => ({ data: [] }))
-      return data
-    },
-    enabled: !!folderId,
+function DroppableHome() {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'drop-root',
+    data: { type: 'folder', folderId: null },
+  })
+  return (
+    <span
+      ref={setNodeRef}
+      className={`inline-flex rounded p-0.5 transition-colors ${isOver ? 'bg-violet-100 dark:bg-violet-900/30' : ''}`}
+    >
+      <Link
+        to="/explorer"
+        className={`transition-colors ${isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400'}`}
+      >
+        <Home size={13} />
+      </Link>
+    </span>
+  )
+}
+
+function DroppableCrumb({ crumb, isLast }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `drop-folder-${crumb.id}`,
+    data: { type: 'folder', folderId: crumb.id },
   })
 
+  const overClass = 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
+
+  return (
+    <span className="flex items-center gap-1">
+      <ChevronRight size={12} className="text-slate-300 dark:text-gray-700" />
+      {isLast ? (
+        <span
+          ref={setNodeRef}
+          className={`font-medium rounded px-1 py-0.5 transition-colors ${isOver ? overClass : 'text-slate-700 dark:text-gray-300'}`}
+        >
+          {crumb.name}
+        </span>
+      ) : (
+        <span
+          ref={setNodeRef}
+          className={`rounded px-0.5 transition-colors ${isOver ? overClass : ''}`}
+        >
+          <Link
+            to={`/explorer/${crumb.id}`}
+            className={`transition-colors ${isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400'}`}
+          >
+            {crumb.name}
+          </Link>
+        </span>
+      )}
+    </span>
+  )
+}
+
+// chain et folderId sont maintenant passés depuis Explorer (query remontée)
+export default function Breadcrumb({ chain, folderId }) {
   if (!folderId || !chain?.length) return null
 
   return (
     <nav className="flex items-center gap-1 text-sm">
-      <Link to="/explorer" className="text-slate-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
-        <Home size={13} />
-      </Link>
+      <DroppableHome />
       {chain.map((crumb, i) => (
-        <span key={crumb.id} className="flex items-center gap-1">
-          <ChevronRight size={12} className="text-slate-300 dark:text-gray-700" />
-          {i === chain.length - 1 ? (
-            <span className="text-slate-700 dark:text-gray-300 font-medium">{crumb.name}</span>
-          ) : (
-            <Link to={`/explorer/${crumb.id}`} className="text-slate-400 dark:text-gray-500 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
-              {crumb.name}
-            </Link>
-          )}
-        </span>
+        <DroppableCrumb key={crumb.id} crumb={crumb} isLast={i === chain.length - 1} />
       ))}
     </nav>
   )

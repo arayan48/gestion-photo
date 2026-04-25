@@ -1,7 +1,8 @@
-import { Folder, FileImage, FileVideo, File, Heart, Unlink } from 'lucide-react'
+import { Folder, FileImage, FileVideo, File, Heart, Unlink, CornerLeftUp } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 
 function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
@@ -24,13 +25,153 @@ function TypeBadge({ mime }) {
   )
 }
 
-export default function FileList({ files, folders, onFileClick, onContextMenu, isTrash, selectedFiles = [], onToggleSelect }) {
+// Ligne ".." dossier parent — droppable
+function ParentFolderRow({ parentFolderId, onNavigate, showCheckbox }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'drop-parent',
+    data: { type: 'folder', folderId: parentFolderId },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all border-b border-slate-100 dark:border-gray-800 ${
+        isOver ? 'bg-violet-50 dark:bg-violet-900/20 border-l-2 border-l-violet-400' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
+      }`}
+      onDoubleClick={onNavigate}
+      title="Dossier parent (double-clic pour remonter)"
+    >
+      {showCheckbox && <div className="w-4 shrink-0" />}
+      <div className="w-7 shrink-0 flex items-center justify-center">
+        <div className="relative">
+          <Folder size={15} className={isOver ? 'text-violet-400' : 'text-slate-300 dark:text-gray-600'} />
+          <CornerLeftUp size={9} className="absolute -top-1 -right-1 text-slate-400 dark:text-gray-500" />
+        </div>
+      </div>
+      <span className="text-sm text-slate-400 dark:text-gray-500 flex-1 truncate font-medium select-none">..</span>
+      <span className="w-20 hidden sm:block" />
+      <span className="w-16 text-center hidden sm:block">
+        <span className="text-[10px] bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-600 px-1.5 py-0.5 rounded font-mono">DIR</span>
+      </span>
+      <span className="w-28 hidden md:block" />
+      <span className="w-32 hidden lg:block" />
+    </div>
+  )
+}
+
+// Ligne dossier droppable
+function DroppableFolderRow({ folder, onContextMenu, showCheckbox }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `folder-${folder.id}`,
+    data: { type: 'folder', folderId: folder.id },
+  })
   const navigate = useNavigate()
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all border-b border-slate-100 dark:border-gray-800 ${
+        isOver ? 'bg-violet-50 dark:bg-violet-900/20 border-l-2 border-l-violet-400' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
+      }`}
+      onDoubleClick={() => navigate(`/explorer/${folder.id}`)}
+      onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
+    >
+      {showCheckbox && <div className="w-4 shrink-0" />}
+      <Folder size={15} className={`shrink-0 w-7 ${isOver ? 'text-violet-400' : 'text-yellow-500/80'}`} />
+      <span className="text-sm text-slate-700 dark:text-gray-300 flex-1 truncate font-medium">
+        {folder.name}
+        {isOver && <span className="ml-2 text-xs text-violet-500 font-normal">Déposer ici</span>}
+      </span>
+      <span className="w-20 hidden sm:block" />
+      <span className="w-16 text-center hidden sm:block">
+        <span className="text-[10px] bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-500 px-1.5 py-0.5 rounded font-mono">DIR</span>
+      </span>
+      <span className="w-28 hidden md:block" />
+      <span className="w-32 hidden lg:block" />
+    </div>
+  )
+}
+
+// Ligne fichier draggable
+function DraggableFileRow({ file, isSelected, onToggleSelect, onFileClick, onContextMenu, isTrash, isDraggingGroup }) {
+  const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
+    id: `file-${file.id}`,
+    data: { type: 'file', fileId: file.id },
+    disabled: isTrash,
+  })
+
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.3 : 1, zIndex: isDragging ? 999 : undefined }
+    : isDraggingGroup && !isDragging ? { opacity: 0.4 } : undefined
 
   return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 px-3 py-2.5 transition-all border-b border-slate-100 dark:border-gray-800 group last:border-0 ${
+        isDragging
+          ? 'cursor-grabbing'
+          : isTrash ? 'cursor-pointer' : 'cursor-grab'
+      } ${
+        isSelected ? 'bg-violet-50 dark:bg-violet-900/10' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
+      }`}
+      onClick={() => !isDragging && onFileClick(file)}
+      onContextMenu={(e) => onContextMenu(e, file)}
+      {...(!isTrash ? listeners : {})}
+      {...(!isTrash ? attributes : {})}
+    >
+      {/* Checkbox */}
+      {onToggleSelect && (
+        <div
+          className={`shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(file.id) }}
+        >
+          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+            isSelected ? 'bg-violet-600 border-violet-600' : 'border-slate-300 dark:border-gray-600'
+          }`}>
+            {isSelected && (
+              <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white fill-current">
+                <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Thumbnail */}
+      <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+        {file.thumbnail_path
+          ? <img src={file.thumbnail_path} alt="" className="w-full h-full object-cover" loading="lazy" />
+          : <TypeIcon mime={file.mime_type} />
+        }
+      </div>
+
+      {/* Nom */}
+      <div className="flex-1 flex items-center gap-2 min-w-0">
+        <span className="text-sm text-slate-700 dark:text-gray-300 truncate">{file.original_name}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {file.is_favorite && <Heart size={11} className="text-pink-400 fill-pink-400" />}
+          {file.link_active === false && <Unlink size={11} className="text-red-400" />}
+        </div>
+      </div>
+
+      <span className="text-xs text-slate-400 dark:text-gray-500 w-20 text-right hidden sm:block shrink-0">{formatSize(file.size)}</span>
+      <span className="w-16 text-center hidden sm:block shrink-0"><TypeBadge mime={file.mime_type} /></span>
+      <span className="text-xs text-slate-400 dark:text-gray-500 w-28 text-right truncate hidden md:block shrink-0">{file.owner_pseudo || '—'}</span>
+      <span className="text-xs text-slate-400 dark:text-gray-600 w-32 text-right hidden lg:block shrink-0">
+        {formatDistanceToNow(new Date(file.created_at), { locale: fr, addSuffix: true })}
+      </span>
+    </div>
+  )
+}
+
+export default function FileList({
+  files, folders, onFileClick, onContextMenu, isTrash,
+  selectedFiles = [], onToggleSelect,
+  parentFolderId, onNavigateUp,
+  draggingIds = [],
+}) {
+  return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-hidden">
-      {/* En-têtes */}
-      {(files.length > 0 || folders.length > 0) && (
+      {(files.length > 0 || folders.length > 0 || parentFolderId !== undefined) && (
         <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-gray-600">
           {onToggleSelect && <div className="w-4 shrink-0" />}
           <div className="w-7 shrink-0" />
@@ -42,98 +183,28 @@ export default function FileList({ files, folders, onFileClick, onContextMenu, i
         </div>
       )}
 
-      {/* Dossiers */}
+      {parentFolderId !== undefined && onNavigateUp && !isTrash && (
+        <ParentFolderRow parentFolderId={parentFolderId} onNavigate={onNavigateUp} showCheckbox={!!onToggleSelect} />
+      )}
+
       {folders.map((folder) => (
-        <div
-          key={folder.id}
-          className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors border-b border-slate-100 dark:border-gray-800"
-          onDoubleClick={() => navigate(`/explorer/${folder.id}`)}
-          onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
-        >
-          {onToggleSelect && <div className="w-4 shrink-0" />}
-          <Folder size={15} className="text-yellow-500/80 shrink-0 w-7" />
-          <span className="text-sm text-slate-700 dark:text-gray-300 flex-1 truncate font-medium">{folder.name}</span>
-          <span className="w-20 hidden sm:block" />
-          <span className="w-16 text-center hidden sm:block">
-            <span className="text-[10px] bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-500 px-1.5 py-0.5 rounded font-mono">DIR</span>
-          </span>
-          <span className="w-28 hidden md:block" />
-          <span className="w-32 hidden lg:block" />
-        </div>
+        <DroppableFolderRow key={folder.id} folder={folder} onContextMenu={onContextMenu} showCheckbox={!!onToggleSelect} />
       ))}
 
-      {/* Fichiers */}
-      {files.map((file) => {
-        const isSelected = selectedFiles.includes(file.id)
-        return (
-          <div
-            key={file.id}
-            className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors border-b border-slate-100 dark:border-gray-800 group last:border-0 ${
-              isSelected
-                ? 'bg-violet-50 dark:bg-violet-900/10'
-                : 'hover:bg-slate-50 dark:hover:bg-gray-800'
-            }`}
-            onClick={() => onFileClick(file)}
-            onContextMenu={(e) => onContextMenu(e, file)}
-          >
-            {/* Checkbox */}
-            {onToggleSelect && (
-              <div
-                className={`shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                onClick={(e) => { e.stopPropagation(); onToggleSelect(file.id) }}
-              >
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                  isSelected ? 'bg-violet-600 border-violet-600' : 'border-slate-300 dark:border-gray-600'
-                }`}>
-                  {isSelected && (
-                    <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white fill-current">
-                      <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                    </svg>
-                  )}
-                </div>
-              </div>
-            )}
+      {files.map((file) => (
+        <DraggableFileRow
+          key={file.id}
+          file={file}
+          isSelected={selectedFiles.includes(file.id)}
+          onToggleSelect={onToggleSelect}
+          onFileClick={onFileClick}
+          onContextMenu={onContextMenu}
+          isTrash={isTrash}
+          isDraggingGroup={draggingIds.includes(file.id)}
+        />
+      ))}
 
-            {/* Thumbnail */}
-            <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-              {file.thumbnail_path ? (
-                <img src={file.thumbnail_path} alt="" className="w-full h-full object-cover" loading="lazy" />
-              ) : <TypeIcon mime={file.mime_type} />}
-            </div>
-
-            {/* Nom */}
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <span className="text-sm text-slate-700 dark:text-gray-300 truncate">{file.original_name}</span>
-              <div className="flex items-center gap-1 shrink-0">
-                {file.is_favorite && <Heart size={11} className="text-pink-400 fill-pink-400" />}
-                {file.link_active === false && <Unlink size={11} className="text-red-400" />}
-              </div>
-            </div>
-
-            {/* Taille */}
-            <span className="text-xs text-slate-400 dark:text-gray-500 w-20 text-right hidden sm:block shrink-0">
-              {formatSize(file.size)}
-            </span>
-
-            {/* Type */}
-            <span className="w-16 text-center hidden sm:block shrink-0">
-              <TypeBadge mime={file.mime_type} />
-            </span>
-
-            {/* Propriétaire */}
-            <span className="text-xs text-slate-400 dark:text-gray-500 w-28 text-right truncate hidden md:block shrink-0">
-              {file.owner_pseudo || '—'}
-            </span>
-
-            {/* Date */}
-            <span className="text-xs text-slate-400 dark:text-gray-600 w-32 text-right hidden lg:block shrink-0">
-              {formatDistanceToNow(new Date(file.created_at), { locale: fr, addSuffix: true })}
-            </span>
-          </div>
-        )
-      })}
-
-      {files.length === 0 && folders.length === 0 && (
+      {files.length === 0 && folders.length === 0 && parentFolderId === undefined && (
         <div className="text-center py-16">
           <FileImage size={36} className="mx-auto text-slate-200 dark:text-gray-700 mb-2" />
           <p className="text-sm text-slate-400 dark:text-gray-500">Aucun fichier ici</p>

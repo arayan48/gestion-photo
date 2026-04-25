@@ -3,6 +3,7 @@ import { Eye, Download, Trash2, RotateCcw, Link2, Unlink, Heart, HeartOff, Copy,
 
 export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) {
   const ref = useRef(null)
+  const isFolder = file?.type === 'folder'
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -12,7 +13,6 @@ export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) 
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Ajuster la position si elle dépasse l'écran
   const style = {
     position: 'fixed',
     top: Math.min(y, window.innerHeight - 280),
@@ -32,7 +32,8 @@ export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) 
     </button>
   )
 
-  if (isTrash) {
+  // Menu corbeille (fichiers seulement — les dossiers ne vont pas en corbeille)
+  if (isTrash && !isFolder) {
     return (
       <div ref={ref} style={style} className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-1 w-48">
         <MenuItem icon={RotateCcw} label="Restaurer" onClick={() => onAction('restore', file)} />
@@ -41,26 +42,36 @@ export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) 
     )
   }
 
+  // Menu dossier
+  if (isFolder) {
+    return (
+      <div ref={ref} style={style} className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-1 w-48">
+        <MenuItem icon={Pencil} label="Renommer" onClick={() => onAction('rename-folder', file)} />
+        <div className="my-1 border-t border-gray-800" />
+        <MenuItem icon={Trash2} label="Supprimer le dossier" onClick={() => onAction('delete-folder', file)} danger />
+      </div>
+    )
+  }
+
+  // Menu fichier
   return (
     <div ref={ref} style={style} className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-1 w-48">
-      <MenuItem icon={Eye} label="Ouvrir" onClick={() => onAction('view', file)} />
-      <MenuItem icon={Download} label="Télécharger" onClick={() => onAction('download', file)} />
-      <MenuItem icon={Copy} label="Copier le lien" onClick={() => onAction('copy-link', file)} />
+      <MenuItem icon={Eye}      label="Ouvrir"           onClick={() => onAction('view', file)} />
+      <MenuItem icon={Download} label="Télécharger"      onClick={() => onAction('download', file)} />
+      <MenuItem icon={Copy}     label="Copier le lien"   onClick={() => onAction('copy-link', file)} />
       <div className="my-1 border-t border-gray-800" />
-      {file.is_favorite ? (
-        <MenuItem icon={HeartOff} label="Retirer des favoris" onClick={() => onAction('unfavorite', file)} />
-      ) : (
-        <MenuItem icon={Heart} label="Ajouter aux favoris" onClick={() => onAction('favorite', file)} />
-      )}
-      {file.link_active ? (
-        <MenuItem icon={Unlink} label="Désactiver le lien" onClick={() => onAction('toggle-link', file)} />
-      ) : (
-        <MenuItem icon={Link2} label="Activer le lien" onClick={() => onAction('toggle-link', file)} />
-      )}
+      {file.is_favorite
+        ? <MenuItem icon={HeartOff} label="Retirer des favoris" onClick={() => onAction('unfavorite', file)} />
+        : <MenuItem icon={Heart}    label="Ajouter aux favoris" onClick={() => onAction('favorite', file)} />
+      }
+      {file.link_active
+        ? <MenuItem icon={Unlink} label="Désactiver le lien" onClick={() => onAction('toggle-link', file)} />
+        : <MenuItem icon={Link2}  label="Activer le lien"    onClick={() => onAction('toggle-link', file)} />
+      }
       <MenuItem icon={Pencil} label="Renommer" onClick={() => onAction('rename', file)} />
       <div className="my-1 border-t border-gray-800" />
-      <MenuItem icon={Info} label="Informations" onClick={() => onAction('info', file)} />
-      <MenuItem icon={Trash2} label="Supprimer" onClick={() => onAction('delete', file)} danger />
+      <MenuItem icon={Info}   label="Informations" onClick={() => onAction('info', file)} />
+      <MenuItem icon={Trash2} label="Supprimer"    onClick={() => onAction('delete', file)} danger />
     </div>
   )
 }
