@@ -28,22 +28,20 @@ function DroppableCrumb({ crumb, isLast }) {
     data: { type: 'folder', folderId: crumb.id },
   })
 
-  const overClass = 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-
   return (
     <span className="flex items-center gap-1">
       <ChevronRight size={12} className="text-slate-300 dark:text-gray-700" />
       {isLast ? (
         <span
           ref={setNodeRef}
-          className={`font-medium rounded px-1 py-0.5 transition-colors ${isOver ? overClass : 'text-slate-700 dark:text-gray-300'}`}
+          className={`font-medium rounded px-1 py-0.5 transition-colors ${isOver ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-gray-300'}`}
         >
           {crumb.name}
         </span>
       ) : (
         <span
           ref={setNodeRef}
-          className={`rounded px-0.5 transition-colors ${isOver ? overClass : ''}`}
+          className={`rounded px-0.5 transition-colors ${isOver ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300' : ''}`}
         >
           <Link
             to={`/explorer/${crumb.id}`}

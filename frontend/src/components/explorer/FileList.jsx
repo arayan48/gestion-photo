@@ -3,11 +3,23 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { formatSize } from '../../utils/format.js'
 
-function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
+export function ListSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-hidden">
+      <div className="h-8 bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800" />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-slate-100 dark:border-gray-800 last:border-0 animate-pulse">
+          <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-gray-800 shrink-0" />
+          <div className="flex-1 h-3 bg-slate-200 dark:bg-gray-800 rounded w-2/5" />
+          <div className="w-14 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden sm:block" />
+          <div className="w-10 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden sm:block" />
+          <div className="w-20 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden lg:block" />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function TypeIcon({ mime }) {
@@ -205,7 +217,7 @@ export default function FileList({
         />
       ))}
 
-      {files.length === 0 && folders.length === 0 && parentFolderId === undefined && (
+      {files.length === 0 && folders.length === 0 && (
         <div className="text-center py-16">
           <FileImage size={36} className="mx-auto text-slate-200 dark:text-gray-700 mb-2" />
           <p className="text-sm text-slate-400 dark:text-gray-500">Aucun fichier ici</p>

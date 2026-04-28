@@ -26,7 +26,7 @@ export default function Sidebar() {
     return view === null ? !currentView : currentView === view
   }
 
-  // role_id peut être un UUID truthy ou 0/null — utiliser != null pour fiabilité
+  // role_id est un UUID (string) ou null/undefined — != null couvre les deux cas
   const isAdmin = user?.is_super_admin || user?.role_id != null
 
   const used  = user?.storage_used  ?? 0

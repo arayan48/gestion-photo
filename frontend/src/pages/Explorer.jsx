@@ -5,11 +5,11 @@ import {
   DndContext, DragOverlay,
   PointerSensor, TouchSensor,
   useSensor, useSensors,
-  pointerWithin, rectIntersection, getFirstCollision,
+  pointerWithin, rectIntersection, closestCenter,
 } from '@dnd-kit/core'
 import api from '../utils/api.js'
-import FileGrid from '../components/explorer/FileGrid.jsx'
-import FileList from '../components/explorer/FileList.jsx'
+import FileGrid, { GridSkeleton } from '../components/explorer/FileGrid.jsx'
+import FileList, { ListSkeleton } from '../components/explorer/FileList.jsx'
 import UploadPanel from '../components/upload/UploadPanel.jsx'
 import FileViewer from '../components/viewer/FileViewer.jsx'
 import ContextMenu from '../components/explorer/ContextMenu.jsx'
@@ -18,40 +18,6 @@ import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash
 import { toast } from '../stores/toast.store.js'
 import { confirm } from '../stores/confirm.store.js'
 
-// ── Skeleton loaders ─────────────────────────────────────────────────────────
-function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div key={i} className="rounded-xl overflow-hidden bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 animate-pulse">
-          <div className="h-28 bg-slate-200 dark:bg-gray-800" />
-          <div className="p-2 space-y-1.5">
-            <div className="h-2.5 bg-slate-200 dark:bg-gray-800 rounded w-3/4" />
-            <div className="h-2 bg-slate-200 dark:bg-gray-800 rounded w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ListSkeleton() {
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-hidden">
-      <div className="h-8 bg-slate-50 dark:bg-gray-800/50 border-b border-slate-200 dark:border-gray-800" />
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-slate-100 dark:border-gray-800 last:border-0 animate-pulse">
-          <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-gray-800 shrink-0" />
-          <div className="flex-1 h-3 bg-slate-200 dark:bg-gray-800 rounded w-2/5" />
-          <div className="w-14 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden sm:block" />
-          <div className="w-10 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden sm:block" />
-          <div className="w-20 h-2.5 bg-slate-200 dark:bg-gray-800 rounded hidden lg:block" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // Icône selon le MIME type (utilisée dans l'overlay)
 function FileTypeIcon({ mime, size = 20 }) {
   if (mime?.startsWith('image/')) return <FileImage size={size} className="text-blue-400" />
@@ -59,11 +25,58 @@ function FileTypeIcon({ mime, size = 20 }) {
   return <File size={size} className="text-slate-400" />
 }
 
-// Collision : priorité au curseur dans la zone, sinon intersection des rectangles
+// Collision : priorité au curseur dans la zone, sinon intersection des rectangles,
+// puis closest center en dernier recours (évite les drops perdus sur mobile)
 function customCollision(args) {
   const pointer = pointerWithin(args)
   if (pointer.length > 0) return pointer
-  return rectIntersection(args)
+  const rect = rectIntersection(args)
+  if (rect.length > 0) return rect
+  return closestCenter(args)
+}
+
+// Modal de renommage — remplace window.prompt() bloquant
+function RenameModal({ initial, onConfirm, onCancel }) {
+  const [value, setValue] = useState(initial)
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-5 w-80 mx-4 border border-slate-200 dark:border-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-3">Renommer</h3>
+        <input
+          className="input w-full text-sm"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && value.trim()) onConfirm(value.trim())
+            if (e.key === 'Escape') onCancel()
+          }}
+          autoFocus
+          onFocus={(e) => e.target.select()}
+        />
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-sm rounded-lg text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => value.trim() && onConfirm(value.trim())}
+            disabled={!value.trim()}
+            className="btn-primary text-sm py-1.5 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Renommer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function Explorer() {
@@ -85,6 +98,8 @@ export default function Explorer() {
   const [newFolderName, setNewFolderName] = useState('')
   // activeDrag : { fileId, count, file (objet complet pour le thumbnail) }
   const [activeDrag, setActiveDrag] = useState(null)
+  // renameModal : { file, action ('rename' | 'rename-folder'), initialValue }
+  const [renameModal, setRenameModal] = useState(null)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -190,7 +205,8 @@ export default function Explorer() {
         toast.success(fileIds.length > 1 ? `${fileIds.length} fichiers déplacés` : 'Fichier déplacé')
         // Vider la sélection seulement si tout a réussi
         if (isMulti) setSelectedFiles([])
-        queryClient.invalidateQueries({ queryKey })
+        // Invalider toutes les vues fichiers (source + destination peuvent être n'importe quel dossier/vue)
+        queryClient.invalidateQueries({ queryKey: ['files'] })
         queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
         queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
       } catch {
@@ -210,17 +226,7 @@ export default function Explorer() {
 
       // ── Dossiers ────────────────────────────────────────────────────────────
       case 'rename-folder': {
-        const newName = prompt('Nouveau nom :', file.name)
-        if (newName?.trim() && newName.trim() !== file.name) {
-          try {
-            await api.patch(`/files/folders/${file.id}`, { name: newName.trim() })
-            // Invalider le dossier courant ET le parent (le dossier renommé peut être visible depuis le parent)
-            queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-            queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
-            queryClient.invalidateQueries({ queryKey: ['breadcrumb', folderId] })
-            toast.success('Dossier renommé')
-          } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-        }
+        setRenameModal({ file, action: 'rename-folder', initialValue: file.name })
         break
       }
       case 'delete-folder': {
@@ -294,14 +300,7 @@ export default function Explorer() {
         break
       }
       case 'rename': {
-        const newName = prompt('Nouveau nom :', file.original_name)
-        if (newName?.trim() && newName.trim() !== file.original_name) {
-          try {
-            await api.patch(`/files/${file.id}`, { name: newName.trim() })
-            queryClient.invalidateQueries({ queryKey })
-            toast.success('Fichier renommé')
-          } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors du renommage') }
-        }
+        setRenameModal({ file, action: 'rename', initialValue: file.original_name })
         break
       }
       case 'info':
@@ -320,6 +319,28 @@ export default function Explorer() {
         console.warn('[Explorer] Action inconnue:', action)
     }
   }, [queryClient, queryKey, folderId, parentFolderId])
+
+  const handleRenameSubmit = useCallback(async (newName) => {
+    const { file, action } = renameModal
+    setRenameModal(null)
+    if (action === 'rename-folder') {
+      if (newName === file.name) return
+      try {
+        await api.patch(`/files/folders/${file.id}`, { name: newName })
+        queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+        queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
+        queryClient.invalidateQueries({ queryKey: ['breadcrumb', folderId] })
+        toast.success('Dossier renommé')
+      } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
+    } else {
+      if (newName === file.original_name) return
+      try {
+        await api.patch(`/files/${file.id}`, { name: newName })
+        queryClient.invalidateQueries({ queryKey })
+        toast.success('Fichier renommé')
+      } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors du renommage') }
+    }
+  }, [renameModal, queryClient, queryKey, folderId, parentFolderId])
 
   const handleZipDownload = async () => {
     if (selectedFiles.length === 0) return
@@ -350,6 +371,7 @@ export default function Explorer() {
     toast.success(`${selectedFiles.length} fichier(s) déplacé(s) dans la corbeille`)
     clearSelection()
     queryClient.invalidateQueries({ queryKey })
+    queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
   }
 
   const handleEmptyTrash = async () => {
@@ -595,6 +617,14 @@ export default function Explorer() {
             isTrash={view === 'trash'}
             onAction={handleFileAction}
             onClose={() => setContextMenu(null)}
+          />
+        )}
+
+        {renameModal && (
+          <RenameModal
+            initial={renameModal.initialValue}
+            onConfirm={handleRenameSubmit}
+            onCancel={() => setRenameModal(null)}
           />
         )}
       </div>

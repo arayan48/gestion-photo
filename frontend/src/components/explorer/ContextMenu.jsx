@@ -32,8 +32,11 @@ export default function ContextMenu({ x, y, file, isTrash, onAction, onClose }) 
     </button>
   )
 
-  // Menu corbeille (fichiers seulement — les dossiers ne vont pas en corbeille)
-  if (isTrash && !isFolder) {
+  // Les dossiers en corbeille n'ont pas d'actions : on n'affiche rien
+  if (isTrash && isFolder) return null
+
+  // Menu corbeille (fichiers uniquement)
+  if (isTrash) {
     return (
       <div ref={ref} style={style} className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-1 w-48">
         <MenuItem icon={RotateCcw} label="Restaurer" onClick={() => onAction('restore', file)} />

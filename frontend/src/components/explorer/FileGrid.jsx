@@ -3,11 +3,22 @@ import { Folder, FileImage, FileVideo, File, Unlink, Heart, Download, Copy, Eye,
 import { useNavigate } from 'react-router-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { toast } from '../../stores/toast.store.js'
+import { formatSize } from '../../utils/format.js'
 
-function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
+export function GridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} className="rounded-xl overflow-hidden bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 animate-pulse">
+          <div className="h-28 bg-slate-200 dark:bg-gray-800" />
+          <div className="p-2 space-y-1.5">
+            <div className="h-2.5 bg-slate-200 dark:bg-gray-800 rounded w-3/4" />
+            <div className="h-2 bg-slate-200 dark:bg-gray-800 rounded w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function FileTypeIcon({ mime, size = 20 }) {
@@ -243,8 +254,8 @@ export default function FileGrid({
         />
       ))}
 
-      {/* Empty state */}
-      {files.length === 0 && folders.length === 0 && parentFolderId === undefined && (
+      {/* Empty state — affiché quel que soit parentFolderId (un dossier peut être vide) */}
+      {files.length === 0 && folders.length === 0 && (
         <div className="col-span-full flex flex-col items-center justify-center py-24 text-slate-400 dark:text-gray-600">
           <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-gray-800/60 flex items-center justify-center mb-4 ring-1 ring-slate-200 dark:ring-gray-700">
             <FileImage size={28} className="opacity-40" />

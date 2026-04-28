@@ -30,8 +30,8 @@ function ThemeOption({ value, label, icon: Icon, current, onChange }) {
 }
 
 const TABS = [
+    { key: 'profile',    label: 'Mon profil',      icon: User },
   { key: 'appearance', label: 'Apparence',      icon: Palette },
-  { key: 'profile',    label: 'Mon profil',      icon: User },
   { key: 'security',   label: 'Sécurité',        icon: Lock },
   { key: 'linked',     label: 'Comptes liés',    icon: Link2 },
   { key: 'notifs',     label: 'Notifications',   icon: Bell },
