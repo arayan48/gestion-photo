@@ -15,7 +15,7 @@ useThemeStore.getState().init()
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
+    queries: { retry: 1, staleTime: 0 },
   },
 })
 

@@ -484,10 +484,68 @@ export default async function fileRoutes(fastify) {
     return reply.code(201).send(rows[0])
   })
 
+  // Statistiques d'un dossier (nombre de fichiers et sous-dossiers directs)
+  fastify.get('/folders/:id/stats', { preHandler: [authenticate] }, async (request, reply) => {
+    const { id } = request.params
+    const { rows: [fc] } = await pool.query(
+      `SELECT COUNT(*) FROM files WHERE folder_id = $1 AND is_deleted = false`,
+      [id]
+    )
+    const { rows: [sc] } = await pool.query(
+      `SELECT COUNT(*) FROM folders WHERE parent_id = $1`,
+      [id]
+    )
+    return reply.send({ fileCount: parseInt(fc.count), folderCount: parseInt(sc.count) })
+  })
+
   fastify.delete('/folders/:id', {
     preHandler: [authenticate, requirePermission('files.create_folder')],
   }, async (request, reply) => {
-    await pool.query('DELETE FROM folders WHERE id = $1 AND owner_id = $2', [request.params.id, request.currentUser.id])
+    const { id } = request.params
+    const { moveToTrash } = request.query   // 'true' | 'false' | undefined
+    const user = request.currentUser
+
+    // Récupérer le dossier + tous ses sous-dossiers récursivement
+    const { rows: allFolders } = await pool.query(`
+      WITH RECURSIVE sub AS (
+        SELECT id, parent_id FROM folders WHERE id = $1 AND owner_id = $2
+        UNION ALL
+        SELECT f.id, f.parent_id FROM folders f JOIN sub s ON f.parent_id = s.id
+      )
+      SELECT id, parent_id FROM sub
+    `, [id, user.id])
+
+    if (!allFolders.length) return reply.code(404).send({ error: 'Dossier introuvable' })
+
+    const allFolderIds = allFolders.map((f) => f.id)
+    const parentFolderId = allFolders[0].parent_id  // dossier parent (null = racine)
+
+    if (moveToTrash === 'true') {
+      // Déplacer tous les fichiers vers la corbeille
+      await pool.query(
+        `UPDATE files SET is_deleted = true, deleted_at = NOW(), folder_id = NULL
+         WHERE folder_id = ANY($1) AND owner_id = $2 AND is_deleted = false`,
+        [allFolderIds, user.id]
+      )
+    } else {
+      // Remonter les fichiers vers le dossier parent (ou racine si null)
+      await pool.query(
+        `UPDATE files SET folder_id = $1
+         WHERE folder_id = ANY($2) AND owner_id = $3 AND is_deleted = false`,
+        [parentFolderId, allFolderIds, user.id]
+      )
+    }
+
+    // Supprimer tous les dossiers (sous-dossiers d'abord via ORDER BY depth desc n'est pas nécessaire
+    // car ON DELETE CASCADE ou simple DELETE sur les IDs collectés)
+    await pool.query('DELETE FROM folders WHERE id = ANY($1)', [allFolderIds])
+
+    await log(pool, {
+      category: 'files', level: 'info', action: 'folder.delete',
+      userId: user.id,
+      metadata: { folderId: id, moveToTrash: moveToTrash === 'true', affectedFolders: allFolderIds.length },
+    })
+
     return reply.send({ message: 'Dossier supprimé.' })
   })
 

@@ -36,6 +36,75 @@ function customCollision(args) {
   return closestCenter(args)
 }
 
+// Modal de suppression de dossier avec option corbeille
+function FolderDeleteModal({ folderName, stats, onConfirm, onCancel }) {
+  const [moveToTrash, setMoveToTrash] = useState(true)
+  const hasContent = stats.fileCount > 0 || stats.folderCount > 0
+
+  const contentDesc = [
+    stats.fileCount  > 0 && `${stats.fileCount} fichier${stats.fileCount  > 1 ? 's' : ''}`,
+    stats.folderCount > 0 && `${stats.folderCount} sous-dossier${stats.folderCount > 1 ? 's' : ''}`,
+  ].filter(Boolean).join(' et ')
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-5 w-96 mx-4 border border-slate-200 dark:border-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-1">Supprimer le dossier</h3>
+        <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">
+          Supprimer <span className="font-medium text-slate-800 dark:text-gray-200">"{folderName}"</span> ?
+        </p>
+
+        {hasContent && (
+          <div className="mb-4 space-y-2">
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              Ce dossier contient {contentDesc}.
+            </p>
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
+              <input
+                type="checkbox"
+                checked={moveToTrash}
+                onChange={(e) => setMoveToTrash(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded accent-violet-600"
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-gray-300">
+                  Déplacer les fichiers vers la corbeille
+                </p>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
+                  {moveToTrash
+                    ? 'Les fichiers seront récupérables pendant 48h depuis la corbeille.'
+                    : 'Les fichiers seront remontés vers le dossier parent.'}
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-sm rounded-lg text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => onConfirm(moveToTrash)}
+            className="px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+          >
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Modal de renommage — remplace window.prompt() bloquant
 function RenameModal({ initial, onConfirm, onCancel }) {
   const [value, setValue] = useState(initial)
@@ -101,6 +170,8 @@ export default function Explorer() {
   const [activeDrag, setActiveDrag] = useState(null)
   // renameModal : { file, action ('rename' | 'rename-folder'), initialValue }
   const [renameModal, setRenameModal] = useState(null)
+  // folderDeleteModal : { file, stats: { fileCount, folderCount } }
+  const [folderDeleteModal, setFolderDeleteModal] = useState(null)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -231,18 +302,10 @@ export default function Explorer() {
         break
       }
       case 'delete-folder': {
-        const ok = await confirm(
-          `Supprimer le dossier "${file.name}" et tout son contenu ?`,
-          { danger: true, confirmLabel: 'Supprimer', title: 'Supprimer le dossier' }
-        )
-        if (ok) {
-          try {
-            await api.delete(`/files/folders/${file.id}`)
-            queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-            queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
-            toast.success(`Dossier "${file.name}" supprimé`)
-          } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-        }
+        try {
+          const { data: stats } = await api.get(`/files/folders/${file.id}/stats`)
+          setFolderDeleteModal({ file, stats })
+        } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
         break
       }
 
@@ -282,7 +345,7 @@ export default function Explorer() {
       case 'restore':
         try {
           await api.post(`/files/${file.id}/restore`)
-          queryClient.invalidateQueries({ queryKey })
+          queryClient.invalidateQueries({ queryKey: ['files'] })
           toast.success('Fichier restauré')
         } catch { toast.error('Erreur lors de la restauration') }
         break
@@ -351,6 +414,18 @@ export default function Explorer() {
       } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors du renommage') }
     }
   }, [renameModal, queryClient, queryKey, folderId, parentFolderId])
+
+  const handleFolderDeleteConfirm = useCallback(async (moveToTrash) => {
+    const { file } = folderDeleteModal
+    setFolderDeleteModal(null)
+    try {
+      await api.delete(`/files/folders/${file.id}?moveToTrash=${moveToTrash}`)
+      queryClient.invalidateQueries({ queryKey: ['files'] })
+      queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
+      queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
+      toast.success(`Dossier "${file.name}" supprimé`)
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
+  }, [folderDeleteModal, queryClient, folderId, parentFolderId])
 
   const handleZipDownload = async () => {
     if (selectedFiles.length === 0) return
@@ -635,6 +710,15 @@ export default function Explorer() {
             initial={renameModal.initialValue}
             onConfirm={handleRenameSubmit}
             onCancel={() => setRenameModal(null)}
+          />
+        )}
+
+        {folderDeleteModal && (
+          <FolderDeleteModal
+            folderName={folderDeleteModal.file.name}
+            stats={folderDeleteModal.stats}
+            onConfirm={handleFolderDeleteConfirm}
+            onCancel={() => setFolderDeleteModal(null)}
           />
         )}
       </div>
