@@ -35,8 +35,8 @@ function ParentFolderRow({ parentFolderId, onNavigate, showCheckbox }) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all border-b border-slate-100 dark:border-gray-800 ${
-        isOver ? 'bg-violet-50 dark:bg-violet-900/20 border-l-2 border-l-violet-400' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
+      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors duration-150 border-b border-slate-100 dark:border-gray-800 ${
+        isOver ? 'bg-violet-50 dark:bg-violet-950/50 border-l-2 border-l-violet-500' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
       }`}
       onDoubleClick={onNavigate}
       title="Dossier parent (double-clic pour remonter)"
@@ -44,11 +44,11 @@ function ParentFolderRow({ parentFolderId, onNavigate, showCheckbox }) {
       {showCheckbox && <div className="w-4 shrink-0" />}
       <div className="w-7 shrink-0 flex items-center justify-center">
         <div className="relative">
-          <Folder size={15} className={isOver ? 'text-violet-400' : 'text-slate-300 dark:text-gray-600'} />
+          <Folder size={15} className={`transition-colors duration-150 ${isOver ? 'text-violet-500' : 'text-slate-300 dark:text-gray-600'}`} />
           <CornerLeftUp size={9} className="absolute -top-1 -right-1 text-slate-400 dark:text-gray-500" />
         </div>
       </div>
-      <span className="text-sm text-slate-400 dark:text-gray-500 flex-1 truncate font-medium select-none">..</span>
+      <span className={`text-sm flex-1 truncate font-medium select-none transition-colors duration-150 ${isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-gray-500'}`}>..</span>
       <span className="w-20 hidden sm:block" />
       <span className="w-16 text-center hidden sm:block">
         <span className="text-[10px] bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-600 px-1.5 py-0.5 rounded font-mono">DIR</span>
@@ -69,17 +69,16 @@ function DroppableFolderRow({ folder, onContextMenu, showCheckbox }) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all border-b border-slate-100 dark:border-gray-800 ${
-        isOver ? 'bg-violet-50 dark:bg-violet-900/20 border-l-2 border-l-violet-400' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
+      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors duration-150 border-b border-slate-100 dark:border-gray-800 ${
+        isOver ? 'bg-violet-50 dark:bg-violet-950/50 border-l-2 border-l-violet-500' : 'hover:bg-slate-50 dark:hover:bg-gray-800'
       }`}
       onDoubleClick={() => navigate(`/explorer/${folder.id}`)}
       onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
     >
       {showCheckbox && <div className="w-4 shrink-0" />}
-      <Folder size={15} className={`shrink-0 w-7 ${isOver ? 'text-violet-400' : 'text-yellow-500/80'}`} />
-      <span className="text-sm text-slate-700 dark:text-gray-300 flex-1 truncate font-medium">
+      <Folder size={15} className={`shrink-0 w-7 transition-colors duration-150 ${isOver ? 'text-violet-500' : 'text-yellow-500/80'}`} />
+      <span className={`text-sm flex-1 truncate font-medium transition-colors duration-150 ${isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-700 dark:text-gray-300'}`}>
         {folder.name}
-        {isOver && <span className="ml-2 text-xs text-violet-500 font-normal">Déposer ici</span>}
       </span>
       <span className="w-20 hidden sm:block" />
       <span className="w-16 text-center hidden sm:block">

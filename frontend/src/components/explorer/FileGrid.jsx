@@ -43,22 +43,19 @@ function ParentFolder({ parentFolderId, onNavigate }) {
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl p-3 cursor-pointer transition-all duration-200 border border-dashed select-none ${
+      className={`rounded-xl p-3 cursor-pointer select-none transition-colors duration-150 border border-dashed ${
         isOver
-          ? 'bg-violet-50 dark:bg-violet-900/30 border-violet-400 dark:border-violet-500 scale-[1.03] shadow-lg shadow-violet-500/20'
-          : 'bg-white/50 dark:bg-gray-900/50 hover:bg-slate-50 dark:hover:bg-gray-800/80 border-slate-300 dark:border-gray-700 hover:border-slate-400 dark:hover:border-gray-600 hover:scale-[1.02]'
+          ? 'bg-violet-50 dark:bg-violet-950/60 border-violet-400 dark:border-violet-500'
+          : 'bg-white/50 dark:bg-gray-900/50 border-slate-300 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-800/80 hover:border-slate-400 dark:hover:border-gray-600'
       }`}
       onDoubleClick={onNavigate}
       title="Dossier parent — double-clic pour remonter"
     >
       <div className="relative flex items-center justify-center h-16 mb-2">
-        <Folder size={32} className={isOver ? 'text-violet-400' : 'text-slate-300 dark:text-gray-600'} />
-        <CornerLeftUp
-          size={14}
-          className={`absolute top-1 right-1 ${isOver ? 'text-violet-500' : 'text-slate-400 dark:text-gray-500'}`}
-        />
+        <Folder size={32} className={`transition-colors duration-150 ${isOver ? 'text-violet-500' : 'text-slate-300 dark:text-gray-600'}`} />
+        <CornerLeftUp size={12} className={`absolute top-1 right-1 transition-colors duration-150 ${isOver ? 'text-violet-400' : 'text-slate-400 dark:text-gray-600'}`} />
       </div>
-      <p className="text-xs text-slate-400 dark:text-gray-600 truncate text-center font-medium">..</p>
+      <p className={`text-xs truncate text-center font-medium transition-colors duration-150 ${isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-gray-600'}`}>..</p>
     </div>
   )
 }
@@ -74,30 +71,25 @@ function DroppableFolder({ folder, onDoubleClick, onContextMenu, isTrash }) {
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl p-3 cursor-pointer transition-all duration-200 border select-none group ${
+      className={`rounded-xl p-3 cursor-pointer select-none transition-colors duration-150 border group ${
         isOver
-          ? 'bg-violet-50 dark:bg-violet-900/30 border-violet-400 dark:border-violet-500 scale-[1.04] shadow-xl shadow-violet-500/25 ring-2 ring-violet-500/30'
-          : 'bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700 hover:scale-[1.02] hover:shadow-md hover:shadow-black/10'
+          ? 'bg-violet-50 dark:bg-violet-950/60 border-violet-400 dark:border-violet-500 border-dashed'
+          : 'bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800 hover:border-slate-300 dark:hover:border-gray-700 hover:shadow-sm'
       }`}
       onDoubleClick={() => onDoubleClick(folder)}
       onContextMenu={(e) => onContextMenu(e, { ...folder, type: 'folder' })}
     >
-      <div className="relative flex items-center justify-center h-16 mb-2">
+      <div className="flex items-center justify-center h-16 mb-2">
         <Folder
           size={36}
-          className={`transition-colors duration-200 ${
+          className={`transition-colors duration-150 ${
             isOver ? 'text-violet-500' : 'text-yellow-500/80 group-hover:text-yellow-400'
           }`}
         />
-        {isOver && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[11px] text-violet-600 dark:text-violet-300 font-semibold bg-white/95 dark:bg-gray-900/95 px-2 py-0.5 rounded-full shadow-sm">
-              Déposer ici
-            </span>
-          </div>
-        )}
       </div>
-      <p className="text-xs text-slate-700 dark:text-gray-300 truncate text-center font-medium">{folder.name}</p>
+      <p className={`text-xs truncate text-center font-medium transition-colors duration-150 ${
+        isOver ? 'text-violet-600 dark:text-violet-400' : 'text-slate-700 dark:text-gray-300'
+      }`}>{folder.name}</p>
     </div>
   )
 }
