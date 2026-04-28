@@ -92,8 +92,10 @@ export default function Settings() {
   }
 
   const handleSetupTotp = async () => {
-    const { data } = await api.post('/auth/totp/setup')
-    setTotpQr(data.qrCode)
+    try {
+      const { data } = await api.post('/auth/totp/setup')
+      setTotpQr(data.qrCode)
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de l\'activation 2FA') }
   }
 
   const handleConfirmTotp = async () => {
@@ -117,9 +119,11 @@ export default function Settings() {
   }
 
   const handleUnlinkDiscord = async () => {
-    await api.delete('/users/me/discord')
-    await fetchMe()
-    toast.success('Compte Discord délié')
+    try {
+      await api.delete('/users/me/discord')
+      await fetchMe()
+      toast.success('Compte Discord délié')
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de la dissociation') }
   }
 
   const handleAvatarUpload = async (e) => {

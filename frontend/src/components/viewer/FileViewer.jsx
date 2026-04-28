@@ -3,11 +3,7 @@ import { X, Download, Heart, HeartOff, Copy, Link2, Unlink, Trash2, ExternalLink
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { useAuthStore } from '../../stores/auth.store.js'
-
-function formatSize(bytes) {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(2)} Mo`
-}
+import { formatSize } from '../../utils/format.js'
 
 function Row({ label, value }) {
   return (

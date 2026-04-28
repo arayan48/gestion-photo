@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { X, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import api from '../../utils/api.js'
+import { formatSize } from '../../utils/format.js'
 
 const ACCEPTED_TYPES = {
   'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif'],
@@ -15,11 +16,6 @@ const QUALITY_OPTIONS = [
   { value: 'standard', label: '⚖️ Usage standard', desc: 'Optimisation légère (~85%)' },
   { value: 'thumbnail', label: '🔹 Miniature / Icône', desc: 'Compression forte' },
 ]
-
-function formatSize(bytes) {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
-}
 
 export default function UploadPanel({ folderId, onClose, onDone }) {
   const [files, setFiles] = useState([])
@@ -53,6 +49,10 @@ export default function UploadPanel({ folderId, onClose, onDone }) {
     if (!files.length) return
     setUploading(true)
 
+    // Compter les fichiers à traiter (pas déjà "done")
+    const toUpload = files.filter((f) => f.status !== 'done').length
+    let successCount = 0
+
     for (let i = 0; i < files.length; i++) {
       const item = files[i]
       if (item.status === 'done') continue
@@ -73,14 +73,15 @@ export default function UploadPanel({ folderId, onClose, onDone }) {
           },
         })
         updateFile(i, { status: 'done', progress: 100 })
+        successCount++
       } catch (err) {
         updateFile(i, { status: 'error', error: err.response?.data?.error || 'Erreur upload' })
       }
     }
 
     setUploading(false)
-    const allDone = files.every((f, i) => files[i].status === 'done')
-    if (allDone) setTimeout(onDone, 800)
+    // Utiliser un compteur local — `files` est une closure périmée ici
+    if (successCount === toUpload) setTimeout(onDone, 800)
   }
 
   return (

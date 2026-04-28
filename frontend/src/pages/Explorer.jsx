@@ -213,7 +213,7 @@ export default function Explorer() {
         toast.error('Erreur lors du déplacement')
       }
     }
-  }, [queryClient, queryKey, folderId, parentFolderId, selectedFiles])
+  }, [queryClient, folderId, parentFolderId, selectedFiles])
 
   const handleContextMenu = useCallback((e, file) => {
     e.preventDefault()
