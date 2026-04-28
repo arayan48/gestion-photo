@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import { X, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import api from '../../utils/api.js'
 import { formatSize } from '../../utils/format.js'
+import { usePreferencesStore } from '../../stores/preferences.store.js'
 
 const ACCEPTED_TYPES = {
   'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif'],
@@ -18,6 +19,7 @@ const QUALITY_OPTIONS = [
 ]
 
 export default function UploadPanel({ folderId, onClose, onDone }) {
+  const { defaultQuality, setDefaultQuality } = usePreferencesStore()
   const [files, setFiles] = useState([])
   const [uploading, setUploading] = useState(false)
 
@@ -25,13 +27,13 @@ export default function UploadPanel({ folderId, onClose, onDone }) {
     const newFiles = accepted.map((f) => ({
       file: f,
       name: f.name.replace(/\.[^.]+$/, ''),
-      qualityPreset: 'original',
+      qualityPreset: defaultQuality,
       status: 'pending',
       progress: 0,
       error: null,
     }))
     setFiles((prev) => [...prev, ...newFiles])
-  }, [])
+  }, [defaultQuality])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -140,7 +142,7 @@ export default function UploadPanel({ folderId, onClose, onDone }) {
                   {QUALITY_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
-                      onClick={() => updateFile(i, { qualityPreset: opt.value })}
+                      onClick={() => { updateFile(i, { qualityPreset: opt.value }); setDefaultQuality(opt.value) }}
                       className={`flex-1 text-xs px-2 py-1.5 rounded-lg border transition-colors ${
                         item.qualityPreset === opt.value
                           ? 'border-violet-500 bg-violet-500/20 text-violet-300'

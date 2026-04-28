@@ -17,6 +17,7 @@ import Breadcrumb from '../components/explorer/Breadcrumb.jsx'
 import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash2, FileImage, FileVideo, File } from 'lucide-react'
 import { toast } from '../stores/toast.store.js'
 import { confirm } from '../stores/confirm.store.js'
+import { usePreferencesStore } from '../stores/preferences.store.js'
 
 // Icône selon le MIME type (utilisée dans l'overlay)
 function FileTypeIcon({ mime, size = 20 }) {
@@ -85,7 +86,7 @@ export default function Explorer() {
   const navigate = useNavigate()
   const view = searchParams.get('view') || 'mine'
 
-  const [viewMode, setViewMode] = useState('grid')
+  const { viewMode, setViewMode } = usePreferencesStore()
   const [showUpload, setShowUpload] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [search, setSearch] = useState('')
@@ -306,9 +307,18 @@ export default function Explorer() {
       case 'info':
         setSelectedFile(file)
         break
-      case 'download':
-        window.open(`/api/files/${file.id}/download`, '_blank')
+      case 'download': {
+        try {
+          const res = await api.get(`/files/${file.id}/download`, { responseType: 'blob' })
+          const url = URL.createObjectURL(new Blob([res.data], { type: file.mime_type }))
+          const a = document.createElement('a')
+          a.href = url
+          a.download = file.original_name
+          a.click()
+          URL.revokeObjectURL(url)
+        } catch { toast.error('Erreur lors du téléchargement') }
         break
+      }
       case 'copy-link':
         navigator.clipboard
           .writeText(`${window.location.origin}/media/${file.link_token}`)

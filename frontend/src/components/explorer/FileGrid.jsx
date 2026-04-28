@@ -192,7 +192,7 @@ function DraggableFile({ file, isSelected, onToggleSelect, onFileClick, onContex
         {!isTrash && !isDragging && (
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-center pb-2.5 gap-1.5">
             <QuickAction icon={Eye}      title="Ouvrir"         onClick={() => onFileClick(file)} />
-            <QuickAction icon={Download} title="Télécharger"    onClick={() => window.open(`/api/files/${file.id}/download`, '_blank')} />
+            <QuickAction icon={Download} title="Télécharger"    onClick={() => onAction?.('download', file)} />
             <QuickAction icon={Copy}     title="Copier le lien" onClick={copyLink} />
             {onAction && <QuickAction icon={Trash2} title="Supprimer" onClick={() => onAction('delete', file)} danger />}
           </div>
