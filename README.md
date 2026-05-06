@@ -1,31 +1,59 @@
 # WubalStore
 
-Plateforme d'hébergement de médias privée et auto-hébergée. Stocker vos images et vidéos sur votre VPS, générer des liens protégés par liste blanche IP, gérer des comptes avec rôles granulaires.
+Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vidéos sur votre propre serveur, partagez-les via des liens sécurisés, gérez des comptes avec rôles et permissions.
 
-## Stack
+---
 
-- **Backend** : Node.js + Fastify
-- **Base de données** : PostgreSQL 16
-- **Frontend** : React + Vite + Tailwind CSS
-- **Reverse proxy** : Nginx
-- **Conteneurisation** : Docker + Docker Compose
-- **Traitement médias** : Sharp (images) + FFmpeg (vidéos)
+## Fonctionnalités
 
-## Déploiement rapide
+- Upload d'images (JPG, PNG, WEBP, GIF, SVG, AVIF) et vidéos (MP4, WEBM, MOV)
+- Explorateur de fichiers style Google Drive (grille / liste, dossiers, drag & drop)
+- Liens permanents protégés par liste blanche IP
+- Miniatures automatiques (Sharp + FFmpeg)
+- Gestion des comptes avec validation manuelle par l'admin
+- Rôles et permissions granulaires
+- Double authentification : TOTP (Google Authenticator, etc.) + OTP par email
+- Connexion via Discord OAuth2
+- Bannissement progressif des attaquants + fingerprinting
+- Logs par catégorie, notifications temps réel
+- Sauvegardes locales et vers Backblaze B2 (via Rclone)
 
-### Prérequis
+---
+
+## Prérequis
 
 - Docker + Docker Compose
-- Ubuntu 22.04 (ou compatible)
+- Un serveur Linux (Ubuntu 22.04 recommandé) ou un poste local
 
-### Installation
+---
+
+## Installation
+
+### 1. Cloner le dépôt
 
 ```bash
 git clone https://github.com/wubal/wubalstore
 cd wubalstore
-cp .env.example .env
-# Éditer .env avec vos valeurs
 ```
+
+### 2. Créer le fichier d'environnement
+
+```bash
+cp .env.example .env
+```
+
+### 3. Éditer `.env`
+
+Les variables obligatoires à changer :
+
+| Variable | Description |
+| --- | --- |
+| `APP_URL` | URL publique de l'application |
+| `DB_PASSWORD` | Mot de passe PostgreSQL |
+| `JWT_ACCESS_SECRET` | Secret JWT access token (min. 32 chars) |
+| `JWT_REFRESH_SECRET` | Secret JWT refresh token (min. 32 chars) |
+| `EMAIL_PROVIDER` | Provider email : `brevo`, `smtp`, `resend`, `mailgun`, `sendgrid` |
+| `EMAIL_FROM` | Adresse d'expédition des emails |
 
 Générer des secrets JWT sécurisés :
 
@@ -33,55 +61,67 @@ Générer des secrets JWT sécurisés :
 openssl rand -base64 64
 ```
 
-Lancer la commande deux fois et copier les valeurs dans `.env` pour `JWT_ACCESS_SECRET` et `JWT_REFRESH_SECRET`.
+Lancer la commande deux fois et copier les résultats dans `JWT_ACCESS_SECRET` et `JWT_REFRESH_SECRET`.
+
+### 4. Lancer les conteneurs
 
 ```bash
 docker-compose up -d
 ```
 
-### Premier lancement
+Les services démarrés :
 
-1. Accéder à `http://votre-serveur`
-2. La page de setup s'ouvre automatiquement
-3. Créer le compte Super Admin
-4. La plateforme est prête
+- `postgres` — base de données
+- `backend` — API Fastify (port 3000)
+- `frontend` — interface React/Vite (port 5173)
+- `nginx` — reverse proxy (ports 80 / 443)
 
-### Migrations et seed
+### 5. Premier lancement
 
-```bash
-docker-compose exec backend npm run migrate
-docker-compose exec backend npm run seed
+Ouvrir `http://votre-serveur` dans le navigateur. La page de setup s'affiche automatiquement pour créer le compte Super Admin. Une fois validé, la plateforme est opérationnelle.
+
+---
+
+## Configuration email
+
+Choisir un provider dans `.env` via `EMAIL_PROVIDER`, puis renseigner les clés correspondantes :
+
+| Provider | Variable requise |
+| --- | --- |
+| Brevo | `BREVO_API_KEY` |
+| SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` |
+| Resend | `RESEND_API_KEY` |
+| Mailgun | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` |
+| SendGrid | `SENDGRID_API_KEY` |
+
+---
+
+## Sauvegardes Backblaze B2 (optionnel)
+
+Renseigner dans `.env` :
+
+```env
+B2_APPLICATION_KEY_ID=
+B2_APPLICATION_KEY=
+B2_BUCKET_NAME=
 ```
 
-## Variables d'environnement
+Les sauvegardes sont configurables depuis le dashboard admin.
 
-Voir [.env.example](.env.example) pour la liste complète.
+---
 
-## Fonctionnalités
+## Stack technique
 
-- Upload images (JPG, PNG, WEBP, GIF, SVG, AVIF) et vidéos (MP4, WEBM, MOV)
-- Génération automatique de miniatures
-- Explorateur de fichiers style Google Drive (grille / liste)
-- Liens permanents protégés par liste blanche IP
-- Gestion de comptes avec validation manuelle
-- Rôles et permissions granulaires
-- 2FA TOTP + OTP email
-- Connexion Discord OAuth2
-- Ban progressif des attaquants
-- Fingerprinting navigateur
-- Logs complets par catégorie
-- Notifications temps réel (WebSocket)
-- Sauvegardes locales + Backblaze B2 (Rclone)
-- Gestion automatique du stockage
+| Couche | Technologie |
+| --- | --- |
+| Backend | Node.js + Fastify |
+| Base de données | PostgreSQL 16 |
+| Frontend | React + Vite + Tailwind CSS |
+| Reverse proxy | Nginx |
+| Conteneurisation | Docker + Docker Compose |
+| Traitement médias | Sharp (images) + FFmpeg (vidéos) |
 
-## Sécurité
-
-- JWT (access 15min + refresh 7j httpOnly)
-- Bannissement progressif : 2min → 15min → 1h → 24h → permanent
-- Double vérification IP whitelist (Nginx + Fastify)
-- Validation MIME côté serveur
-- Sanitisation des noms de fichiers
-- URLs publiques uniquement via tokens (jamais les chemins réels)
+---
 
 ## Auteur
 
