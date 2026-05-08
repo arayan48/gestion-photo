@@ -189,10 +189,10 @@ export default async function authRoutes(fastify) {
         id: user.id,
         email: user.email,
         pseudo: user.pseudo,
-        roleId: user.role_id,
-        isSuperAdmin: user.is_super_admin,
-        storageQuota: user.storage_quota,
-        storageUsed: user.storage_used,
+        role_id: user.role_id,
+        is_super_admin: user.is_super_admin,
+        storage_quota: user.storage_quota,
+        storage_used: user.storage_used,
       },
     })
   })
