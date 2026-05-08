@@ -78,8 +78,16 @@ Lancer la commande deux fois et copier les valeurs dans `.env`. Alternative si O
 Démarrer les conteneurs :
 
 ```powershell
-docker compose up -d
+docker compose up -d --build
 ```
+
+Initialiser la base de données (**une seule fois**, lors du premier lancement) :
+
+```powershell
+docker compose run --rm backend node src/models/migrate.js
+```
+
+Sans cette étape, le backend démarre mais crashe car les tables n'existent pas encore.
 
 ## Premier lancement
 
@@ -87,13 +95,6 @@ docker compose up -d
 2. La page de setup s'ouvre automatiquement
 3. Créer le compte Super Admin
 4. La plateforme est prête
-
-## Migrations et seed
-
-```powershell
-docker compose exec backend npm run migrate
-docker compose exec backend npm run seed
-```
 
 ## Commandes utiles
 

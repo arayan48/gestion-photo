@@ -41,6 +41,7 @@ Thumbs.db
 
 # md
 *.md
+CLAUDE.md
 !README.md
 !README.windows.md
 

@@ -66,17 +66,27 @@ Lancer la commande deux fois et copier les résultats dans `JWT_ACCESS_SECRET` e
 ### 4. Lancer les conteneurs
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
 
 Les services démarrés :
 
 - `postgres` — base de données
 - `backend` — API Fastify (port 3000)
-- `frontend` — interface React/Vite (port 5173)
+- `frontend` — interface React (port 80 via nginx)
 - `nginx` — reverse proxy (ports 80 / 443)
 
-### 5. Premier lancement
+### 5. Initialiser la base de données
+
+À effectuer **une seule fois** lors du premier lancement :
+
+```bash
+docker compose run --rm backend node src/models/migrate.js
+```
+
+Cette commande crée toutes les tables nécessaires. Sans elle, le backend démarre mais crashe immédiatement.
+
+### 6. Premier lancement
 
 Ouvrir `http://votre-serveur` dans le navigateur. La page de setup s'affiche automatiquement pour créer le compte Super Admin. Une fois validé, la plateforme est opérationnelle.
 
