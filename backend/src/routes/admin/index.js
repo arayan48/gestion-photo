@@ -7,6 +7,7 @@ import { isUuid, parsePagination } from '../../utils/validation.js'
 import { unban } from '../../services/ban.service.js'
 import { revokeAllUserTokens } from '../../services/auth.service.js'
 import { checkMediaStorageLimit } from '../../config/storage.js'
+import { getConfigForAdmin, setConfigValues, INTERNAL_KEYS, MASKED_VALUE } from '../../services/config.service.js'
 
 const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
 // Valeurs calculées automatiquement au démarrage : non modifiables à la main
@@ -191,8 +192,8 @@ export default async function adminRoutes(fastify) {
   fastify.get('/config', {
     preHandler: [authenticate, requirePermission('system.manage_config')],
   }, async (_, reply) => {
-    const { rows } = await pool.query('SELECT key, value FROM system_config ORDER BY key')
-    return reply.send(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+    // Les secrets sont masqués : ils ne quittent jamais le serveur en clair
+    return reply.send(await getConfigForAdmin())
   })
 
   fastify.patch('/config', {
@@ -203,10 +204,24 @@ export default async function adminRoutes(fastify) {
       return reply.code(400).send({ error: 'Configuration invalide' })
     }
 
-    const entries = Object.entries(updates)
-    for (const [key] of entries) {
+    // Un secret renvoyé masqué n'a pas été modifié : on garde la valeur existante
+    const entries = Object.entries(updates).filter(([, value]) => value !== MASKED_VALUE)
+    for (const [key, value] of entries) {
       if (!CONFIG_KEY_RE.test(key) || key.length > 100) return reply.code(400).send({ error: `Clé de configuration invalide : ${key}` })
-      if (READONLY_CONFIG_KEYS.has(key)) return reply.code(400).send({ error: `Clé en lecture seule : ${key}` })
+      if (READONLY_CONFIG_KEYS.has(key) || INTERNAL_KEYS.has(key)) return reply.code(400).send({ error: `Clé en lecture seule : ${key}` })
+      if (value !== null && typeof value === 'object') return reply.code(400).send({ error: `Valeur invalide : ${key}` })
+    }
+
+    // URL publique : origine http(s) valide, sans chemin ni slash final
+    const urlEntry = entries.find(([key]) => key === 'app.url')
+    if (urlEntry && urlEntry[1]) {
+      try {
+        const url = new URL(String(urlEntry[1]).trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
+        urlEntry[1] = url.origin
+      } catch {
+        return reply.code(400).send({ error: 'URL publique invalide (ex : https://photos.mondomaine.fr)' })
+      }
     }
 
     // Les seuils de stockage relèvent d'une permission dédiée
@@ -218,12 +233,7 @@ export default async function adminRoutes(fastify) {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
-      for (const [key, value] of entries) {
-        await client.query(
-          'INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()',
-          [key, value === null || value === undefined ? '' : String(value)]
-        )
-      }
+      await setConfigValues(entries, client) // secrets chiffrés automatiquement
       await client.query('COMMIT')
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {})

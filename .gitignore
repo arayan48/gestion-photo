@@ -19,6 +19,8 @@ coverage/
 .vite/
 
 # Stockage (données utilisateurs)
+backend/data/
+master.key
 storage/
 backend/storage/
 temp_zips/

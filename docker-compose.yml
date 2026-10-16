@@ -33,6 +33,7 @@ services:
       - ./backend:/app
       - /app/node_modules
       - storage_data:/app/storage
+      - backend_data:/app/data   # clé maître de chiffrement (master.key)
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +77,7 @@ services:
 volumes:
   postgres_data:
   storage_data:
+  backend_data:
 
 networks:
   wubalstore_net:

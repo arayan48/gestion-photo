@@ -46,26 +46,41 @@ function Field({ label, hint, children }) {
   )
 }
 
+// Valeur renvoyée par l'API pour un secret déjà enregistré (jamais transmis en clair)
+const MASKED_SECRET = '••••••••'
+
 function PasswordInput({ value, onChange, placeholder, ...props }) {
   const [show, setShow] = useState(false)
+  const isStored = value === MASKED_SECRET
   return (
-    <div className="relative">
-      <input
-        type={show ? 'text' : 'password'}
-        className="input pr-10"
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        {...props}
-      />
-      <button
-        type="button"
-        onClick={() => setShow((v) => !v)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
-        tabIndex={-1}
-      >
-        {show ? <EyeOff size={14} /> : <Eye size={14} />}
-      </button>
+    <div>
+      <div className="relative">
+        <input
+          type={show && !isStored ? 'text' : 'password'}
+          className="input pr-10"
+          value={value}
+          onChange={onChange}
+          onFocus={(e) => isStored && e.target.select()}
+          placeholder={placeholder}
+          autoComplete="off"
+          {...props}
+        />
+        {!isStored && (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+            tabIndex={-1}
+          >
+            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        )}
+      </div>
+      {isStored && (
+        <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+          Enregistré (chiffré en base). Saisissez une nouvelle valeur pour le remplacer.
+        </p>
+      )}
     </div>
   )
 }
@@ -279,8 +294,8 @@ function TabDiscord({ config }) {
         <Field label="Client Secret">
           <PasswordInput value={form['discord.client_secret'] || ''} onChange={(e) => set('discord.client_secret', e.target.value)} placeholder="••••••••••••••••••••••••••••••••" />
         </Field>
-        <Field label="Redirect URI" hint="Doit correspondre exactement à ce qui est configuré sur Discord Developer Portal">
-          <input className="input font-mono" value={form['discord.redirect_uri'] || ''} onChange={(e) => set('discord.redirect_uri', e.target.value)} placeholder="https://mon-domaine.com/api/auth/discord/callback" />
+        <Field label="Redirect URI" hint="Laisser vide pour utiliser l'URL affichée en grisé (déduite de l'URL publique). Doit correspondre exactement à celle déclarée sur le Discord Developer Portal.">
+          <input className="input font-mono" value={form['discord.redirect_uri'] || ''} onChange={(e) => set('discord.redirect_uri', e.target.value)} placeholder={`${config?.['app.url'] || 'https://mon-domaine.com'}/api/auth/discord/callback`} />
         </Field>
       </Section>
 

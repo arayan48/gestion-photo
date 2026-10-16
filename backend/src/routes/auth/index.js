@@ -19,7 +19,8 @@ import {
   hashToken,
 } from '../../services/auth.service.js'
 import { checkBan, recordFailedAttempt, resetAttempts } from '../../services/ban.service.js'
-import { getConfigValues } from '../../services/config.service.js'
+import { getConfigValues, setConfigValues, getAppUrl } from '../../services/config.service.js'
+import { encryptSecret, decryptSecret } from '../../services/secrets.service.js'
 import { log, notifyAdmins } from '../../utils/logger.js'
 import { extractIp } from '../../utils/fingerprint.js'
 import { authenticate } from '../../middleware/auth.js'
@@ -58,12 +59,26 @@ function clearRefreshCookie(reply) {
 
 const PASSWORD_ERROR = `Le mot de passe doit contenir au moins ${PASSWORD_MIN_LENGTH} caractères`
 
+// Paramètres admin → Discord (le secret est stocké chiffré)
 async function getDiscordConfig() {
   const db = await getConfigValues(['discord.client_id', 'discord.client_secret', 'discord.redirect_uri'])
+  const appUrl = await getAppUrl()
   return {
-    clientId: db['discord.client_id'] || config.discord.clientId,
-    clientSecret: db['discord.client_secret'] || config.discord.clientSecret,
-    redirectUri: db['discord.redirect_uri'] || config.discord.redirectUri,
+    clientId: db['discord.client_id'] || '',
+    clientSecret: db['discord.client_secret'] || '',
+    // Par défaut : déduit de l'URL publique définie à l'installation
+    redirectUri: db['discord.redirect_uri'] || (appUrl ? `${appUrl}/api/auth/discord/callback` : ''),
+  }
+}
+
+function normalizeAppUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const url = new URL(value.trim())
+    if (!['http:', 'https:'].includes(url.protocol)) return null
+    return url.origin
+  } catch {
+    return null
   }
 }
 
@@ -84,11 +99,15 @@ async function getUserPermissions(roleId, isSuperAdmin) {
 export default async function authRoutes(fastify) {
   // ─── Setup : créer le super admin ───────────────────────────────────────
   fastify.post('/setup', async (request, reply) => {
-    const { email, pseudo, password, firstName, lastName } = request.body || {}
+    const { email, pseudo, password, firstName, lastName, appUrl, appName } = request.body || {}
     if (!isValidEmail(email) || !isNonEmptyString(pseudo, 100) || typeof password !== 'string') {
       return reply.code(400).send({ error: 'Email, pseudo et mot de passe requis' })
     }
     if (!isValidPassword(password)) return reply.code(400).send({ error: PASSWORD_ERROR })
+
+    // URL publique : celle saisie, sinon celle par laquelle le navigateur accède au serveur
+    const publicUrl = normalizeAppUrl(appUrl) || normalizeAppUrl(request.headers.origin)
+    if (!publicUrl) return reply.code(400).send({ error: 'URL publique invalide (ex : https://photos.mondomaine.fr)' })
 
     const passwordHash = await hashPassword(password)
     const userId = uuidv4()
@@ -120,6 +139,11 @@ export default async function authRoutes(fastify) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
         [userId, normalizeEmail(email), passwordHash, pseudo.trim(), optionalString(firstName), optionalString(lastName), roleId]
       )
+
+      await setConfigValues([
+        ['app.url', publicUrl],
+        ['app.name', optionalString(appName, 100) || 'WubalStore'],
+      ], client)
 
       await client.query('UPDATE setup SET is_completed = true, completed_at = NOW() WHERE id = 1')
       await client.query('COMMIT')
@@ -244,7 +268,7 @@ export default async function authRoutes(fastify) {
       if (!totp) {
         return reply.code(200).send({ requireTotp: true })
       }
-      if (!verifyTotp(user.totp_secret, String(totp))) {
+      if (!verifyTotp(decryptSecret(user.totp_secret), String(totp))) {
         // Compte aussi comme tentative échouée : sinon le code TOTP serait brute-forçable
         await recordFailedAttempt(attempt)
         await log({ category: 'auth', level: 'warning', action: 'login_totp_failed', userId: user.id, ipAddress: ip })
@@ -355,7 +379,7 @@ export default async function authRoutes(fastify) {
 
   fastify.get('/discord', async (_, reply) => {
     const url = await buildDiscordAuthorizeUrl(reply)
-    if (!url) return reply.redirect(`${config.appUrl}/login?error=discord_not_configured`)
+    if (!url) return reply.redirect('/login?error=discord_not_configured')
     return reply.redirect(url)
   })
 
@@ -380,7 +404,7 @@ export default async function authRoutes(fastify) {
     }
     const linkMode = !!statePayload?.linkUserId
     const failRedirect = (reason) =>
-      reply.redirect(linkMode ? `${config.appUrl}/settings?discord_error=${reason}` : `${config.appUrl}/login?error=${reason}`)
+      reply.redirect(linkMode ? `/settings?discord_error=${reason}` : `/login?error=${reason}`)
 
     if (oauthError) return failRedirect('discord_cancelled')
     if (!code) return reply.code(400).send({ error: 'Code OAuth2 manquant' })
@@ -429,7 +453,7 @@ export default async function authRoutes(fastify) {
           [discordUser.id, discordAvatar, discordPseudo, statePayload.linkUserId]
         )
         await log({ category: 'auth', level: 'info', action: 'discord_linked', userId: statePayload.linkUserId, ipAddress: ip })
-        return reply.redirect(`${config.appUrl}/settings?discord=linked`)
+        return reply.redirect('/settings?discord=linked')
       }
 
       // ── Mode connexion ──
@@ -442,12 +466,12 @@ export default async function authRoutes(fastify) {
       }
 
       if (!rows.length) {
-        return reply.redirect(`${config.appUrl}/login?error=account_not_found`)
+        return reply.redirect('/login?error=account_not_found')
       }
 
       const user = rows[0]
       if (!user.is_active || user.is_banned) {
-        return reply.redirect(`${config.appUrl}/login?error=account_inactive`)
+        return reply.redirect('/login?error=account_inactive')
       }
 
       await pool.query(
@@ -464,7 +488,7 @@ export default async function authRoutes(fastify) {
 
       // L'access token n'est jamais placé dans l'URL (historique, logs, Referer) :
       // le frontend le récupère via /refresh grâce au cookie httpOnly
-      return reply.redirect(`${config.appUrl}/login?discord=success`)
+      return reply.redirect('/login?discord=success')
     } catch (err) {
       request.log.warn({ err: err.message }, 'Échec OAuth2 Discord')
       return failRedirect('discord_failed')
@@ -528,8 +552,8 @@ export default async function authRoutes(fastify) {
     const secret = generateTotpSecret()
     const qrCode = await generateTotpQrCode(secret, user.email)
 
-    // Stocker le secret temporairement (avant confirmation)
-    await pool.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, user.id])
+    // Stocker le secret (chiffré) temporairement, avant confirmation
+    await pool.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [encryptSecret(secret), user.id])
 
     return reply.send({ secret, qrCode })
   })
@@ -542,7 +566,7 @@ export default async function authRoutes(fastify) {
     if (!rows[0]?.totp_secret) return reply.code(400).send({ error: 'TOTP non initialisé' })
     if (rows[0].totp_enabled) return reply.code(400).send({ error: '2FA déjà activée' })
 
-    if (!verifyTotp(rows[0].totp_secret, String(code ?? ''))) {
+    if (!verifyTotp(decryptSecret(rows[0].totp_secret), String(code ?? ''))) {
       return reply.code(401).send({ error: 'Code TOTP invalide' })
     }
 
@@ -558,7 +582,7 @@ export default async function authRoutes(fastify) {
     const { rows } = await pool.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [user.id])
     if (!rows[0]?.totp_enabled) return reply.code(400).send({ error: 'TOTP non activé' })
 
-    if (!verifyTotp(rows[0].totp_secret, String(code ?? ''))) {
+    if (!verifyTotp(decryptSecret(rows[0].totp_secret), String(code ?? ''))) {
       return reply.code(401).send({ error: 'Code TOTP invalide' })
     }
 

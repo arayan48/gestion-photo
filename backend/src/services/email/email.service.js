@@ -1,9 +1,8 @@
-import { config } from '../../config/env.js'
-import { getConfigValues } from '../config.service.js'
+import { getConfigValues, getAppUrl } from '../config.service.js'
 
-// Clés éditables dans Paramètres admin → Email ; les variables d'environnement servent de repli
+// Clés éditables dans Paramètres admin → Email (les clés API sont stockées chiffrées)
 const CONFIG_KEYS = [
-  'email.provider', 'email.from', 'app.name', 'app.url',
+  'email.provider', 'email.from', 'app.name',
   'email.brevo_key',
   'email.smtp_host', 'email.smtp_port', 'email.smtp_user', 'email.smtp_password', 'email.smtp_secure',
   'email.resend_key',
@@ -11,24 +10,28 @@ const CONFIG_KEYS = [
   'email.sendgrid_key',
 ]
 
+function hostnameOf(url) {
+  try { return new URL(url).hostname } catch { return 'localhost' }
+}
+
 async function getEmailSettings() {
   const db = await getConfigValues(CONFIG_KEYS)
-  const env = process.env
+  const appUrl = await getAppUrl()
   return {
-    provider: db['email.provider'] || config.email.provider,
-    from: db['email.from'] || config.email.from,
+    provider: db['email.provider'] || 'brevo',
+    from: db['email.from'] || `noreply@${hostnameOf(appUrl)}`,
     appName: db['app.name'] || 'WubalStore',
-    appUrl: (db['app.url'] || config.appUrl).replace(/\/+$/, ''),
-    brevoKey: db['email.brevo_key'] || env.BREVO_API_KEY,
-    smtpHost: db['email.smtp_host'] || env.SMTP_HOST,
-    smtpPort: db['email.smtp_port'] || env.SMTP_PORT,
-    smtpUser: db['email.smtp_user'] || env.SMTP_USER,
-    smtpPassword: db['email.smtp_password'] || env.SMTP_PASSWORD,
-    smtpSecure: db['email.smtp_secure'] || env.SMTP_SECURE,
-    resendKey: db['email.resend_key'] || env.RESEND_API_KEY,
-    mailgunKey: db['email.mailgun_key'] || env.MAILGUN_API_KEY,
-    mailgunDomain: db['email.mailgun_domain'] || env.MAILGUN_DOMAIN,
-    sendgridKey: db['email.sendgrid_key'] || env.SENDGRID_API_KEY,
+    appUrl,
+    brevoKey: db['email.brevo_key'],
+    smtpHost: db['email.smtp_host'],
+    smtpPort: db['email.smtp_port'],
+    smtpUser: db['email.smtp_user'],
+    smtpPassword: db['email.smtp_password'],
+    smtpSecure: db['email.smtp_secure'],
+    resendKey: db['email.resend_key'],
+    mailgunKey: db['email.mailgun_key'],
+    mailgunDomain: db['email.mailgun_domain'],
+    sendgridKey: db['email.sendgrid_key'],
   }
 }
 

@@ -18,10 +18,11 @@ const MEDIA_DIRS = ['images', 'videos', 'thumbnails', 'avatars']
 
 async function getB2Config() {
   const db = await getConfigValues(['b2.key_id', 'b2.key', 'b2.bucket'])
+  // Paramètres admin → Sauvegardes (identifiants stockés chiffrés)
   return {
-    keyId: db['b2.key_id'] || process.env.B2_APPLICATION_KEY_ID || '',
-    key: db['b2.key'] || process.env.B2_APPLICATION_KEY || '',
-    bucket: db['b2.bucket'] || process.env.B2_BUCKET_NAME || '',
+    keyId: db['b2.key_id'] || '',
+    key: db['b2.key'] || '',
+    bucket: db['b2.bucket'] || '',
   }
 }
 
