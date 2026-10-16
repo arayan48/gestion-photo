@@ -21,11 +21,16 @@ api.interceptors.request.use((config) => {
 let isRefreshing = false
 let refreshQueue = []
 
+// Un 401 sur ces routes est une vraie erreur (mauvais mot de passe, code TOTP…) :
+// tenter un refresh puis rediriger masquerait le message à l'utilisateur
+const NO_REFRESH_URLS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/setup', '/auth/register', '/auth/reset-password', '/auth/forgot-password', '/auth/otp']
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && !original._retry) {
+    const skipRefresh = !original || NO_REFRESH_URLS.some((u) => original.url?.startsWith(u))
+    if (error.response?.status === 401 && !skipRefresh && !original._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           refreshQueue.push({ resolve, reject })
@@ -46,11 +51,13 @@ api.interceptors.response.use(
         refreshQueue = []
         original.headers.Authorization = `Bearer ${newToken}`
         return api(original)
-      } catch {
-        refreshQueue.forEach((p) => p.reject())
+      } catch (refreshError) {
+        refreshQueue.forEach((p) => p.reject(refreshError))
         refreshQueue = []
         store?.getState().logout()
         window.location.href = '/login'
+        // Toujours rejeter : sinon l'appelant reçoit `undefined` comme réponse
+        return Promise.reject(error)
       } finally {
         isRefreshing = false
       }

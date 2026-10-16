@@ -44,24 +44,19 @@ cp .env.example .env
 
 ### 3. Éditer `.env`
 
-Les variables obligatoires à changer :
+Le `.env` ne contient que l'infrastructure. Seul `DB_PASSWORD` est à changer :
+
+```bash
+openssl rand -base64 32   # → copier dans DB_PASSWORD
+```
 
 | Variable | Description |
 | --- | --- |
-| `APP_URL` | URL publique de l'application |
-| `DB_PASSWORD` | Mot de passe PostgreSQL |
-| `JWT_ACCESS_SECRET` | Secret JWT access token (min. 32 chars) |
-| `JWT_REFRESH_SECRET` | Secret JWT refresh token (min. 32 chars) |
-| `EMAIL_PROVIDER` | Provider email : `brevo`, `smtp`, `resend`, `mailgun`, `sendgrid` |
-| `EMAIL_FROM` | Adresse d'expédition des emails |
+| `DB_PASSWORD` | Mot de passe PostgreSQL (obligatoire) |
+| `DB_NAME`, `DB_USER` | Nom de la base et utilisateur (défaut : `wubalstore`) |
+| `MASTER_KEY` | *Optionnel* — clé de chiffrement des secrets (sinon générée automatiquement) |
 
-Générer des secrets JWT sécurisés :
-
-```bash
-openssl rand -base64 64
-```
-
-Lancer la commande deux fois et copier les résultats dans `JWT_ACCESS_SECRET` et `JWT_REFRESH_SECRET`.
+Tout le reste se configure dans l'interface (voir [Configuration](#configuration)).
 
 ### 4. Lancer les conteneurs
 
@@ -76,47 +71,46 @@ Les services démarrés :
 - `frontend` — interface React (port 80 via nginx)
 - `nginx` — reverse proxy (ports 80 / 443)
 
-### 5. Initialiser la base de données
+### 5. Base de données
 
-À effectuer **une seule fois** lors du premier lancement :
+Les migrations sont appliquées **automatiquement** à chaque démarrage du backend (seules les migrations manquantes sont exécutées). Pour les lancer manuellement si besoin :
 
 ```bash
 docker compose run --rm backend node src/models/migrate.js
 ```
 
-Cette commande crée toutes les tables nécessaires. Sans elle, le backend démarre mais crashe immédiatement.
-
 ### 6. Premier lancement
 
-Ouvrir `http://votre-serveur` dans le navigateur. La page de setup s'affiche automatiquement pour créer le compte Super Admin. Une fois validé, la plateforme est opérationnelle.
+Ouvrir `http://votre-serveur` dans le navigateur. La page de setup s'affiche automatiquement : elle demande l'**URL publique**, le **nom de l'instance** et le **compte Super Admin**. Une fois validé, la plateforme est opérationnelle.
 
 ---
 
-## Configuration email
+## Configuration
 
-Choisir un provider dans `.env` via `EMAIL_PROVIDER`, puis renseigner les clés correspondantes :
+Depuis **Admin → Configuration** (Super Admin ou rôle avec `system.manage_config`) :
 
-| Provider | Variable requise |
+| Onglet | Contenu |
 | --- | --- |
-| Brevo | `BREVO_API_KEY` |
-| SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` |
-| Resend | `RESEND_API_KEY` |
-| Mailgun | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` |
-| SendGrid | `SENDGRID_API_KEY` |
+| Général | Nom, URL publique, répartition du stockage |
+| Email | Provider (Brevo, SMTP, Resend, Mailgun, SendGrid) et ses identifiants |
+| Discord | Client ID / Secret OAuth2 (Redirect URI déduite de l'URL publique) |
+| Sauvegardes | Planification, rétention, Backblaze B2 |
 
----
+### Secrets et chiffrement
 
-## Sauvegardes Backblaze B2 (optionnel)
+- Les clés API, mots de passe SMTP, secrets OAuth2 et secrets 2FA (TOTP) sont **chiffrés en base** (AES-256-GCM). L'interface ne les renvoie jamais en clair : un secret enregistré s'affiche masqué.
+- Le secret de signature des JWT est **généré automatiquement** au premier démarrage et stocké chiffré.
+- La **clé maître** est soit `MASTER_KEY` dans `.env`, soit le fichier `/app/data/master.key` (volume Docker `backend_data`), créé au premier démarrage.
 
-Renseigner dans `.env` :
+> ⚠️ Sauvegardez la clé maître **à part** : elle n'est volontairement pas incluse dans les sauvegardes, pour qu'une archive volée ne suffise pas à lire les secrets. Sans elle, il faudra ressaisir les secrets et les utilisateurs devront réactiver leur 2FA.
+>
+> ```bash
+> docker compose cp backend:/app/data/master.key ./master.key.backup
+> ```
 
-```env
-B2_APPLICATION_KEY_ID=
-B2_APPLICATION_KEY=
-B2_BUCKET_NAME=
-```
+### Migration depuis une ancienne version
 
-Les sauvegardes sont configurables depuis le dashboard admin.
+Les anciennes variables (`APP_URL`, `JWT_ACCESS_SECRET`, `DISCORD_*`, `EMAIL_*`, `SMTP_*`, `BREVO_API_KEY`, `B2_*`…) sont **importées automatiquement** en base au démarrage, puis chiffrées. Les sessions en cours restent valides. Vous pouvez ensuite les retirer du `.env`.
 
 ---
 

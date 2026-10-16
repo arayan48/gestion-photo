@@ -4,7 +4,7 @@ import { extractIp } from '../utils/fingerprint.js'
 function isLocalOrPrivateIp(ip) {
   if (!ip) return false
   // Loopback
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return true
+  if (ip === '127.0.0.1' || ip === '::1') return true
   // Docker bridge et réseaux privés courants (172.16.0.0/12)
   const dockerMatch = ip.match(/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/)
   if (dockerMatch) return true

@@ -1,27 +1,24 @@
 import cron from 'node-cron'
-import { join } from 'path'
-import { unlink, readdir } from 'fs/promises'
+import { unlink } from 'fs/promises'
 import { totalmem, freemem, cpus, loadavg } from 'os'
 import pool from '../config/database.js'
-import { config } from '../config/env.js'
 import { log } from './logger.js'
+import { deleteMediaFiles } from '../services/storage.service.js'
+import { runConfiguredBackups } from '../services/backup.service.js'
+import { getConfigValues } from '../services/config.service.js'
 
 export function startCronJobs() {
   // Nettoyage corbeille : toutes les heures, supprimer les fichiers > 48h
   cron.schedule('0 * * * *', async () => {
     try {
       const { rows } = await pool.query(
-        `SELECT id, stored_name, mime_type, size, owner_id FROM files
-         WHERE is_deleted = true AND deleted_at < NOW() - INTERVAL '48 hours'`
+        `DELETE FROM files
+         WHERE is_deleted = true AND deleted_at < NOW() - INTERVAL '48 hours'
+         RETURNING id, stored_name, mime_type, size, owner_id, thumbnail_path`
       )
 
       for (const file of rows) {
-        const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
-        try {
-          await unlink(join(config.storage.path, subdir, file.stored_name))
-        } catch {}
-
-        await pool.query('DELETE FROM files WHERE id = $1', [file.id])
+        await deleteMediaFiles(file)
         await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [file.size, file.owner_id])
       }
 
@@ -67,6 +64,23 @@ export function startCronJobs() {
     try {
       await pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = true')
     } catch {}
+  })
+
+  // Sauvegardes planifiées (Paramètres admin → Sauvegardes → Planification)
+  // Vérification chaque heure à hh:05 ; la fréquence configurée décide si on lance
+  cron.schedule('5 * * * *', async () => {
+    try {
+      const cfg = await getConfigValues(['backup.schedule'])
+      const schedule = cfg['backup.schedule'] || 'daily'
+      const now = new Date()
+      const due =
+        schedule === 'hourly' ||
+        (schedule === 'daily' && now.getUTCHours() === 3) ||
+        (schedule === 'weekly' && now.getUTCHours() === 3 && now.getUTCDay() === 0)
+      if (due) await runConfiguredBackups()
+    } catch (err) {
+      console.error('Erreur sauvegarde planifiée:', err)
+    }
   })
 
   // Métriques système : toutes les heures

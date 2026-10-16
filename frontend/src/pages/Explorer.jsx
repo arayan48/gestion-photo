@@ -8,6 +8,7 @@ import {
   pointerWithin, rectIntersection, closestCenter,
 } from '@dnd-kit/core'
 import api from '../utils/api.js'
+import { useAuthStore } from '../stores/auth.store.js'
 import FileGrid, { GridSkeleton } from '../components/explorer/FileGrid.jsx'
 import FileList, { ListSkeleton } from '../components/explorer/FileList.jsx'
 import UploadPanel from '../components/upload/UploadPanel.jsx'
@@ -378,7 +379,7 @@ export default function Explorer() {
           a.href = url
           a.download = file.original_name
           a.click()
-          URL.revokeObjectURL(url)
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
         } catch { toast.error('Erreur lors du téléchargement') }
         break
       }
@@ -436,7 +437,7 @@ export default function Explorer() {
       a.href = url
       a.download = 'archive.zip'
       a.click()
-      URL.revokeObjectURL(url)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
       toast.success('Archive ZIP téléchargée')
     } catch { toast.error('Erreur lors de la création du ZIP') }
   }
@@ -687,7 +688,11 @@ export default function Explorer() {
           <UploadPanel
             folderId={folderId}
             onClose={() => setShowUpload(false)}
-            onDone={() => { queryClient.invalidateQueries({ queryKey }); setShowUpload(false) }}
+            onDone={() => {
+              queryClient.invalidateQueries({ queryKey })
+              setShowUpload(false)
+              useAuthStore.getState().fetchMe().catch(() => {}) // rafraîchir l'espace utilisé
+            }}
           />
         )}
 

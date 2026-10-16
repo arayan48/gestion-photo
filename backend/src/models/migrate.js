@@ -333,7 +333,7 @@ const migrations = [
   },
 ]
 
-async function runMigrations() {
+export async function runMigrations({ closePool = false } = {}) {
   const client = await pool.connect()
   try {
     // Table de suivi des migrations
@@ -367,11 +367,14 @@ async function runMigrations() {
     console.log('✅ Toutes les migrations sont appliquées.')
   } finally {
     client.release()
-    await pool.end()
+    if (closePool) await pool.end()
   }
 }
 
-runMigrations().catch((err) => {
-  console.error('Erreur fatale de migration:', err)
-  process.exit(1)
-})
+// Exécution directe via CLI (npm run migrate)
+if (process.argv[1]?.endsWith('migrate.js')) {
+  runMigrations({ closePool: true }).catch((err) => {
+    console.error('Erreur fatale de migration:', err)
+    process.exit(1)
+  })
+}
