@@ -12,6 +12,11 @@ export default function Layout() {
   const { accessToken } = useAuthStore()
   const { connect, setNotifications } = useNotificationStore()
 
+  // Rafraîchir le profil (permissions, quota) à l'ouverture de l'application
+  useEffect(() => {
+    useAuthStore.getState().fetchMe().catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (accessToken) {
       connect(accessToken)

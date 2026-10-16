@@ -1,4 +1,5 @@
 import pool from '../config/database.js'
+import { sendToUser } from '../websocket/notifications.js'
 
 export async function log({ category, level, action, userId = null, ipAddress = null, metadata = null }) {
   try {
@@ -22,10 +23,7 @@ export async function notifyAdmins({ type, message }) {
     )
 
     for (const user of rows) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)`,
-        [user.id, type, message]
-      )
+      await notify({ userId: user.id, type, message })
     }
   } catch {
     // silencieux
@@ -34,10 +32,12 @@ export async function notifyAdmins({ type, message }) {
 
 export async function notify({ userId, type, message }) {
   try {
-    await pool.query(
-      `INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)`,
+    const { rows } = await pool.query(
+      `INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3) RETURNING *`,
       [userId, type, message]
     )
+    // Push temps réel vers la cloche (format attendu par notification.store.js)
+    sendToUser(userId, { type: 'notification', notification: rows[0] })
   } catch {
     // silencieux
   }

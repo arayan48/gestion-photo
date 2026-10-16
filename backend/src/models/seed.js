@@ -31,6 +31,15 @@ const PERMISSIONS = [
   { key: 'system.manage_storage', label: 'Modifier les seuils de stockage', category: 'Système' },
 ]
 
+const DEFAULT_ROLE_PERMISSIONS = [
+  'files.upload',
+  'files.delete_own',
+  'files.create_folder',
+  'files.rename_move',
+  'files.toggle_link',
+  'files.create_tags',
+]
+
 export async function seedPermissions() {
   const client = await pool.connect()
   try {
@@ -53,9 +62,25 @@ export async function seedPermissions() {
       )
     }
 
+    // Rôle par défaut attribué aux nouveaux comptes : sans lui, un utilisateur accepté
+    // n'aurait aucune permission (pas même l'upload)
+    const { rows: standardRoles } = await client.query('SELECT id FROM roles WHERE is_super_admin = false LIMIT 1')
+    if (standardRoles.length === 0) {
+      const { rows: [role] } = await client.query(
+        `INSERT INTO roles (name, is_super_admin) VALUES ($1, false) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+        ['Utilisateur']
+      )
+      await client.query(
+        `INSERT INTO role_permissions (role_id, permission_id)
+         SELECT $1, id FROM permissions WHERE key = ANY($2)
+         ON CONFLICT DO NOTHING`,
+        [role.id, DEFAULT_ROLE_PERMISSIONS]
+      )
+    }
+
     await client.query(
       `INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
-      ['email.provider', process.env.EMAIL_PROVIDER || 'brevo']
+      ['email.provider', 'brevo']
     )
 
     // IPs locales auto-whitelistées
@@ -84,7 +109,7 @@ export async function seedPermissions() {
 }
 
 // Exécution directe via CLI
-if (process.argv[1].endsWith('seed.js')) {
+if (process.argv[1]?.endsWith('seed.js')) {
   seedPermissions()
     .then(() => { console.log('✅ Seed terminé.'); process.exit(0) })
     .catch((err) => { console.error('Erreur fatale seed:', err); process.exit(1) })

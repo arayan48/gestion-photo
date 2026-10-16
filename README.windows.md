@@ -54,26 +54,13 @@ notepad .env
 code .env
 ```
 
-Modifier au minimum :
+Modifier au minimum le mot de passe de la base :
 
 ```env
 DB_PASSWORD=votre_mot_de_passe
-JWT_ACCESS_SECRET=une_chaine_aleatoire_longue
-JWT_REFRESH_SECRET=une_autre_chaine_aleatoire_longue
-APP_URL=http://localhost
 ```
 
-Générer des secrets JWT sécurisés (Git Bash ou PowerShell avec OpenSSL) :
-
-```powershell
-openssl rand -base64 64
-```
-
-Lancer la commande deux fois et copier les valeurs dans `.env`. Alternative si OpenSSL n'est pas disponible :
-
-```powershell
-[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Maximum 256 }))
-```
+Tout le reste (URL publique, email, Discord, sauvegardes) se configure dans l'interface : à l'installation puis dans **Admin → Configuration**. Les secrets JWT sont générés automatiquement.
 
 Démarrer les conteneurs :
 
@@ -174,11 +161,7 @@ ipconfig
 # Chercher "Adresse IPv4" sous l'adaptateur actif
 ```
 
-2. Modifier `APP_URL` dans `.env` :
-
-```env
-APP_URL=http://192.168.1.xxx
-```
+2. Ouvrir `http://192.168.1.xxx` depuis l'autre appareil et, si l'installation est déjà faite, mettre à jour l'**URL publique** dans **Admin → Configuration → Général**.
 
 3. Ouvrir le port 80 dans le pare-feu Windows :
 

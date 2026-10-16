@@ -1,13 +1,12 @@
-import { join, extname } from 'path'
-import { readFile, unlink, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { readFile, writeFile, unlink, mkdir, rename, stat } from 'fs/promises'
 import { createReadStream, createWriteStream } from 'fs'
+import { pipeline } from 'stream/promises'
 import { nanoid } from 'nanoid'
 import pool from '../../config/database.js'
-import { authenticate } from '../../middleware/auth.js'
-import { requirePermission } from '../../middleware/auth.js'
+import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { checkIpWhitelist } from '../../middleware/ipWhitelist.js'
-import { log } from '../../utils/logger.js'
-import { notify, notifyAdmins } from '../../utils/logger.js'
+import { log, notify, notifyAdmins } from '../../utils/logger.js'
 import { getFolderBreadcrumb } from './breadcrumb.js'
 import {
   sanitizeFilename,
@@ -18,11 +17,47 @@ import {
   getVideoMetadata,
   generateVideoThumbnail,
   getFilePath,
-  ensureStorageDirs,
+  getMediaSubdir,
+  deleteMediaFiles,
+  QUALITY_PRESETS,
 } from '../../services/storage.service.js'
 import { checkMediaStorageLimit } from '../../config/storage.js'
 import { config } from '../../config/env.js'
 import { extractIp } from '../../utils/fingerprint.js'
+import { isUuid, isNonEmptyString, parsePagination } from '../../utils/validation.js'
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const MAX_ZIP_FILES = 500
+
+// En-tête Content-Disposition sûr (guillemets, caractères non ASCII)
+function contentDisposition(type, filename) {
+  const fallback = String(filename).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  return `${type}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+// Le propriétaire, le Super Admin ou un rôle avec files.view_others peut consulter un fichier
+async function canViewFile(user, file) {
+  if (file.owner_id === user.id) return true
+  return userHasPermission(user, 'files.view_others')
+}
+
+// Peut modifier (renommer, déplacer, lien, tags) : propriétaire ou Super Admin
+function canEditFile(user, file) {
+  return file.owner_id === user.id || user.is_super_admin
+}
+
+async function isOwnFolder(folderId, userId) {
+  if (!folderId) return true // racine
+  if (!isUuid(folderId)) return false
+  const { rows } = await pool.query('SELECT 1 FROM folders WHERE id = $1 AND owner_id = $2', [folderId, userId])
+  return rows.length > 0
+}
+
+async function getActiveFile(id) {
+  if (!isUuid(id)) return null
+  const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [id])
+  return rows[0] || null
+}
 
 export default async function fileRoutes(fastify) {
   // ─── Upload ───────────────────────────────────────────────────────────────
@@ -30,6 +65,7 @@ export default async function fileRoutes(fastify) {
     preHandler: [authenticate, requirePermission('files.upload')],
   }, async (request, reply) => {
     const user = request.currentUser
+    const ip = extractIp(request)
 
     // Vérifier la limite de stockage serveur
     const storageStatus = await checkMediaStorageLimit()
@@ -37,89 +73,141 @@ export default async function fileRoutes(fastify) {
       return reply.code(507).send({ error: 'Le serveur a atteint sa limite de stockage. Veuillez contacter l\'administrateur.' })
     }
 
-    const parts = request.parts()
+    // Le fichier est écrit en streaming dans storage/temp (pas de buffer de 500 Mo en RAM)
     const fields = {}
-    const fileBuffer = { buffer: null, filename: null, mimetype: null }
+    const upload = { tempPath: null, filename: null, mimetype: null, truncated: false }
 
-    for await (const part of parts) {
-      if (part.type === 'file') {
-        const chunks = []
-        for await (const chunk of part.file) chunks.push(chunk)
-        fileBuffer.buffer = Buffer.concat(chunks)
-        fileBuffer.filename = part.filename
-        fileBuffer.mimetype = part.mimetype
-      } else {
-        fields[part.fieldname] = part.value
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === 'file') {
+          if (upload.tempPath) {
+            part.file.resume() // un seul fichier par requête
+            continue
+          }
+          upload.tempPath = getFilePath('temp', `upload_${nanoid(16)}`)
+          upload.filename = part.filename
+          upload.mimetype = part.mimetype
+          await pipeline(part.file, createWriteStream(upload.tempPath))
+          upload.truncated = part.file.truncated
+        } else {
+          fields[part.fieldname] = part.value
+        }
       }
+    } catch (err) {
+      if (upload.tempPath) await unlink(upload.tempPath).catch(() => {})
+      throw err
     }
 
-    if (!fileBuffer.buffer) {
-      await log({ category: 'files', level: 'warning', action: 'upload_failed', userId: user.id, ipAddress: extractIp(request), metadata: { reason: 'Fichier manquant' } })
-      return reply.code(400).send({ error: 'Fichier requis' })
-    }
-    if (!validateMime(fileBuffer.mimetype)) {
-      await log({ category: 'files', level: 'warning', action: 'upload_failed', userId: user.id, ipAddress: extractIp(request), metadata: { reason: 'Type MIME refusé', mime: fileBuffer.mimetype, filename: fileBuffer.filename } })
-      return reply.code(400).send({ error: 'Type de fichier non supporté' })
+    const cleanupTemp = () => (upload.tempPath ? unlink(upload.tempPath).catch(() => {}) : Promise.resolve())
+    const fail = async (code, error, reason) => {
+      await cleanupTemp()
+      await log({ category: 'files', level: 'warning', action: 'upload_failed', userId: user.id, ipAddress: ip, metadata: { reason: reason || error, mime: upload.mimetype, filename: upload.filename } })
+      return reply.code(code).send({ error })
     }
 
-    // Vérifier quota utilisateur
-    const fileSize = fileBuffer.buffer.length
-    if (user.storage_used + fileSize > user.storage_quota) {
-      return reply.code(400).send({ error: 'Quota de stockage dépassé' })
-    }
+    if (!upload.tempPath) return fail(400, 'Fichier requis', 'Fichier manquant')
+    if (upload.truncated) return fail(413, 'Fichier trop volumineux (500 Mo maximum)')
+    if (!validateMime(upload.mimetype)) return fail(400, 'Type de fichier non supporté', 'Type MIME refusé')
 
     const qualityPreset = fields.qualityPreset || 'original'
-    const originalName = sanitizeFilename(fields.name || fileBuffer.filename)
+    if (!QUALITY_PRESETS.includes(qualityPreset)) return fail(400, 'Préréglage de qualité invalide')
+
     const folderId = fields.folderId || null
-    const linkToken = nanoid(32)
+    if (!(await isOwnFolder(folderId, user.id))) return fail(400, 'Dossier de destination invalide')
 
-    const isImage = fileBuffer.mimetype.startsWith('image/')
-    const isVideo = fileBuffer.mimetype.startsWith('video/')
+    const isImage = upload.mimetype.startsWith('image/')
+    const baseName = sanitizeFilename(fields.name || upload.filename).replace(/\.[^.]+$/, '') || 'fichier'
 
-    let storedName, subdir, metadata = {}
+    let storedName, finalPath, mimeType, originalName, fileSize
+    let metadata = {}
+    const createdPaths = []
 
-    if (isImage) {
-      subdir = 'images'
-      const { info, data } = await processImage(fileBuffer.buffer, qualityPreset)
-      storedName = generateStoredName(originalName.replace(/\.[^.]+$/, '') + '.jpg')
-      const path = getFilePath(subdir, storedName)
-      const { writeFile } = await import('fs/promises')
-      await writeFile(path, data)
-      metadata = { width: info.width, height: info.height, format: info.format }
+    try {
+      if (isImage) {
+        // Validation du contenu réel par Sharp (pas seulement le MIME envoyé par le client)
+        const input = await readFile(upload.tempPath)
+        const { data, mime, ext, info } = await processImage(input, qualityPreset)
+        mimeType = mime
+        originalName = baseName + ext
+        storedName = generateStoredName(originalName)
+        finalPath = getFilePath('images', storedName)
+        await writeFile(finalPath, data)
+        createdPaths.push(finalPath)
+        fileSize = data.length
+        metadata = { width: info.width, height: info.height, format: info.format }
 
-      if (qualityPreset !== 'thumbnail') {
-        const thumbPath = await generateImageThumbnail(path)
-        metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
+        if (qualityPreset !== 'thumbnail') {
+          const thumbPath = await generateImageThumbnail(finalPath)
+          createdPaths.push(thumbPath)
+          metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
+        }
+        await cleanupTemp()
+      } else {
+        // ffprobe valide qu'il s'agit bien d'une vidéo lisible
+        metadata = await getVideoMetadata(upload.tempPath)
+        mimeType = upload.mimetype
+        const ext = sanitizeFilename(upload.filename).match(/\.[a-z0-9]+$/i)?.[0] || ''
+        originalName = baseName + ext.toLowerCase()
+        storedName = generateStoredName(originalName)
+        finalPath = getFilePath('videos', storedName)
+        await rename(upload.tempPath, finalPath)
+        createdPaths.push(finalPath)
+        fileSize = (await stat(finalPath)).size
+
+        try {
+          const thumbPath = await generateVideoThumbnail(finalPath)
+          createdPaths.push(thumbPath)
+          metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
+        } catch {
+          // Pas de miniature (vidéo très courte…) : l'upload reste valide
+        }
       }
-    } else if (isVideo) {
-      subdir = 'videos'
-      storedName = generateStoredName(originalName)
-      const path = getFilePath(subdir, storedName)
-      const { writeFile } = await import('fs/promises')
-      await writeFile(path, fileBuffer.buffer)
-
-      const videoMeta = await getVideoMetadata(path)
-      metadata = videoMeta
-      const thumbPath = await generateVideoThumbnail(path)
-      metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
+    } catch (err) {
+      await cleanupTemp()
+      for (const p of createdPaths) await unlink(p).catch(() => {})
+      if (err.statusCode === 400) return fail(400, err.message)
+      throw err
     }
 
-    const { rows: fileRows } = await pool.query(
-      `INSERT INTO files (original_name, stored_name, folder_id, owner_id, mime_type, size,
-                          width, height, fps, duration, codec, format, quality_preset,
-                          thumbnail_path, link_token)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING *`,
-      [
-        originalName, storedName, folderId, user.id, fileBuffer.mimetype, fileSize,
-        metadata.width || null, metadata.height || null, metadata.fps || null,
-        metadata.duration || null, metadata.codec || null, metadata.format || null,
-        qualityPreset, metadata.thumbnailPath || null, linkToken,
-      ]
-    )
+    const linkToken = nanoid(32)
+    const client = await pool.connect()
+    let file
+    try {
+      await client.query('BEGIN')
+      // Réservation atomique du quota (storage_* sont des BIGINT : comparaison faite en SQL)
+      const { rowCount } = await client.query(
+        `UPDATE users SET storage_used = storage_used + $1
+         WHERE id = $2 AND storage_used + $1 <= storage_quota`,
+        [fileSize, user.id]
+      )
+      if (!rowCount) {
+        await client.query('ROLLBACK')
+        for (const p of createdPaths) await unlink(p).catch(() => {})
+        return reply.code(400).send({ error: 'Quota de stockage dépassé' })
+      }
 
-    // Mettre à jour le storage_used
-    await pool.query('UPDATE users SET storage_used = storage_used + $1 WHERE id = $2', [fileSize, user.id])
+      const { rows: fileRows } = await client.query(
+        `INSERT INTO files (original_name, stored_name, folder_id, owner_id, mime_type, size,
+                            width, height, fps, duration, codec, format, quality_preset,
+                            thumbnail_path, link_token)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING *`,
+        [
+          originalName, storedName, folderId, user.id, mimeType, fileSize,
+          metadata.width || null, metadata.height || null, metadata.fps || null,
+          metadata.duration || null, metadata.codec || null, metadata.format || null,
+          qualityPreset, metadata.thumbnailPath || null, linkToken,
+        ]
+      )
+      file = fileRows[0]
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      for (const p of createdPaths) await unlink(p).catch(() => {})
+      throw err
+    } finally {
+      client.release()
+    }
 
     // Alerte si 90% de la limite serveur
     if (storageStatus.percent >= 90) {
@@ -127,16 +215,18 @@ export default async function fileRoutes(fastify) {
     }
 
     await notify({ userId: user.id, type: 'upload_done', message: `Fichier "${originalName}" uploadé avec succès` })
-    await log({ category: 'files', level: 'info', action: 'file_uploaded', userId: user.id, ipAddress: extractIp(request), metadata: { fileId: fileRows[0].id, name: originalName, size: fileSize, mime: fileBuffer.mimetype, qualityPreset } })
+    await log({ category: 'files', level: 'info', action: 'file_uploaded', userId: user.id, ipAddress: ip, metadata: { fileId: file.id, name: originalName, size: fileSize, mime: mimeType, qualityPreset } })
 
-    return reply.code(201).send(fileRows[0])
+    return reply.code(201).send(file)
   })
 
   // ─── Liste des fichiers ────────────────────────────────────────────────────
   fastify.get('/', { preHandler: [authenticate] }, async (request, reply) => {
     const user = request.currentUser
-    const { folderId, view = 'mine', page = 1, limit = 50, search, tag, sortBy = 'created_at', sortDir = 'desc' } = request.query
-    const offset = (page - 1) * limit
+    const { folderId, search, tag, from, to, sortBy = 'created_at', sortDir = 'desc' } = request.query
+    // Toute valeur autre que "others" est traitée comme "mine" : jamais de liste globale par défaut
+    const view = request.query.view === 'others' ? 'others' : 'mine'
+    const { page, limit, offset } = parsePagination(request.query, { defaultLimit: 50, maxLimit: 200 })
 
     let where = 'WHERE f.is_deleted = false'
     const params = []
@@ -144,22 +234,15 @@ export default async function fileRoutes(fastify) {
     if (view === 'mine') {
       params.push(user.id)
       where += ` AND f.owner_id = $${params.length}`
-    } else if (view === 'others') {
-      // Vérifier permission
-      const { rows: permRows } = await pool.query(
-        `SELECT 1 FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id
-         WHERE rp.role_id = $1 AND p.key = 'files.view_others'`,
-        [user.role_id]
-      )
-      if (!user.is_super_admin && !permRows.length) {
-        return reply.code(403).send({ error: 'Permission refusée' })
-      }
+    } else if (!(await userHasPermission(user, 'files.view_others'))) {
+      return reply.code(403).send({ error: 'Permission refusée' })
     }
 
     if (folderId) {
+      if (!isUuid(folderId)) return reply.code(400).send({ error: 'Dossier invalide' })
       params.push(folderId)
       where += ` AND f.folder_id = $${params.length}`
-    } else if (!folderId && view === 'mine') {
+    } else if (view === 'mine') {
       where += ` AND f.folder_id IS NULL`
     }
 
@@ -171,6 +254,16 @@ export default async function fileRoutes(fastify) {
     if (tag) {
       params.push(tag)
       where += ` AND EXISTS (SELECT 1 FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id AND t.name = $${params.length})`
+    }
+
+    if (from && DATE_RE.test(from)) {
+      params.push(from)
+      where += ` AND f.created_at >= $${params.length}::date`
+    }
+    if (to && DATE_RE.test(to)) {
+      params.push(to)
+      // Date de fin incluse (toute la journée)
+      where += ` AND f.created_at < ($${params.length}::date + INTERVAL '1 day')`
     }
 
     const allowed = ['created_at', 'original_name', 'size', 'updated_at']
@@ -192,13 +285,15 @@ export default async function fileRoutes(fastify) {
       [...params, limit, offset, user.id]
     )
 
-    return reply.send({ files: rows, page: parseInt(page), limit: parseInt(limit) })
+    return reply.send({ files: rows, page, limit })
   })
 
   // ─── Fichiers récents ─────────────────────────────────────────────────────
   fastify.get('/recent', { preHandler: [authenticate] }, async (request, reply) => {
     const { rows } = await pool.query(
-      `SELECT f.*, u.pseudo AS owner_pseudo FROM files f JOIN users u ON f.owner_id = u.id
+      `SELECT f.*, u.pseudo AS owner_pseudo,
+              EXISTS(SELECT 1 FROM favorites fav WHERE fav.file_id = f.id AND fav.user_id = $1) AS is_favorite
+       FROM files f JOIN users u ON f.owner_id = u.id
        WHERE f.owner_id = $1 AND f.is_deleted = false
        ORDER BY f.updated_at DESC LIMIT 20`,
       [request.currentUser.id]
@@ -209,7 +304,7 @@ export default async function fileRoutes(fastify) {
   // ─── Favoris ──────────────────────────────────────────────────────────────
   fastify.get('/favorites', { preHandler: [authenticate] }, async (request, reply) => {
     const { rows } = await pool.query(
-      `SELECT f.*, u.pseudo AS owner_pseudo FROM files f
+      `SELECT f.*, u.pseudo AS owner_pseudo, true AS is_favorite FROM files f
        JOIN users u ON f.owner_id = u.id
        JOIN favorites fav ON fav.file_id = f.id
        WHERE fav.user_id = $1 AND f.is_deleted = false
@@ -220,15 +315,19 @@ export default async function fileRoutes(fastify) {
   })
 
   fastify.post('/:id/favorite', { preHandler: [authenticate] }, async (request, reply) => {
-    const { id } = request.params
+    const file = await getActiveFile(request.params.id)
+    if (!file || !(await canViewFile(request.currentUser, file))) {
+      return reply.code(404).send({ error: 'Fichier introuvable' })
+    }
     await pool.query(
       'INSERT INTO favorites (user_id, file_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [request.currentUser.id, id]
+      [request.currentUser.id, file.id]
     )
     return reply.send({ message: 'Ajouté aux favoris' })
   })
 
   fastify.delete('/:id/favorite', { preHandler: [authenticate] }, async (request, reply) => {
+    if (!isUuid(request.params.id)) return reply.code(400).send({ error: 'Identifiant invalide' })
     await pool.query('DELETE FROM favorites WHERE user_id = $1 AND file_id = $2', [request.currentUser.id, request.params.id])
     return reply.send({ message: 'Retiré des favoris' })
   })
@@ -243,10 +342,14 @@ export default async function fileRoutes(fastify) {
   })
 
   fastify.post('/:id/restore', { preHandler: [authenticate] }, async (request, reply) => {
-    await pool.query(
-      `UPDATE files SET is_deleted = false, deleted_at = NULL WHERE id = $1 AND owner_id = $2`,
+    if (!isUuid(request.params.id)) return reply.code(400).send({ error: 'Identifiant invalide' })
+    const { rowCount } = await pool.query(
+      `UPDATE files SET is_deleted = false, deleted_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND owner_id = $2 AND is_deleted = true`,
       [request.params.id, request.currentUser.id]
     )
+    if (!rowCount) return reply.code(404).send({ error: 'Fichier introuvable dans la corbeille' })
+    await log({ category: 'files', level: 'info', action: 'file_restored', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { fileId: request.params.id } })
     return reply.send({ message: 'Fichier restauré' })
   })
 
@@ -254,28 +357,25 @@ export default async function fileRoutes(fastify) {
   fastify.delete('/trash', { preHandler: [authenticate] }, async (request, reply) => {
     const user = request.currentUser
     const { rows: files } = await pool.query(
-      'SELECT id, stored_name, mime_type, size FROM files WHERE owner_id = $1 AND is_deleted = true',
+      'DELETE FROM files WHERE owner_id = $1 AND is_deleted = true RETURNING stored_name, mime_type, size, thumbnail_path',
       [user.id]
     )
 
-    const { deleteFile } = await import('../../services/storage.service.js')
-    for (const file of files) {
-      const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
-      await deleteFile(file.stored_name, subdir).catch(() => {})
-    }
+    for (const file of files) await deleteMediaFiles(file)
 
-    const totalSize = files.reduce((sum, f) => sum + f.size, 0)
-    await pool.query('DELETE FROM files WHERE owner_id = $1 AND is_deleted = true', [user.id])
+    // size est un BIGINT renvoyé en string par pg : conversion explicite
+    const totalSize = files.reduce((sum, f) => sum + Number(f.size), 0)
     if (totalSize > 0) {
       await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [totalSize, user.id])
     }
 
-    await log({ category: 'files', level: 'info', action: 'trash_emptied', userId: user.id, metadata: { count: files.length } })
+    await log({ category: 'files', level: 'info', action: 'trash_emptied', userId: user.id, ipAddress: extractIp(request), metadata: { count: files.length } })
     return reply.send({ message: `Corbeille vidée (${files.length} fichier(s))` })
   })
 
   // ─── Infos d'un fichier ───────────────────────────────────────────────────
   fastify.get('/:id', { preHandler: [authenticate] }, async (request, reply) => {
+    if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Fichier introuvable' })
     const { rows } = await pool.query(
       `SELECT f.*, u.pseudo AS owner_pseudo,
               COALESCE(json_agg(DISTINCT jsonb_build_object('id', t.id, 'name', t.name)) FILTER (WHERE t.id IS NOT NULL), '[]') AS tags
@@ -286,7 +386,9 @@ export default async function fileRoutes(fastify) {
        GROUP BY f.id, u.pseudo`,
       [request.params.id]
     )
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+    if (!rows.length || !(await canViewFile(request.currentUser, rows[0]))) {
+      return reply.code(404).send({ error: 'Fichier introuvable' })
+    }
     return reply.send(rows[0])
   })
 
@@ -294,89 +396,75 @@ export default async function fileRoutes(fastify) {
   fastify.patch('/:id', {
     preHandler: [authenticate, requirePermission('files.rename_move')],
   }, async (request, reply) => {
-    const { id } = request.params
-    const { name, folderId } = request.body
+    const { name, folderId } = request.body || {}
     const user = request.currentUser
 
-    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1', [id])
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
-
-    const file = rows[0]
-    if (file.owner_id !== user.id && !user.is_super_admin) {
-      return reply.code(403).send({ error: 'Permission refusée' })
-    }
+    const file = await getActiveFile(request.params.id)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
+    if (!canEditFile(user, file)) return reply.code(403).send({ error: 'Permission refusée' })
 
     const updates = []
     const params = []
-    if (name) { params.push(sanitizeFilename(name)); updates.push(`original_name = $${params.length}`) }
-    if (folderId !== undefined) { params.push(folderId); updates.push(`folder_id = $${params.length}`) }
+    if (name !== undefined) {
+      if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom invalide' })
+      params.push(sanitizeFilename(name.trim()))
+      updates.push(`original_name = $${params.length}`)
+    }
+    if (folderId !== undefined) {
+      // Le dossier cible doit appartenir au propriétaire du fichier
+      if (!(await isOwnFolder(folderId, file.owner_id))) return reply.code(400).send({ error: 'Dossier de destination invalide' })
+      params.push(folderId || null)
+      updates.push(`folder_id = $${params.length}`)
+    }
 
     if (updates.length) {
-      params.push(id)
+      params.push(file.id)
       await pool.query(`UPDATE files SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params)
     }
 
-    await log({ category: 'files', level: 'info', action: 'file_renamed_moved', userId: user.id, metadata: { fileId: id } })
+    await log({ category: 'files', level: 'info', action: 'file_renamed_moved', userId: user.id, ipAddress: extractIp(request), metadata: { fileId: file.id, name, folderId } })
     return reply.send({ message: 'Fichier modifié.' })
   })
 
   // ─── Supprimer (corbeille) ────────────────────────────────────────────────
   fastify.delete('/:id', { preHandler: [authenticate] }, async (request, reply) => {
-    const { id } = request.params
     const user = request.currentUser
 
-    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [id])
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+    const file = await getActiveFile(request.params.id)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
 
-    const file = rows[0]
     const isOwner = file.owner_id === user.id
-
-    if (!isOwner) {
-      const { rows: permRows } = await pool.query(
-        `SELECT 1 FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id
-         WHERE rp.role_id = $1 AND p.key = 'files.delete_others'`,
-        [user.role_id]
-      )
-      if (!user.is_super_admin && !permRows.length) {
-        return reply.code(403).send({ error: 'Permission refusée' })
-      }
-    }
+    const allowed = await userHasPermission(user, isOwner ? 'files.delete_own' : 'files.delete_others')
+    if (!allowed) return reply.code(403).send({ error: 'Permission refusée' })
 
     await pool.query(
       'UPDATE files SET is_deleted = true, deleted_at = NOW() WHERE id = $1',
-      [id]
+      [file.id]
     )
 
-    await notify({ userId: file.owner_id, type: 'file_deleted', message: `Fichier "${file.original_name}" supprimé` })
-    await log({ category: 'files', level: 'info', action: 'file_deleted', userId: user.id, metadata: { fileId: id, name: file.original_name } })
+    if (!isOwner) {
+      await notify({ userId: file.owner_id, type: 'file_deleted', message: `Votre fichier "${file.original_name}" a été supprimé par un administrateur` })
+    }
+    await log({ category: 'files', level: 'info', action: 'file_deleted', userId: user.id, ipAddress: extractIp(request), metadata: { fileId: file.id, name: file.original_name, ownerId: file.owner_id } })
 
     return reply.send({ message: 'Fichier déplacé dans la corbeille.' })
   })
 
   // ─── Suppression permanente ───────────────────────────────────────────────
   fastify.delete('/:id/permanent', { preHandler: [authenticate] }, async (request, reply) => {
-    const { id } = request.params
     const user = request.currentUser
+    if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Fichier introuvable dans la corbeille' })
 
-    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = true', [id])
+    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = true', [request.params.id])
     if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable dans la corbeille' })
 
     const file = rows[0]
-    if (file.owner_id !== user.id && !user.is_super_admin) {
-      return reply.code(403).send({ error: 'Permission refusée' })
-    }
+    if (!canEditFile(user, file)) return reply.code(403).send({ error: 'Permission refusée' })
 
-    const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
-    const { deleteFile } = await import('../../services/storage.service.js')
-    await deleteFile(file.stored_name, subdir)
-    if (file.thumbnail_path) {
-      const thumbName = file.thumbnail_path.split('/').pop()
-      await deleteFile(thumbName, 'thumbnails')
-    }
-
-    await pool.query('DELETE FROM files WHERE id = $1', [id])
+    await pool.query('DELETE FROM files WHERE id = $1', [file.id])
     await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [file.size, file.owner_id])
-    await log({ category: 'files', level: 'warning', action: 'file_permanently_deleted', userId: user.id, metadata: { fileId: id, name: file.original_name } })
+    await deleteMediaFiles(file)
+    await log({ category: 'files', level: 'warning', action: 'file_permanently_deleted', userId: user.id, ipAddress: extractIp(request), metadata: { fileId: file.id, name: file.original_name } })
 
     return reply.send({ message: 'Fichier supprimé définitivement.' })
   })
@@ -385,11 +473,13 @@ export default async function fileRoutes(fastify) {
   fastify.post('/:id/toggle-link', {
     preHandler: [authenticate, requirePermission('files.toggle_link')],
   }, async (request, reply) => {
-    const { rows } = await pool.query('SELECT link_active FROM files WHERE id = $1', [request.params.id])
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+    const file = await getActiveFile(request.params.id)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
+    if (!canEditFile(request.currentUser, file)) return reply.code(403).send({ error: 'Permission refusée' })
 
-    const newState = !rows[0].link_active
-    await pool.query('UPDATE files SET link_active = $1 WHERE id = $2', [newState, request.params.id])
+    const newState = !file.link_active
+    await pool.query('UPDATE files SET link_active = $1, updated_at = NOW() WHERE id = $2', [newState, file.id])
+    await log({ category: 'files', level: 'info', action: newState ? 'link_enabled' : 'link_disabled', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { fileId: file.id } })
 
     return reply.send({ linkActive: newState })
   })
@@ -406,48 +496,41 @@ export default async function fileRoutes(fastify) {
     if (!rows.length) return reply.code(404).send({ error: 'Média introuvable ou lien désactivé' })
 
     const file = rows[0]
-    const isVideo = file.mime_type.startsWith('video/')
-    const subdir = isVideo ? 'videos' : 'images'
-    const filePath = getFilePath(subdir, file.stored_name)
 
     await pool.query('UPDATE files SET link_access_count = link_access_count + 1 WHERE id = $1', [file.id])
-    await log({ category: 'security', level: 'info', action: 'media_accessed', metadata: { token, fileId: file.id } })
+    await log({ category: 'security', level: 'info', action: 'media_accessed', ipAddress: extractIp(request), metadata: { fileId: file.id } })
 
-    return reply.sendFile(file.stored_name, join(config.storage.path, subdir))
+    reply.header('X-Content-Type-Options', 'nosniff')
+    return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)))
   })
 
   // ─── Visionner un fichier (authentifié, sans whitelist IP) ──────────────
   fastify.get('/:id/view', { preHandler: [authenticate] }, async (request, reply) => {
-    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [request.params.id])
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+    const file = await getActiveFile(request.params.id)
+    if (!file || !(await canViewFile(request.currentUser, file))) {
+      return reply.code(404).send({ error: 'Fichier introuvable' })
+    }
 
-    const file = rows[0]
-    const isVideo = file.mime_type.startsWith('video/')
-    const subdir = isVideo ? 'videos' : 'images'
-    const filePath = getFilePath(subdir, file.stored_name)
-
-    reply.header('Content-Disposition', `inline; filename="${file.original_name}"`)
-    reply.header('Content-Type', file.mime_type)
+    reply.header('Content-Disposition', contentDisposition('inline', file.original_name))
     reply.header('Cache-Control', 'private, max-age=3600')
+    reply.header('X-Content-Type-Options', 'nosniff')
 
-    return reply.send(createReadStream(filePath))
+    // sendFile gère les requêtes Range : indispensable pour lire/avancer dans une vidéo
+    return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)), { cacheControl: false })
   })
 
   // ─── Télécharger un fichier ───────────────────────────────────────────────
   fastify.get('/:id/download', { preHandler: [authenticate] }, async (request, reply) => {
-    const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [request.params.id])
-    if (!rows.length) return reply.code(404).send({ error: 'Fichier introuvable' })
+    const file = await getActiveFile(request.params.id)
+    if (!file || !(await canViewFile(request.currentUser, file))) {
+      return reply.code(404).send({ error: 'Fichier introuvable' })
+    }
 
-    const file = rows[0]
-    const isVideo = file.mime_type.startsWith('video/')
-    const subdir = isVideo ? 'videos' : 'images'
-    const filePath = getFilePath(subdir, file.stored_name)
+    reply.header('Content-Disposition', contentDisposition('attachment', file.original_name))
+    reply.header('X-Content-Type-Options', 'nosniff')
+    await log({ category: 'files', level: 'info', action: 'file_downloaded', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { fileId: file.id } })
 
-    reply.header('Content-Disposition', `attachment; filename="${file.original_name}"`)
-    reply.header('Content-Type', file.mime_type)
-
-    const stream = createReadStream(filePath)
-    return reply.send(stream)
+    return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)), { cacheControl: false })
   })
 
   // ─── Dossiers ─────────────────────────────────────────────────────────────
@@ -457,6 +540,7 @@ export default async function fileRoutes(fastify) {
     const params = [request.currentUser.id]
 
     if (parentId) {
+      if (!isUuid(parentId)) return reply.code(400).send({ error: 'Dossier invalide' })
       params.push(parentId)
       where += ` AND parent_id = $${params.length}`
     } else {
@@ -473,20 +557,46 @@ export default async function fileRoutes(fastify) {
   fastify.post('/folders', {
     preHandler: [authenticate, requirePermission('files.create_folder')],
   }, async (request, reply) => {
-    const { name, parentId } = request.body
-    if (!name) return reply.code(400).send({ error: 'Nom requis' })
+    const { name, parentId } = request.body || {}
+    if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom requis' })
+    if (!(await isOwnFolder(parentId, request.currentUser.id))) {
+      return reply.code(400).send({ error: 'Dossier parent invalide' })
+    }
 
     const { rows } = await pool.query(
       'INSERT INTO folders (name, parent_id, owner_id) VALUES ($1, $2, $3) RETURNING *',
-      [sanitizeFilename(name), parentId || null, request.currentUser.id]
+      [sanitizeFilename(name.trim()), parentId || null, request.currentUser.id]
     )
 
+    await log({ category: 'files', level: 'info', action: 'folder_created', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { folderId: rows[0].id, name: rows[0].name } })
     return reply.code(201).send(rows[0])
+  })
+
+  // Renommer un dossier
+  fastify.patch('/folders/:id', {
+    preHandler: [authenticate, requirePermission('files.rename_move')],
+  }, async (request, reply) => {
+    const { id } = request.params
+    const { name } = request.body || {}
+    if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom requis' })
+    if (!isUuid(id)) return reply.code(404).send({ error: 'Dossier introuvable' })
+
+    const { rows } = await pool.query(
+      'UPDATE folders SET name = $1 WHERE id = $2 AND owner_id = $3 RETURNING *',
+      [sanitizeFilename(name.trim()), id, request.currentUser.id]
+    )
+    if (!rows.length) return reply.code(404).send({ error: 'Dossier introuvable' })
+
+    await log({ category: 'files', level: 'info', action: 'folder_renamed', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { folderId: id, name: rows[0].name } })
+    return reply.send(rows[0])
   })
 
   // Statistiques d'un dossier (nombre de fichiers et sous-dossiers directs)
   fastify.get('/folders/:id/stats', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params
+    if (!(await isOwnFolder(id, request.currentUser.id)) || !id) {
+      return reply.code(404).send({ error: 'Dossier introuvable' })
+    }
     const { rows: [fc] } = await pool.query(
       `SELECT COUNT(*) FROM files WHERE folder_id = $1 AND is_deleted = false`,
       [id]
@@ -504,12 +614,13 @@ export default async function fileRoutes(fastify) {
     const { id } = request.params
     const { moveToTrash } = request.query   // 'true' | 'false' | undefined
     const user = request.currentUser
+    if (!isUuid(id)) return reply.code(404).send({ error: 'Dossier introuvable' })
 
     // Récupérer le dossier + tous ses sous-dossiers récursivement
     const { rows: allFolders } = await pool.query(`
       WITH RECURSIVE sub AS (
         SELECT id, parent_id FROM folders WHERE id = $1 AND owner_id = $2
-        UNION ALL
+        UNION
         SELECT f.id, f.parent_id FROM folders f JOIN sub s ON f.parent_id = s.id
       )
       SELECT id, parent_id FROM sub
@@ -518,7 +629,7 @@ export default async function fileRoutes(fastify) {
     if (!allFolders.length) return reply.code(404).send({ error: 'Dossier introuvable' })
 
     const allFolderIds = allFolders.map((f) => f.id)
-    const parentFolderId = allFolders[0].parent_id  // dossier parent (null = racine)
+    const parentFolderId = allFolders.find((f) => f.id === id)?.parent_id ?? null // null = racine
 
     if (moveToTrash === 'true') {
       // Déplacer tous les fichiers vers la corbeille
@@ -531,18 +642,16 @@ export default async function fileRoutes(fastify) {
       // Remonter les fichiers vers le dossier parent (ou racine si null)
       await pool.query(
         `UPDATE files SET folder_id = $1
-         WHERE folder_id = ANY($2) AND owner_id = $3 AND is_deleted = false`,
+         WHERE folder_id = ANY($2) AND owner_id = $3`,
         [parentFolderId, allFolderIds, user.id]
       )
     }
 
-    // Supprimer tous les dossiers (sous-dossiers d'abord via ORDER BY depth desc n'est pas nécessaire
-    // car ON DELETE CASCADE ou simple DELETE sur les IDs collectés)
     await pool.query('DELETE FROM folders WHERE id = ANY($1)', [allFolderIds])
 
-    await log(pool, {
-      category: 'files', level: 'info', action: 'folder.delete',
-      userId: user.id,
+    await log({
+      category: 'files', level: 'info', action: 'folder_deleted',
+      userId: user.id, ipAddress: extractIp(request),
       metadata: { folderId: id, moveToTrash: moveToTrash === 'true', affectedFolders: allFolderIds.length },
     })
 
@@ -550,21 +659,25 @@ export default async function fileRoutes(fastify) {
   })
 
   fastify.get('/folders/:id/breadcrumb', { preHandler: [authenticate] }, async (request, reply) => {
-    const chain = await getFolderBreadcrumb(request.params.id)
+    if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Dossier introuvable' })
+    const chain = await getFolderBreadcrumb(request.params.id, request.currentUser.id)
     return reply.send(chain)
   })
 
   // ─── Téléchargement ZIP de plusieurs fichiers ─────────────────────────────
   fastify.post('/zip', { preHandler: [authenticate] }, async (request, reply) => {
-    const { fileIds } = request.body
+    const { fileIds } = request.body || {}
     if (!Array.isArray(fileIds) || fileIds.length === 0) {
       return reply.code(400).send({ error: 'Liste de fichiers requise' })
     }
+    const ids = [...new Set(fileIds.filter(isUuid))].slice(0, MAX_ZIP_FILES)
+    if (!ids.length) return reply.code(400).send({ error: 'Liste de fichiers invalide' })
 
     const user = request.currentUser
+    const canViewOthers = await userHasPermission(user, 'files.view_others')
     const { rows: files } = await pool.query(
-      `SELECT * FROM files WHERE id = ANY($1) AND is_deleted = false AND owner_id = $2`,
-      [fileIds, user.id]
+      `SELECT * FROM files WHERE id = ANY($1) AND is_deleted = false AND ($2 OR owner_id = $3)`,
+      [ids, canViewOthers, user.id]
     )
     if (!files.length) return reply.code(404).send({ error: 'Aucun fichier trouvé' })
 
@@ -573,40 +686,16 @@ export default async function fileRoutes(fastify) {
     const zipName = `archive_${nanoid(12)}.zip`
     const zipPath = join(zipDir, zipName)
 
-    let archiverLib
-    try {
-      archiverLib = (await import('archiver')).default
-    } catch {
-      return reply.code(501).send({ error: 'Fonctionnalité ZIP non disponible. Redémarrez le serveur après mise à jour.' })
-    }
+    const archiverLib = (await import('archiver')).default
 
-    await new Promise((resolve, reject) => {
-      const output = createWriteStream(zipPath)
-      const archive = archiverLib('zip', { zlib: { level: 6 } })
-
-      output.on('close', resolve)
-      archive.on('error', reject)
-      archive.pipe(output)
-
-      for (const file of files) {
-        const subdir = file.mime_type.startsWith('video/') ? 'videos' : 'images'
-        const filePath = getFilePath(subdir, file.stored_name)
-        archive.file(filePath, { name: file.original_name })
-      }
-
-      archive.finalize()
-    })
-
+    // Enregistré avant la création : si le serveur s'arrête en cours de route,
+    // le cron de nettoyage supprimera quand même le fichier
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
     await pool.query(
       'INSERT INTO temp_zips (path, user_id, expires_at) VALUES ($1, $2, $3)',
       [zipPath, user.id, expiresAt]
     )
 
-    reply.header('Content-Disposition', `attachment; filename="archive.zip"`)
-    reply.header('Content-Type', 'application/zip')
-
-    // Supprimer le zip après téléchargement (finish) ou abandon de connexion (close)
     const cleanupZip = (() => {
       let done = false
       return () => {
@@ -616,6 +705,41 @@ export default async function fileRoutes(fastify) {
         pool.query('DELETE FROM temp_zips WHERE path = $1', [zipPath]).catch(() => {})
       }
     })()
+
+    try {
+      await new Promise((resolve, reject) => {
+        const output = createWriteStream(zipPath)
+        const archive = archiverLib('zip', { zlib: { level: 6 } })
+
+        output.on('close', resolve)
+        output.on('error', reject)
+        archive.on('error', reject)
+        archive.pipe(output)
+
+        // Noms uniques dans l'archive (deux "photo.jpg" s'écraseraient à l'extraction)
+        const usedNames = new Map()
+        for (const file of files) {
+          let entryName = file.original_name
+          const count = usedNames.get(entryName) || 0
+          usedNames.set(entryName, count + 1)
+          if (count > 0) entryName = entryName.replace(/(\.[^.]+)?$/, (ext) => ` (${count})${ext}`)
+
+          archive.file(getFilePath(getMediaSubdir(file.mime_type), file.stored_name), { name: entryName })
+        }
+
+        archive.finalize()
+      })
+    } catch (err) {
+      cleanupZip()
+      throw err
+    }
+
+    await log({ category: 'files', level: 'info', action: 'zip_downloaded', userId: user.id, ipAddress: extractIp(request), metadata: { count: files.length } })
+
+    reply.header('Content-Disposition', `attachment; filename="archive.zip"`)
+    reply.header('Content-Type', 'application/zip')
+
+    // Supprimer le zip après téléchargement (finish) ou abandon de connexion (close)
     reply.raw.on('finish', cleanupZip)
     reply.raw.on('close', cleanupZip)
 
@@ -631,26 +755,43 @@ export default async function fileRoutes(fastify) {
   fastify.post('/tags', {
     preHandler: [authenticate, requirePermission('files.create_tags')],
   }, async (request, reply) => {
-    const { name } = request.body
-    if (!name) return reply.code(400).send({ error: 'Nom requis' })
+    const { name } = request.body || {}
+    if (!isNonEmptyString(name, 100)) return reply.code(400).send({ error: 'Nom requis' })
 
     const { rows } = await pool.query(
       'INSERT INTO tags (name, created_by) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING *',
-      [name.toLowerCase(), request.currentUser.id]
+      [name.trim().toLowerCase(), request.currentUser.id]
     )
     return reply.send(rows[0])
   })
 
   fastify.post('/:id/tags', { preHandler: [authenticate] }, async (request, reply) => {
-    const { tagIds } = request.body
-    for (const tagId of tagIds) {
-      await pool.query('INSERT INTO file_tags (file_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [request.params.id, tagId])
+    const { tagIds } = request.body || {}
+    if (!Array.isArray(tagIds)) return reply.code(400).send({ error: 'Liste de tags requise' })
+
+    const file = await getActiveFile(request.params.id)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
+    if (!canEditFile(request.currentUser, file)) return reply.code(403).send({ error: 'Permission refusée' })
+
+    const ids = [...new Set(tagIds.filter(isUuid))]
+    if (ids.length) {
+      await pool.query(
+        `INSERT INTO file_tags (file_id, tag_id)
+         SELECT $1, id FROM tags WHERE id = ANY($2)
+         ON CONFLICT DO NOTHING`,
+        [file.id, ids]
+      )
     }
     return reply.send({ message: 'Tags ajoutés.' })
   })
 
   fastify.delete('/:id/tags/:tagId', { preHandler: [authenticate] }, async (request, reply) => {
-    await pool.query('DELETE FROM file_tags WHERE file_id = $1 AND tag_id = $2', [request.params.id, request.params.tagId])
+    const file = await getActiveFile(request.params.id)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
+    if (!canEditFile(request.currentUser, file)) return reply.code(403).send({ error: 'Permission refusée' })
+    if (!isUuid(request.params.tagId)) return reply.code(400).send({ error: 'Tag invalide' })
+
+    await pool.query('DELETE FROM file_tags WHERE file_id = $1 AND tag_id = $2', [file.id, request.params.tagId])
     return reply.send({ message: 'Tag retiré.' })
   })
 }
