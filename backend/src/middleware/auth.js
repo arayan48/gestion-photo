@@ -36,20 +36,27 @@ export async function authenticate(request, reply) {
   }
 }
 
+// Vérifie une permission pour l'utilisateur courant (le Super Admin a tout)
+export async function userHasPermission(user, permissionKey) {
+  if (!user) return false
+  if (user.is_super_admin) return true
+  if (!user.role_id) return false
+
+  const { rows } = await pool.query(
+    `SELECT 1 FROM role_permissions rp
+     JOIN permissions p ON rp.permission_id = p.id
+     WHERE rp.role_id = $1 AND p.key = $2`,
+    [user.role_id, permissionKey]
+  )
+  return rows.length > 0
+}
+
 export function requirePermission(permissionKey) {
   return async function (request, reply) {
     const user = request.currentUser
     if (!user) return reply.code(401).send({ error: 'Non authentifié' })
-    if (user.is_super_admin) return // Super admin : accès total
 
-    const { rows } = await pool.query(
-      `SELECT 1 FROM role_permissions rp
-       JOIN permissions p ON rp.permission_id = p.id
-       WHERE rp.role_id = $1 AND p.key = $2`,
-      [user.role_id, permissionKey]
-    )
-
-    if (!rows.length) {
+    if (!(await userHasPermission(user, permissionKey))) {
       return reply.code(403).send({ error: 'Permission refusée' })
     }
   }

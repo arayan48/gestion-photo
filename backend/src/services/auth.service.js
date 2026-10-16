@@ -1,5 +1,5 @@
 import argon2 from 'argon2'
-import { randomBytes, createHash } from 'crypto'
+import { createHash, randomInt } from 'crypto'
 import { nanoid } from 'nanoid'
 import { v4 as uuidv4 } from 'uuid'
 import { authenticator } from 'otplib'
@@ -43,8 +43,12 @@ export async function saveRefreshToken(userId, rawToken, ip, userAgent) {
 export async function rotateRefreshToken(fastify, oldRawToken, ip, userAgent) {
   const oldHash = hashToken(oldRawToken)
 
+  // Révocation atomique : deux requêtes concurrentes avec le même token ne peuvent
+  // pas obtenir chacune un nouveau couple de tokens
   const { rows } = await pool.query(
-    `SELECT * FROM refresh_tokens WHERE token_hash = $1 AND revoked = false AND expires_at > NOW()`,
+    `UPDATE refresh_tokens SET revoked = true
+     WHERE token_hash = $1 AND revoked = false AND expires_at > NOW()
+     RETURNING user_id`,
     [oldHash]
   )
 
@@ -52,17 +56,17 @@ export async function rotateRefreshToken(fastify, oldRawToken, ip, userAgent) {
 
   const old = rows[0]
 
-  // Révoquer l'ancien
-  await pool.query('UPDATE refresh_tokens SET revoked = true WHERE id = $1', [old.id])
+  const { rows: userRows } = await pool.query(
+    'SELECT id, email, is_active, is_banned FROM users WHERE id = $1',
+    [old.user_id]
+  )
+  if (!userRows.length || !userRows[0].is_active || userRows[0].is_banned) return null
+
+  const user = userRows[0]
 
   // Générer nouveau token
   const newRefresh = nanoid(64)
-  await saveRefreshToken(old.user_id, newRefresh, ip, userAgent)
-
-  const { rows: userRows } = await pool.query('SELECT id, email FROM users WHERE id = $1', [old.user_id])
-  if (!userRows.length) return null
-
-  const user = userRows[0]
+  await saveRefreshToken(user.id, newRefresh, ip, userAgent)
   const accessToken = fastify.jwt.sign(
     { id: user.id, email: user.email },
     { expiresIn: config.jwt.accessExpiry, secret: config.jwt.accessSecret }
@@ -112,12 +116,17 @@ export async function generateTotpQrCode(secret, email) {
 }
 
 export function verifyTotp(secret, token) {
-  return authenticator.verify({ token, secret })
+  if (!secret || typeof token !== 'string') return false
+  try {
+    return authenticator.verify({ token: token.trim(), secret })
+  } catch {
+    return false
+  }
 }
 
 // OTP email (6 chiffres) — persisté en base, code hashé
 export async function generateOtp(email) {
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  const code = randomInt(100000, 1000000).toString()
   const codeHash = hashToken(code)
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
   await pool.query('DELETE FROM otp_codes WHERE email = $1', [email])
@@ -129,7 +138,7 @@ export async function generateOtp(email) {
 }
 
 export async function verifyOtp(email, code) {
-  const codeHash = hashToken(code)
+  const codeHash = hashToken(String(code))
   const { rows } = await pool.query(
     'DELETE FROM otp_codes WHERE email = $1 AND code_hash = $2 AND expires_at > NOW() RETURNING id',
     [email, codeHash]

@@ -26,8 +26,14 @@ export default function Sidebar() {
     return view === null ? !currentView : currentView === view
   }
 
-  // role_id est un UUID (string) ou null/undefined — != null couvre les deux cas
-  const isAdmin = user?.is_super_admin || user?.role_id != null
+  // Liens admin selon les permissions renvoyées par /auth/me (le backend reste la vraie barrière)
+  const permissions = user?.permissions || []
+  const hasAdminPermission = permissions.some((p) => !p.startsWith('files.'))
+  const adminLinks = [
+    { to: '/dashboard',      Icon: LayoutDashboard, label: 'Dashboard',     show: user?.is_super_admin || hasAdminPermission },
+    { to: '/admin/settings', Icon: Wrench,          label: 'Configuration', show: user?.is_super_admin || permissions.includes('system.manage_config') },
+  ].filter((l) => l.show)
+  const isAdmin = adminLinks.length > 0
 
   const used  = user?.storage_used  ?? 0
   const quota = user?.storage_quota ?? 1
@@ -84,10 +90,7 @@ export default function Sidebar() {
           <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-gray-600">
             Admin
           </p>
-          {[
-            { to: '/dashboard',      Icon: LayoutDashboard, label: 'Dashboard' },
-            { to: '/admin/settings', Icon: Wrench,          label: 'Configuration' },
-          ].map(({ to, Icon, label }) => {
+          {adminLinks.map(({ to, Icon, label }) => {
             const active = pathname === to
             return (
               <Link

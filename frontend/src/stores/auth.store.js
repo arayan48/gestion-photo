@@ -19,8 +19,8 @@ export const useAuthStore = create(
       },
 
       logout: async () => {
-        try { await api.post('/auth/logout') } catch {}
         set({ user: null, accessToken: null })
+        try { await api.post('/auth/logout') } catch {}
       },
 
       fetchMe: async () => {

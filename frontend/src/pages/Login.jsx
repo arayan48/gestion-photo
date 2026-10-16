@@ -1,22 +1,51 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth.store.js'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 import api from '../utils/api.js'
 
+// Messages transmis par redirection (?error=… / ?setup=done …)
+const ERROR_MESSAGES = {
+  account_not_found: 'Aucun compte WubalStore n\'est lié à ce compte Discord. Connectez-vous puis liez Discord depuis vos paramètres.',
+  account_inactive: 'Ce compte est inactif ou suspendu.',
+  discord_failed: 'La connexion avec Discord a échoué. Veuillez réessayer.',
+  discord_cancelled: 'Connexion Discord annulée.',
+  discord_not_configured: 'La connexion Discord n\'est pas configurée sur ce serveur.',
+}
+
 export default function Login() {
   const navigate = useNavigate()
-  const { login } = useAuthStore()
+  const [searchParams] = useSearchParams()
+  const { login, initAuth } = useAuthStore()
   const [form, setForm] = useState({ email: '', password: '', totp: '' })
   const [requireTotp, setRequireTotp] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => ERROR_MESSAGES[searchParams.get('error')] || '')
   const [loading, setLoading] = useState(false)
+
+  const info = searchParams.get('setup') === 'done'
+    ? 'Compte Super Admin créé. Vous pouvez vous connecter.'
+    : searchParams.get('reset') === 'done'
+      ? 'Mot de passe réinitialisé. Vous pouvez vous connecter.'
+      : ''
 
   useEffect(() => {
     api.get('/auth/setup/status').then(({ data }) => {
       if (!data.isCompleted) navigate('/setup', { replace: true })
     }).catch(() => {})
+  }, [])
+
+  // Retour de Discord : la session est dans le cookie httpOnly, on récupère l'access token
+  useEffect(() => {
+    if (searchParams.get('discord') !== 'success') return
+    setLoading(true)
+    useAuthStore.setState({ accessToken: null })
+    initAuth()
+      .then((ok) => {
+        if (ok) navigate('/explorer', { replace: true })
+        else setError(ERROR_MESSAGES.discord_failed)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const handleSubmit = async (e) => {
@@ -51,6 +80,11 @@ export default function Login() {
         <div className="card space-y-5">
           {!requireTotp ? (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {info && !error && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-green-700 dark:text-green-400 text-sm">{info}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Email</label>
                 <input

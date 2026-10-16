@@ -11,7 +11,7 @@ const applyTheme = (resolved) => {
 export const useThemeStore = create(
   persist(
     (set, get) => ({
-      theme: 'system',
+      theme: 'dark', // thème sombre par défaut (modifiable dans Paramètres → Apparence)
       resolvedTheme: 'dark',
 
       init() {
