@@ -80,7 +80,7 @@ export async function seedPermissions() {
 
     await client.query(
       `INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
-      ['email.provider', process.env.EMAIL_PROVIDER || 'brevo']
+      ['email.provider', 'brevo']
     )
 
     // IPs locales auto-whitelistées

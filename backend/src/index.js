@@ -21,12 +21,45 @@ import adminRoutes from './routes/admin/index.js'
 import { authenticate } from './middleware/auth.js'
 import { seedPermissions } from './models/seed.js'
 import { runMigrations } from './models/migrate.js'
+import { initMasterKey } from './services/secrets.service.js'
+import {
+  importLegacyEnvSettings,
+  encryptPlaintextSecrets,
+  verifyMasterKey,
+  resetEncryptedSecrets,
+  ensureJwtSecret,
+  getAppUrl,
+} from './services/config.service.js'
 
-if (config.nodeEnv === 'production') {
-  if (config.jwt.accessSecret.length < 32 || config.jwt.refreshSecret.length < 32) {
-    console.error('FATAL: JWT_ACCESS_SECRET et JWT_REFRESH_SECRET doivent faire au moins 32 caractères en production')
-    process.exit(1)
+// ── Initialisation (avant les plugins : le secret JWT vient de la base) ───────
+try {
+  await pool.query('SELECT 1')
+  console.log('✅ Base de données connectée')
+
+  // Appliquer les migrations manquantes (idempotent)
+  await runMigrations()
+
+  // Clé maître (chiffrement des secrets) puis paramètres
+  await initMasterKey()
+  if (!(await verifyMasterKey())) {
+    if (process.env.MASTER_KEY_RESET === 'true') {
+      await resetEncryptedSecrets()
+    } else {
+      console.error(
+        '❌ La clé maître ne correspond pas aux secrets chiffrés en base.\n' +
+        '   → Restaurez le fichier master.key (volume backend_data) ou la variable MASTER_KEY d\'origine.\n' +
+        '   → Clé définitivement perdue ? Démarrez une fois avec MASTER_KEY_RESET=true : les secrets\n' +
+        '     (email, Discord, B2…) seront à ressaisir et la 2FA des utilisateurs sera désactivée.'
+      )
+      process.exit(1)
+    }
   }
+  await importLegacyEnvSettings()
+  await encryptPlaintextSecrets()
+  config.jwt.accessSecret = await ensureJwtSecret()
+} catch (err) {
+  console.error('❌ Échec de l\'initialisation :', err)
+  process.exit(1)
 }
 
 const fastify = Fastify({
@@ -53,8 +86,12 @@ fastify.setErrorHandler((err, request, reply) => {
 })
 
 // ── Plugins ──────────────────────────────────────────────────────────────────
+// Le frontend est servi sur la même origine (Nginx) : CORS seulement pour l'URL publique configurée
 await fastify.register(cors, {
-  origin: config.appUrl,
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, false)
+    getAppUrl().then((appUrl) => cb(null, !!appUrl && origin === appUrl)).catch(() => cb(null, false))
+  },
   credentials: true,
 })
 
@@ -112,13 +149,6 @@ fastify.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().to
 // ── Démarrage ─────────────────────────────────────────────────────────────────
 async function start() {
   try {
-    // Vérifier la connexion DB
-    await pool.query('SELECT 1')
-    console.log('✅ Base de données connectée')
-
-    // Appliquer les migrations manquantes (idempotent)
-    await runMigrations()
-
     // Auto-seed permissions au démarrage
     await seedPermissions()
 
