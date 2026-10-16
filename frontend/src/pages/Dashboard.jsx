@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
+import { formatSize } from '../utils/format.js'
 import { toast } from '../stores/toast.store.js'
 import { confirm } from '../stores/confirm.store.js'
 import {
@@ -367,12 +368,12 @@ function RoleModal({ role, allPermissions, onClose, onSave }) {
 // ── User action modal ─────────────────────────────────────────────────────────
 function UserActionModal({ user, type, roles, onClose, onSave }) {
   const [roleId, setRoleId] = useState(user.role_id || '')
-  const [quota, setQuota] = useState(Math.round(user.storage_quota / 1e9))
+  const [quota, setQuota] = useState(Math.round(user.storage_quota / (1024 * 1024 * 1024)))
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (type === 'role') onSave({ roleId })
-    if (type === 'quota') onSave({ storageQuota: quota * 1e9 })
+    if (type === 'quota') onSave({ storageQuota: Math.round(quota * 1024 * 1024 * 1024) })
   }
 
   const titles = { role: `Changer le rôle de ${user.pseudo}`, quota: `Modifier le quota de ${user.pseudo}` }
@@ -680,8 +681,8 @@ export default function Dashboard() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Users}         label="Utilisateurs actifs"   value={stats.users.active}            color="blue" />
-            <StatCard icon={FileImage}     label="Fichiers hébergés"      value={stats.files.total}             sub={`${Math.round(stats.files.total_size / 1e9)} Go`} color="violet" />
-            <StatCard icon={HardDrive}     label="Stockage médias"        value={`${stats.storage.percent}%`}  sub={`${Math.round(stats.storage.used / 1e9)} / ${Math.round(stats.storage.limit / 1e9)} Go`} color={stats.storage.percent >= 90 ? 'red' : 'green'} />
+            <StatCard icon={FileImage}     label="Fichiers hébergés"      value={stats.files.total}             sub={formatSize(Number(stats.files.total_size))} color="violet" />
+            <StatCard icon={HardDrive}     label="Stockage médias"        value={`${stats.storage.percent}%`}  sub={`${formatSize(stats.storage.used)} / ${formatSize(stats.storage.limit)}`} color={stats.storage.percent >= 90 ? 'red' : 'green'} />
             <StatCard icon={AlertTriangle} label="Demandes en attente"    value={stats.pendingRequests}         color="yellow" />
           </div>
           {stats.storage.percent >= 90 && (
@@ -874,7 +875,7 @@ export default function Dashboard() {
                           <div className="w-28">
                             <div className="flex justify-between text-[10px] text-slate-500 dark:text-gray-500 mb-1">
                               <span>{Math.round(u.storage_used / 1e6)} Mo</span>
-                              <span>{Math.round(u.storage_quota / 1e9)} Go</span>
+                              <span>{formatSize(Number(u.storage_quota))}</span>
                             </div>
                             <div className="h-1.5 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden">
                               <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />

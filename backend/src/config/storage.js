@@ -2,14 +2,39 @@ import checkDiskSpace from 'check-disk-space'
 import { config } from './env.js'
 import pool from './database.js'
 
-export async function initStorage() {
-  const { free, size } = await checkDiskSpace(config.storage.path)
-  const safeBytes = Math.floor(size * 0.95)
+const GB = 1024 * 1024 * 1024
 
-  const mediaLimit = Math.floor(safeBytes * 0.70)
-  const backupLimit = Math.floor(safeBytes * 0.10)
-  const zipLimit = 5 * 1024 * 1024 * 1024   // 5 Go fixe
-  const logLimit = 2 * 1024 * 1024 * 1024   // 2 Go fixe
+// Réglages modifiables depuis Paramètres admin → Général (table system_config)
+const OVERRIDE_KEYS = ['storage.total_gb', 'storage.media_pct', 'storage.backup_pct', 'storage.logs_gb']
+
+function computeLimits(diskSize, overrides) {
+  const totalGb = parseFloat(overrides['storage.total_gb'])
+  // Sans valeur explicite : 95% du disque (marge de sécurité de 5%)
+  const safeBytes = totalGb > 0
+    ? Math.min(Math.floor(totalGb * GB), diskSize)
+    : Math.floor(diskSize * 0.95)
+
+  const mediaPct = Math.min(Math.max(parseInt(overrides['storage.media_pct']) || 70, 1), 95)
+  const backupPct = Math.min(Math.max(parseInt(overrides['storage.backup_pct']) || 10, 0), 95)
+  const logsGb = parseFloat(overrides['storage.logs_gb']) > 0 ? parseFloat(overrides['storage.logs_gb']) : 2
+
+  return {
+    safeBytes,
+    mediaLimit: Math.floor(safeBytes * (mediaPct / 100)),
+    backupLimit: Math.floor(safeBytes * (backupPct / 100)),
+    zipLimit: 5 * GB, // 5 Go fixe
+    logLimit: Math.floor(logsGb * GB),
+  }
+}
+
+async function readOverrides() {
+  const { rows } = await pool.query('SELECT key, value FROM system_config WHERE key = ANY($1)', [OVERRIDE_KEYS])
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]))
+}
+
+export async function initStorage() {
+  const { size } = await checkDiskSpace(config.storage.path)
+  const { safeBytes, mediaLimit, backupLimit, zipLimit, logLimit } = computeLimits(size, await readOverrides())
 
   const client = await pool.connect()
   try {
@@ -29,6 +54,9 @@ export async function initStorage() {
     await client.query(upsert, ['storage.log_limit', String(logLimit)])
 
     await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
   } finally {
     client.release()
   }
@@ -40,13 +68,18 @@ export async function initStorage() {
 
 export async function getStorageConfig() {
   const res = await pool.query('SELECT key, value FROM system_config WHERE key LIKE $1', ['storage.%'])
-  return Object.fromEntries(res.rows.map((r) => [r.key, parseInt(r.value)]))
+  return Object.fromEntries(res.rows.map((r) => [r.key, parseFloat(r.value)]))
 }
 
 export async function checkMediaStorageLimit() {
   const cfg = await getStorageConfig()
+  // Recalculer avec les réglages actuels : une modification depuis le dashboard
+  // s'applique immédiatement, sans redémarrage du backend
+  const overrides = Object.fromEntries(OVERRIDE_KEYS.map((k) => [k, cfg[k]]))
+  const { mediaLimit } = computeLimits(cfg['storage.total_bytes'] || 0, overrides)
+
   const res = await pool.query('SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE is_deleted = false')
   const used = parseInt(res.rows[0].used)
-  const limit = cfg['storage.media_limit']
-  return { used, limit, percent: Math.round((used / limit) * 100) }
+  const limit = mediaLimit
+  return { used, limit, percent: limit > 0 ? Math.round((used / limit) * 100) : 100 }
 }

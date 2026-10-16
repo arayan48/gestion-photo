@@ -20,6 +20,7 @@ import fileRoutes from './routes/files/index.js'
 import adminRoutes from './routes/admin/index.js'
 import { authenticate } from './middleware/auth.js'
 import { seedPermissions } from './models/seed.js'
+import { runMigrations } from './models/migrate.js'
 
 if (config.nodeEnv === 'production') {
   if (config.jwt.accessSecret.length < 32 || config.jwt.refreshSecret.length < 32) {
@@ -32,7 +33,23 @@ const fastify = Fastify({
   logger: {
     level: config.nodeEnv === 'development' ? 'info' : 'warn',
   },
-  trustProxy: true,
+  // Ne faire confiance qu'aux proxys du réseau privé (Nginx dans Docker) pour X-Forwarded-For.
+  // `true` ferait confiance à l'en-tête envoyé par n'importe quel client (usurpation d'IP).
+  trustProxy: process.env.TRUST_PROXY || 'loopback,linklocal,uniquelocal',
+})
+
+// ── Gestion centralisée des erreurs ──────────────────────────────────────────
+fastify.setErrorHandler((err, request, reply) => {
+  // Erreurs PostgreSQL courantes → réponses client propres
+  if (err.code === '22P02') return reply.code(400).send({ error: 'Identifiant ou valeur invalide' })
+  if (err.code === '23505') return reply.code(409).send({ error: 'Cette valeur existe déjà' })
+  if (err.code === '23503') return reply.code(400).send({ error: 'Référence invalide' })
+  if (err.code === 'FST_REQ_FILE_TOO_LARGE') return reply.code(413).send({ error: 'Fichier trop volumineux (500 Mo maximum)' })
+
+  const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500
+  if (status >= 500) request.log.error(err)
+  // Ne jamais exposer les détails internes (SQL, chemins…) au client
+  return reply.code(status).send({ error: status >= 500 ? 'Erreur interne du serveur' : err.message })
 })
 
 // ── Plugins ──────────────────────────────────────────────────────────────────
@@ -66,6 +83,12 @@ await fastify.register(multipart, {
 await fastify.register(staticPlugin, {
   root: config.storage.path,
   prefix: '/storage/',
+  // Seuls les miniatures et avatars sont publics. Les originaux passent par
+  // /api/files/:id/view (authentifié) ou /media/:token (liste blanche IP), et les
+  // sauvegardes / zips ne doivent jamais être servis.
+  // (reply.sendFile() avec une racine explicite n'est pas concerné par ce filtre.)
+  allowedPath: (pathName, root) =>
+    root !== config.storage.path || /^\/(thumbnails|avatars)\/[^/]+$/.test(pathName),
 })
 
 await fastify.register(websocket)
@@ -92,6 +115,9 @@ async function start() {
     // Vérifier la connexion DB
     await pool.query('SELECT 1')
     console.log('✅ Base de données connectée')
+
+    // Appliquer les migrations manquantes (idempotent)
+    await runMigrations()
 
     // Auto-seed permissions au démarrage
     await seedPermissions()

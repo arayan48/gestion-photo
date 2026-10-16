@@ -76,15 +76,13 @@ Les services démarrés :
 - `frontend` — interface React (port 80 via nginx)
 - `nginx` — reverse proxy (ports 80 / 443)
 
-### 5. Initialiser la base de données
+### 5. Base de données
 
-À effectuer **une seule fois** lors du premier lancement :
+Les migrations sont appliquées **automatiquement** à chaque démarrage du backend (seules les migrations manquantes sont exécutées). Pour les lancer manuellement si besoin :
 
 ```bash
 docker compose run --rm backend node src/models/migrate.js
 ```
-
-Cette commande crée toutes les tables nécessaires. Sans elle, le backend démarre mais crashe immédiatement.
 
 ### 6. Premier lancement
 

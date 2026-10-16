@@ -38,8 +38,9 @@ services:
         condition: service_healthy
     networks:
       - wubalstore_net
+    # Exposé uniquement en local : l'accès public passe par Nginx
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   frontend:
     build:
@@ -53,7 +54,7 @@ services:
     networks:
       - wubalstore_net
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
 
   nginx:
     build:

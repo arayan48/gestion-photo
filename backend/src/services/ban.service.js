@@ -5,9 +5,19 @@ import { buildFingerprint } from '../utils/fingerprint.js'
 
 const BAN_DURATIONS = [0, 2 * 60, 15 * 60, 60 * 60, 24 * 60 * 60]
 // niveau 0 = pas banni, 1 = 2min, 2 = 15min, 3 = 1h, 4 = 24h, 5 = permanent
+const MAX_AUTO_BAN_LEVEL = 4 // le ban permanent (5) est uniquement manuel
+const MAX_ATTEMPTS = 5
+
+// Sans empreinte navigateur fournie par le client, le hash ne contiendrait que le
+// User-Agent : tous les utilisateurs d'un même navigateur partageraient la même
+// "empreinte" et seraient bannis ensemble. On ne l'utilise donc que si elle est fournie.
+function computeFingerprint({ ip, userAgent, jwtHint, browserFingerprint }) {
+  if (!browserFingerprint && !jwtHint) return null
+  return buildFingerprint({ ip, userAgent, jwtHint, browserFingerprint })
+}
 
 export async function checkBan({ ip, identifier, userAgent = '', jwtHint = '', browserFingerprint = '' }) {
-  const fingerprint = buildFingerprint({ ip, userAgent, jwtHint, browserFingerprint })
+  const fingerprint = computeFingerprint({ ip, userAgent, jwtHint, browserFingerprint })
 
   // Vérifier par IP ou identifiant ou fingerprint
   const { rows } = await pool.query(
@@ -38,7 +48,7 @@ export async function checkBan({ ip, identifier, userAgent = '', jwtHint = '', b
 }
 
 export async function recordFailedAttempt({ ip, identifier, userAgent = '', jwtHint = '', browserFingerprint = '' }) {
-  const fingerprint = buildFingerprint({ ip, userAgent, jwtHint, browserFingerprint })
+  const fingerprint = computeFingerprint({ ip, userAgent, jwtHint, browserFingerprint })
 
   const { rows } = await pool.query(
     `SELECT * FROM login_attempts WHERE identifier = $1 OR ip_address = $2 OR fingerprint = $3
@@ -58,20 +68,22 @@ export async function recordFailedAttempt({ ip, identifier, userAgent = '', jwtH
   const record = rows[0]
   const newCount = record.attempt_count + 1
 
-  if (newCount >= 5) {
-    const newLevel = Math.min(record.ban_level + 1, 5)
+  if (newCount >= MAX_ATTEMPTS) {
+    // Un ban permanent manuel n'est jamais rétrogradé
+    const newLevel = record.ban_level >= 5 ? 5 : Math.min(record.ban_level + 1, MAX_AUTO_BAN_LEVEL)
     const durationSec = BAN_DURATIONS[newLevel] || 0
     const bannedUntil = durationSec
       ? new Date(Date.now() + durationSec * 1000)
       : null
     const banId = nanoid(12)
 
+    // Le compteur repart à 0 : la récidive (5 nouveaux échecs) fait passer au niveau suivant
     await pool.query(
       `UPDATE login_attempts
-       SET attempt_count = $1, ban_level = $2, banned_until = $3, ban_id = $4,
-           fingerprint = $5, ip_address = $6, updated_at = NOW()
-       WHERE id = $7`,
-      [newCount, newLevel, bannedUntil, banId, fingerprint, ip, record.id]
+       SET attempt_count = 0, ban_level = $1, banned_until = $2, ban_id = $3,
+           fingerprint = COALESCE($4, fingerprint), ip_address = $5, updated_at = NOW()
+       WHERE id = $6`,
+      [newLevel, bannedUntil, banId, fingerprint, ip, record.id]
     )
 
     await log({
@@ -84,7 +96,7 @@ export async function recordFailedAttempt({ ip, identifier, userAgent = '', jwtH
   } else {
     await pool.query(
       `UPDATE login_attempts
-       SET attempt_count = $1, ip_address = $2, fingerprint = $3, updated_at = NOW()
+       SET attempt_count = $1, ip_address = $2, fingerprint = COALESCE($3, fingerprint), updated_at = NOW()
        WHERE id = $4`,
       [newCount, ip, fingerprint, record.id]
     )

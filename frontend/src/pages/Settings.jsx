@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth.store.js'
 import { useThemeStore } from '../stores/theme.store.js'
 import api from '../utils/api.js'
@@ -37,10 +38,33 @@ const TABS = [
   { key: 'notifs',     label: 'Notifications',   icon: Bell },
 ]
 
+const DISCORD_ERRORS = {
+  discord_already_linked: 'Ce compte Discord est déjà lié à un autre utilisateur.',
+  discord_failed: 'La liaison avec Discord a échoué.',
+  discord_cancelled: 'Liaison Discord annulée.',
+}
+
 export default function Settings() {
   const { user, fetchMe } = useAuthStore()
   const { theme, setTheme } = useThemeStore()
-  const [tab, setTab] = useState('appearance')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() =>
+    searchParams.get('discord') || searchParams.get('discord_error') ? 'linked' : 'appearance'
+  )
+
+  // Retour de la liaison Discord (redirection depuis /api/auth/discord/callback)
+  useEffect(() => {
+    const linked = searchParams.get('discord') === 'linked'
+    const linkError = searchParams.get('discord_error')
+    if (!linked && !linkError) return
+    if (linked) {
+      fetchMe().catch(() => {})
+      toast.success('Compte Discord lié')
+    } else {
+      toast.error(DISCORD_ERRORS[linkError] || DISCORD_ERRORS.discord_failed)
+    }
+    setSearchParams({}, { replace: true })
+  }, [])
   const [form, setForm] = useState({
     pseudo: user?.pseudo || '',
     firstName: user?.first_name || '',
@@ -83,7 +107,7 @@ export default function Settings() {
     }
     setLoading(true)
     try {
-      await api.patch('/users/me/profile', { password: form.newPassword })
+      await api.patch('/users/me/profile', { password: form.newPassword, currentPassword: form.currentPassword })
       toast.success('Mot de passe mis à jour !')
       setForm((f) => ({ ...f, currentPassword: '', newPassword: '', confirmPassword: '' }))
     } catch (err) {
@@ -116,6 +140,13 @@ export default function Settings() {
       toast.success('2FA désactivé')
       setTotpCode('')
     } catch { toast.error('Code invalide') }
+  }
+
+  const handleLinkDiscord = async () => {
+    try {
+      const { data } = await api.post('/auth/discord/link')
+      window.location.href = data.url
+    } catch (err) { toast.error(err.response?.data?.error || 'Impossible de lier Discord') }
   }
 
   const handleUnlinkDiscord = async () => {
@@ -245,6 +276,11 @@ export default function Settings() {
             <h3 className="font-semibold text-slate-800 dark:text-gray-200">Changer le mot de passe</h3>
             <form onSubmit={handleSavePassword} className="space-y-3">
               <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Mot de passe actuel</label>
+                <input type={showPwd ? 'text' : 'password'} className="input" value={form.currentPassword}
+                  onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} autoComplete="current-password" required />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nouveau mot de passe</label>
                 <div className="relative">
                   <input type={showPwd ? 'text' : 'password'} className="input pr-10" value={form.newPassword}
@@ -266,7 +302,7 @@ export default function Settings() {
                   )}
                 </div>
               )}
-              <button type="submit" disabled={loading || !form.newPassword} className="btn-primary text-sm">Changer le mot de passe</button>
+              <button type="submit" disabled={loading || !form.newPassword || !form.currentPassword} className="btn-primary text-sm">Changer le mot de passe</button>
             </form>
           </div>
 
@@ -332,9 +368,9 @@ export default function Settings() {
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-slate-500 dark:text-gray-500">Aucun compte Discord lié. Permet la connexion via Discord OAuth2.</p>
-                <a href="/api/auth/discord" className="btn-secondary text-sm inline-flex items-center gap-2">
+                <button type="button" onClick={handleLinkDiscord} className="btn-secondary text-sm inline-flex items-center gap-2">
                   <Link2 size={14} /> Lier Discord
-                </a>
+                </button>
               </div>
             )}
           </div>
