@@ -1,0 +1,76 @@
+# Déploiement via Coolify
+# ------------------------------------------------------------
+# Aucun port n'est publié sur l'hôte : le proxy de Coolify (Traefik) occupe
+# déjà 80/443 et route vers le service `nginx` par le réseau Docker.
+# Dans Coolify : Docker Compose Location = /docker-compose.coolify.yml,
+# puis renseigner le domaine sur le service `nginx` (port 80).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-obscura}
+      POSTGRES_USER: ${DB_USER:-obscura}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - obscura_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-obscura}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    restart: always
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+    volumes:
+      - storage_data:/app/storage
+      - backend_data:/app/data   # clé maître de chiffrement (master.key)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - obscura_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    restart: always
+    networks:
+      - obscura_net
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: always
+    expose:
+      - "80"
+    volumes:
+      - storage_data:/var/www/storage:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - obscura_net
+
+volumes:
+  postgres_data:
+  storage_data:
+  backend_data:
+
+networks:
+  obscura_net:
+    driver: bridge
