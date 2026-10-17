@@ -3,7 +3,7 @@ version: '3.9'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: wubalstore_db
+    container_name: obscura_db
     restart: always
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - wubalstore_net
+      - obscura_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
@@ -24,7 +24,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: production
-    container_name: wubalstore_backend
+    container_name: obscura_backend
     restart: always
     env_file: .env
     environment:
@@ -37,23 +37,23 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - wubalstore_net
+      - obscura_net
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       target: production
-    container_name: wubalstore_frontend
+    container_name: obscura_frontend
     restart: always
     networks:
-      - wubalstore_net
+      - obscura_net
 
   nginx:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: wubalstore_nginx
+    container_name: obscura_nginx
     restart: always
     ports:
       - "80:80"
@@ -65,7 +65,7 @@ services:
       - backend
       - frontend
     networks:
-      - wubalstore_net
+      - obscura_net
 
 volumes:
   postgres_data:
@@ -74,5 +74,5 @@ volumes:
   certbot_data:
 
 networks:
-  wubalstore_net:
+  obscura_net:
     driver: bridge

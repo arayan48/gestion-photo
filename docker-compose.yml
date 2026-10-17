@@ -3,18 +3,18 @@ version: '3.9'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: wubalstore_db
+    container_name: obscura_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-wubalstore}
-      POSTGRES_USER: ${DB_USER:-wubalstore}
+      POSTGRES_DB: ${DB_NAME:-obscura}
+      POSTGRES_USER: ${DB_USER:-obscura}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - wubalstore_net
+      - obscura_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wubalstore}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-obscura}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,7 +23,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: wubalstore_backend
+    container_name: obscura_backend
     restart: unless-stopped
     env_file: .env
     environment:
@@ -38,7 +38,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - wubalstore_net
+      - obscura_net
     # Exposé uniquement en local : l'accès public passe par Nginx
     ports:
       - "127.0.0.1:3000:3000"
@@ -47,13 +47,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: wubalstore_frontend
+    container_name: obscura_frontend
     restart: unless-stopped
     volumes:
       - ./frontend:/app
       - /app/node_modules
     networks:
-      - wubalstore_net
+      - obscura_net
     ports:
       - "127.0.0.1:5173:5173"
 
@@ -61,7 +61,7 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: wubalstore_nginx
+    container_name: obscura_nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -72,7 +72,7 @@ services:
       - backend
       - frontend
     networks:
-      - wubalstore_net
+      - obscura_net
 
 volumes:
   postgres_data:
@@ -80,5 +80,5 @@ volumes:
   backend_data:
 
 networks:
-  wubalstore_net:
+  obscura_net:
     driver: bridge

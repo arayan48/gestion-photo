@@ -12,7 +12,7 @@ export const usePreferencesStore = create(
       setDefaultQuality:(v) => set({ defaultQuality: v }),
     }),
     {
-      name: 'wubal-prefs',
+      name: 'obscura-prefs',
     }
   )
 )

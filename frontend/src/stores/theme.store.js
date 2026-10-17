@@ -42,7 +42,7 @@ export const useThemeStore = create(
       },
     }),
     {
-      name: 'wubal-theme',
+      name: 'obscura-theme',
       partialize: (s) => ({ theme: s.theme }),
     }
   )

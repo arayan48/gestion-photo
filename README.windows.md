@@ -41,8 +41,8 @@ docker compose version
 Ouvrir **PowerShell** ou **Git Bash** :
 
 ```powershell
-git clone https://github.com/wubal/wubalstore
-cd wubalstore
+git clone https://github.com/arayan48/gestion-photo
+cd gestion-photo
 copy .env.example .env
 ```
 
@@ -138,8 +138,8 @@ Les performances sont meilleures si le projet est cloné **dans le système de f
 
 ```bash
 cd ~
-git clone https://github.com/wubal/wubalstore
-cd wubalstore
+git clone https://github.com/arayan48/gestion-photo
+cd gestion-photo
 cp .env.example .env
 docker compose up -d
 ```

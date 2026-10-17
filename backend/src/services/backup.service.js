@@ -36,15 +36,15 @@ async function createArchive() {
 
   const stagingDir = join(config.storage.path, 'temp', `backup_${nanoid(8)}`)
   await mkdir(stagingDir, { recursive: true })
-  const dumpPath = join(stagingDir, 'wubalstore_db.sql.gz')
+  const dumpPath = join(stagingDir, 'obscura_db.sql.gz')
 
   try {
     // -Z : compression gzip intégrée (pas de pipe shell qui masquerait un échec de pg_dump)
     await execFileAsync('pg_dump', [
       '-h', process.env.DB_HOST || 'localhost',
       '-p', String(process.env.DB_PORT || 5432),
-      '-U', process.env.DB_USER || 'wubalstore',
-      '-d', process.env.DB_NAME || 'wubalstore',
+      '-U', process.env.DB_USER || 'obscura',
+      '-d', process.env.DB_NAME || 'obscura',
       '--no-owner',
       '-Z', '6',
       '-f', dumpPath,
@@ -78,12 +78,12 @@ async function uploadToBackblaze(backupPath) {
     throw new Error('Backblaze B2 non configuré (Key ID, clé et bucket requis)')
   }
   // Remote rclone défini par variables d'environnement : aucun fichier rclone.conf nécessaire
-  await execFileAsync('rclone', ['copy', backupPath, `wubalb2:${b2.bucket}/backups/`], {
+  await execFileAsync('rclone', ['copy', backupPath, `obscurab2:${b2.bucket}/backups/`], {
     env: {
       ...process.env,
-      RCLONE_CONFIG_WUBALB2_TYPE: 'b2',
-      RCLONE_CONFIG_WUBALB2_ACCOUNT: b2.keyId,
-      RCLONE_CONFIG_WUBALB2_KEY: b2.key,
+      RCLONE_CONFIG_OBSCURAB2_TYPE: 'b2',
+      RCLONE_CONFIG_OBSCURAB2_ACCOUNT: b2.keyId,
+      RCLONE_CONFIG_OBSCURAB2_KEY: b2.key,
     },
     maxBuffer: 10 * 1024 * 1024,
   })
