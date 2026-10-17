@@ -1,4 +1,4 @@
-# WubalStore — Guide d'installation Windows
+# Obscura — Guide d'installation Windows
 
 Plateforme d'hébergement de médias privée et auto-hébergée. Ce guide couvre l'installation sur Windows 10/11 via Docker Desktop.
 
@@ -36,7 +36,7 @@ docker --version
 docker compose version
 ```
 
-## Installation de WubalStore
+## Installation d'Obscura
 
 Ouvrir **PowerShell** ou **Git Bash** :
 
@@ -152,7 +152,7 @@ Ouvrir Docker Desktop → Settings → Resources → File sharing, et ajouter le
 
 ## Accès réseau local
 
-Pour rendre WubalStore accessible sur votre réseau local (autres appareils) :
+Pour rendre Obscura accessible sur votre réseau local (autres appareils) :
 
 1. Trouver votre IP locale :
 
@@ -167,7 +167,7 @@ ipconfig
 
 ```powershell
 # En tant qu'administrateur
-New-NetFirewallRule -DisplayName "WubalStore" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+New-NetFirewallRule -DisplayName "Obscura" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
 ```
 
 ## Variables d'environnement

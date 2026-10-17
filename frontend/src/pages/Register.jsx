@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Send, CheckCircle } from 'lucide-react'
 import api from '../utils/api.js'
+import { LogoMark, APP_NAME } from '../components/shared/Logo.jsx'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -54,10 +55,8 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-gray-950 px-4 py-8">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-violet-600 mb-4 shadow-lg shadow-violet-500/30">
-            <span className="text-white font-bold text-xl">W</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">WubalStore</h1>
+          <LogoMark size={56} className="mx-auto mb-4 drop-shadow-[0_6px_18px_rgba(124,58,237,0.4)]" />
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-gray-100">{APP_NAME}</h1>
           <p className="text-slate-500 dark:text-gray-400 mt-1 text-sm">Demande de création de compte</p>
         </div>
 
@@ -128,7 +127,7 @@ export default function Register() {
               <textarea
                 className="input resize-none"
                 rows={3}
-                placeholder="Pourquoi souhaitez-vous accéder à WubalStore ?"
+                placeholder="Pourquoi souhaitez-vous accéder à Obscura ?"
                 value={form.reason}
                 onChange={(e) => set('reason', e.target.value)}
                 required

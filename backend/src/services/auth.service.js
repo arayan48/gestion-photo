@@ -111,7 +111,7 @@ export function generateTotpSecret() {
 }
 
 export async function generateTotpQrCode(secret, email) {
-  const otpauthUrl = authenticator.keyuri(email, 'WubalStore', secret)
+  const otpauthUrl = authenticator.keyuri(email, 'Obscura', secret)
   return qrcode.toDataURL(otpauthUrl)
 }
 

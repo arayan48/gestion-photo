@@ -3,10 +3,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth.store.js'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 import api from '../utils/api.js'
+import { LogoMark, APP_NAME } from '../components/shared/Logo.jsx'
 
 // Messages transmis par redirection (?error=… / ?setup=done …)
 const ERROR_MESSAGES = {
-  account_not_found: 'Aucun compte WubalStore n\'est lié à ce compte Discord. Connectez-vous puis liez Discord depuis vos paramètres.',
+  account_not_found: 'Aucun compte Obscura n\'est lié à ce compte Discord. Connectez-vous puis liez Discord depuis vos paramètres.',
   account_inactive: 'Ce compte est inactif ou suspendu.',
   discord_failed: 'La connexion avec Discord a échoué. Veuillez réessayer.',
   discord_cancelled: 'Connexion Discord annulée.',
@@ -70,10 +71,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-gray-950 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-violet-600 mb-4 shadow-lg shadow-violet-500/30">
-            <span className="text-white font-bold text-xl">W</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-100">WubalStore</h1>
+          <LogoMark size={56} className="mx-auto mb-4 drop-shadow-[0_6px_18px_rgba(124,58,237,0.4)]" />
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-gray-100">{APP_NAME}</h1>
           <p className="text-slate-500 dark:text-gray-400 mt-1 text-sm">Connexion à votre espace</p>
         </div>
 

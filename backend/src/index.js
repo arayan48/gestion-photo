@@ -160,7 +160,7 @@ async function start() {
     startCronJobs()
 
     await fastify.listen({ port: config.port, host: '0.0.0.0' })
-    console.log(`🚀 WubalStore backend démarré sur le port ${config.port}`)
+    console.log(`🚀 Obscura backend démarré sur le port ${config.port}`)
   } catch (err) {
     fastify.log.error(err)
     process.exit(1)

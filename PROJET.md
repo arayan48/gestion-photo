@@ -1,12 +1,12 @@
-# PROJET.md — Documentation complète WubalStore
+# PROJET.md — Documentation complète Obscura
 
-> Document de référence complet du projet WubalStore. Contient la vision, les fonctionnalités, les décisions techniques et les règles métier.
+> Document de référence complet du projet Obscura. Contient la vision, les fonctionnalités, les décisions techniques et les règles métier.
 
 ---
 
 ## 🎯 Vision du projet
 
-**WubalStore** est une plateforme d'hébergement de médias privée et auto-hébergée, conçue pour stocker des images et vidéos de manière sécurisée sur un VPS personnel. Elle permet de générer des liens d'accès contrôlés par liste blanche IP, utilisables dans des projets externes (serveurs FiveM, sites web, etc.).
+**Obscura** (anciennement WubalStore) est une plateforme d'hébergement de médias privée et auto-hébergée, conçue pour stocker des images et vidéos de manière sécurisée sur un VPS personnel. Elle permet de générer des liens d'accès contrôlés par liste blanche IP, utilisables dans des projets externes (serveurs FiveM, sites web, etc.).
 
 Le projet est open source, déployable via Docker sur n'importe quel VPS Ubuntu 22.04, et pensé pour être partagé sur GitHub.
 
