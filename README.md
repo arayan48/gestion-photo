@@ -41,8 +41,8 @@ Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vid�
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/wubal/wubalstore
-cd wubalstore
+git clone https://github.com/arayan48/gestion-photo
+cd gestion-photo
 ```
 
 ### 2. Créer le fichier d'environnement
@@ -62,7 +62,7 @@ openssl rand -base64 32   # → copier dans DB_PASSWORD
 | Variable | Description |
 | --- | --- |
 | `DB_PASSWORD` | Mot de passe PostgreSQL (obligatoire) |
-| `DB_NAME`, `DB_USER` | Nom de la base et utilisateur (défaut : `wubalstore`) |
+| `DB_NAME`, `DB_USER` | Nom de la base et utilisateur (défaut : `obscura`) |
 | `MASTER_KEY` | *Optionnel* — clé de chiffrement des secrets (sinon générée automatiquement) |
 
 Tout le reste se configure dans l'interface (voir [Configuration](#configuration)).
@@ -150,7 +150,7 @@ Le logo représente un **diaphragme d'objectif** à six lames : il évoque la ph
 
 Couleurs : violet `#7c3aed` (principal), `#a78bfa` → `#4c1d95` (dégradé de l'icône). Police du logotype : Inter Display SemiBold.
 
-> Les identifiants techniques (`wubalstore` pour la base, les conteneurs Docker et le réseau) sont conservés pour ne pas casser les installations existantes.
+> **Migration depuis WubalStore** : la base, l'utilisateur Postgres, les conteneurs et le réseau Docker s'appellent désormais `obscura`. Sur une installation existante, mettez `DB_NAME=obscura` et `DB_USER=obscura` dans votre `.env`, puis recréez le volume Postgres (`docker compose down -v && docker compose up -d`) — **cela efface la base**, faites une sauvegarde avant si vous avez des données à garder. Les utilisateurs devront aussi se reconnecter une fois.
 
 ---
 

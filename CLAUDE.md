@@ -31,7 +31,7 @@ Construire **Obscura** : une plateforme d'hébergement de médias (images & vid�
 ## 📁 Architecture des dossiers
 
 ```
-wubalstore/
+obscura/
 ├── backend/
 │   ├── src/
 │   │   ├── config/           # Configuration app, env, storage
@@ -468,8 +468,8 @@ APP_PORT=3000
 # Base de données
 DB_HOST=postgres
 DB_PORT=5432
-DB_NAME=wubalstore
-DB_USER=wubalstore
+DB_NAME=obscura
+DB_USER=obscura
 DB_PASSWORD=changeme
 
 # JWT

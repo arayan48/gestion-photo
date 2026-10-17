@@ -45,7 +45,7 @@ export const useAuthStore = create(
       },
     }),
     {
-      name: 'wubalstore-auth',
+      name: 'obscura-auth',
       // Persister le token évite un flash de redirection au rechargement
       partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     }
