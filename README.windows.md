@@ -68,13 +68,7 @@ Démarrer les conteneurs :
 docker compose up -d --build
 ```
 
-Initialiser la base de données (**une seule fois**, lors du premier lancement) :
-
-```powershell
-docker compose run --rm backend node src/models/migrate.js
-```
-
-Sans cette étape, le backend démarre mais crashe car les tables n'existent pas encore.
+Les migrations de la base sont appliquées automatiquement au démarrage du backend.
 
 ## Premier lancement
 
@@ -117,11 +111,10 @@ netstat -ano | findstr :80
 iisreset /stop
 ```
 
-Ou modifier le port dans `docker-compose.yml` :
+Ou changer le port publié dans `.env` :
 
-```yaml
-ports:
-  - "8080:80"
+```env
+HTTP_PORT=8080
 ```
 
 Puis accéder à `http://localhost:8080`.
@@ -161,9 +154,11 @@ ipconfig
 # Chercher "Adresse IPv4" sous l'adaptateur actif
 ```
 
-2. Ouvrir `http://192.168.1.xxx` depuis l'autre appareil et, si l'installation est déjà faite, mettre à jour l'**URL publique** dans **Admin → Configuration → Général**.
+2. Ajouter `COOKIE_SECURE=false` dans `.env` puis relancer (`docker compose up -d`) : en HTTP simple, le navigateur refuse sinon le cookie de session (`http://localhost` n'est pas concerné). À ne jamais faire sur un serveur exposé à Internet.
 
-3. Ouvrir le port 80 dans le pare-feu Windows :
+3. Ouvrir `http://192.168.1.xxx` depuis l'autre appareil et, si l'installation est déjà faite, mettre à jour l'**URL publique** dans **Admin → Configuration → Général**.
+
+4. Ouvrir le port 80 dans le pare-feu Windows :
 
 ```powershell
 # En tant qu'administrateur

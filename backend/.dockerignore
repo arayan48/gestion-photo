@@ -1,0 +1,12 @@
+# Ne jamais embarquer dans l'image : dépendances de l'hôte (binaires natifs
+# d'un autre OS, ex. Windows), données, secrets
+node_modules
+npm-debug.log*
+storage
+data
+master.key
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore

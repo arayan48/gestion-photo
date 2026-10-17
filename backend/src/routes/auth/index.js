@@ -45,7 +45,7 @@ function setRefreshCookie(reply, token) {
   reply.clearCookie('refresh_token', { path: LEGACY_REFRESH_COOKIE_PATH })
   reply.setCookie('refresh_token', token, {
     httpOnly: true,
-    secure: config.nodeEnv === 'production',
+    secure: config.secureCookies,
     sameSite: 'strict',
     path: REFRESH_COOKIE_PATH,
     maxAge: 7 * 24 * 60 * 60,
@@ -361,7 +361,7 @@ export default async function authRoutes(fastify) {
 
     reply.setCookie(DISCORD_STATE_COOKIE, nonce, {
       httpOnly: true,
-      secure: config.nodeEnv === 'production',
+      secure: config.secureCookies,
       sameSite: 'lax', // envoyé lors de la redirection retour depuis discord.com
       path: '/api/auth/discord',
       maxAge: 10 * 60,
