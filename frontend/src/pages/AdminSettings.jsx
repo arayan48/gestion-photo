@@ -436,7 +436,7 @@ function ProviderConfig({ name, form, set }) {
       </div>
       <Field label="Utilisateur"><input className="input text-sm" value={form['ftp.user'] || ''} onChange={(e) => set('ftp.user', e.target.value)} placeholder="ftpuser" /></Field>
       <Field label="Mot de passe"><PasswordInput value={form['ftp.password'] || ''} onChange={(e) => set('ftp.password', e.target.value)} placeholder="••••••••" /></Field>
-      <Field label="Chemin"><input className="input font-mono text-sm" value={form['ftp.path'] || ''} onChange={(e) => set('ftp.path', e.target.value)} placeholder="/backups/wubalstore" /></Field>
+      <Field label="Chemin"><input className="input font-mono text-sm" value={form['ftp.path'] || ''} onChange={(e) => set('ftp.path', e.target.value)} placeholder="/backups/obscura" /></Field>
     </div>
   )
   if (name === 'sftp') return (
@@ -621,7 +621,7 @@ function TabGeneral({ config }) {
     <form onSubmit={save} className="space-y-6">
       <Section title="Identité du projet">
         <Field label="Nom du projet" hint="Affiché dans l'interface et les emails">
-          <input className="input" value={form['app.name'] || ''} onChange={(e) => set('app.name', e.target.value)} placeholder="WubalStore" />
+          <input className="input" value={form['app.name'] || ''} onChange={(e) => set('app.name', e.target.value)} placeholder="Obscura" />
         </Field>
         <Field label={
           <span className="flex items-center gap-1.5">
@@ -649,7 +649,7 @@ function TabGeneral({ config }) {
           label={
             <span className="flex items-center gap-1.5">
               Espace total alloué au projet
-              <Tooltip text="Taille maximale que WubalStore peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte (95% du disque disponible)." />
+              <Tooltip text="Taille maximale qu'Obscura peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte (95% du disque disponible)." />
             </span>
           }
           hint={totalGb ? `Min recommandé : ${minRecommended} Go — Max médias possible : ${maxMedia} Go` : 'Renseignez la taille pour voir les tailles en Go dans le graphe'}

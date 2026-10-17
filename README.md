@@ -1,4 +1,13 @@
-# WubalStore
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-dark.svg">
+    <img src="docs/brand/logo-light.svg" alt="Obscura" height="72">
+  </picture>
+</p>
+
+<p align="center"><em>Vos photos et vidéos, hors de vue.</em></p>
+
+# Obscura
 
 Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vidéos sur votre propre serveur, partagez-les via des liens sécurisés, gérez des comptes avec rôles et permissions.
 
@@ -124,6 +133,24 @@ Les anciennes variables (`APP_URL`, `JWT_ACCESS_SECRET`, `DISCORD_*`, `EMAIL_*`,
 | Reverse proxy | Nginx |
 | Conteneurisation | Docker + Docker Compose |
 | Traitement médias | Sharp (images) + FFmpeg (vidéos) |
+
+---
+
+## Identité visuelle
+
+Le nom **Obscura** vient de la *camera obscura*, l'ancêtre de l'appareil photo : une chambre noire où l'image se forme à l'abri des regards — comme vos médias, accessibles uniquement aux IP autorisées.
+
+Le logo représente un **diaphragme d'objectif** à six lames : il évoque la photo et la vidéo, et l'idée d'une ouverture que l'on contrôle.
+
+| Fichier | Usage |
+|---------|-------|
+| `docs/brand/icon.svg` / `frontend/public/icon.svg` | Icône seule, favicon |
+| `docs/brand/logo-dark.svg` | Logo complet sur fond sombre |
+| `docs/brand/logo-light.svg` | Logo complet sur fond clair |
+
+Couleurs : violet `#7c3aed` (principal), `#a78bfa` → `#4c1d95` (dégradé de l'icône). Police du logotype : Inter Display SemiBold.
+
+> Les identifiants techniques (`wubalstore` pour la base, les conteneurs Docker et le réseau) sont conservés pour ne pas casser les installations existantes.
 
 ---
 

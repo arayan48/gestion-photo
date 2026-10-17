@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../utils/api.js'
+import { LogoMark, APP_NAME } from '../components/shared/Logo.jsx'
 
 export default function Setup() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
-    appName: 'WubalStore',
+    appName: APP_NAME,
     appUrl: window.location.origin, // URL actuelle : correcte dans la grande majorité des cas
     email: '', pseudo: '', password: '', confirmPassword: '', firstName: '', lastName: '',
   })
@@ -41,7 +42,8 @@ export default function Setup() {
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-violet-400">WubalStore</h1>
+          <LogoMark size={64} className="mx-auto mb-4 drop-shadow-[0_6px_18px_rgba(124,58,237,0.4)]" />
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-50">{APP_NAME}</h1>
           <p className="text-gray-400 mt-2">Configuration initiale — Créer le compte Super Admin</p>
         </div>
 

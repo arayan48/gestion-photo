@@ -1,12 +1,12 @@
-# CLAUDE.md — Instructions de développement WubalStore
+# CLAUDE.md — Instructions de développement Obscura
 
-> Ce fichier est lu automatiquement par Claude Code. Il contient toutes les instructions nécessaires pour construire le projet WubalStore de A à Z.
+> Ce fichier est lu automatiquement par Claude Code. Il contient toutes les instructions nécessaires pour construire le projet Obscura (anciennement WubalStore) de A à Z.
 
 ---
 
 ## 🎯 Objectif du projet
 
-Construire **WubalStore** : une plateforme d'hébergement de médias (images & vidéos) auto-hébergée, sécurisée, avec gestion de comptes, rôles granulaires, liste blanche IP, et interface style Google Drive. Le projet doit être open source, déployable via Docker sur n'importe quel VPS Ubuntu 22.04.
+Construire **Obscura** : une plateforme d'hébergement de médias (images & vidéos) auto-hébergée, sécurisée, avec gestion de comptes, rôles granulaires, liste blanche IP, et interface style Google Drive. Le projet doit être open source, déployable via Docker sur n'importe quel VPS Ubuntu 22.04.
 
 ---
 

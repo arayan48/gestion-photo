@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { FolderOpen, Clock, Heart, Trash2, Globe, LayoutDashboard, Wrench, HardDrive } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth.store.js'
+import Logo from './Logo.jsx'
 
 const navItems = [
   { view: null,         to: '/explorer',                icon: FolderOpen, label: 'Mon espace' },
@@ -45,14 +46,7 @@ export default function Sidebar() {
     <aside className="w-56 bg-white dark:bg-gray-950 border-r border-slate-200 dark:border-gray-800/80 flex flex-col py-4 shrink-0">
       {/* Logo */}
       <div className="px-5 mb-7">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center shadow-md shadow-violet-500/30 shrink-0">
-            <HardDrive size={14} className="text-white" />
-          </div>
-          <span className="text-violet-600 dark:text-violet-400 font-bold text-lg tracking-tight">
-            WubalStore
-          </span>
-        </div>
+        <Logo />
       </div>
 
       {/* Navigation principale */}

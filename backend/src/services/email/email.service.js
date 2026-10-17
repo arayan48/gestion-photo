@@ -20,7 +20,7 @@ async function getEmailSettings() {
   return {
     provider: db['email.provider'] || 'brevo',
     from: db['email.from'] || `noreply@${hostnameOf(appUrl)}`,
-    appName: db['app.name'] || 'WubalStore',
+    appName: db['app.name'] || 'Obscura',
     appUrl,
     brevoKey: db['email.brevo_key'],
     smtpHost: db['email.smtp_host'],

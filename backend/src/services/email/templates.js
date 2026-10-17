@@ -1,7 +1,7 @@
 import { escapeHtml } from '../../utils/validation.js'
 
 // Modèles communs à tous les providers (les valeurs utilisateur sont échappées)
-export function buildProvider(send, { appUrl, appName = 'WubalStore' }) {
+export function buildProvider(send, { appUrl, appName = 'Obscura' }) {
   const name = escapeHtml(appName)
   return {
     async sendAccountAccepted(to, pseudo) {

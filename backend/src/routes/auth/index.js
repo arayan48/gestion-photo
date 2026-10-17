@@ -142,7 +142,7 @@ export default async function authRoutes(fastify) {
 
       await setConfigValues([
         ['app.url', publicUrl],
-        ['app.name', optionalString(appName, 100) || 'WubalStore'],
+        ['app.name', optionalString(appName, 100) || 'Obscura'],
       ], client)
 
       await client.query('UPDATE setup SET is_completed = true, completed_at = NOW() WHERE id = 1')

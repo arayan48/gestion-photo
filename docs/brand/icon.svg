@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="oi-bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset=".55" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+    <radialGradient id="oi-glow" cx="32" cy="32" r="9" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f5f3ff"/>
+      <stop offset="1" stop-color="#c4b5fd"/>
+    </radialGradient>
+    <mask id="oi-m" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <circle cx="32" cy="32" r="20" fill="#fff"/>
+      <path d="M32 23.4L39.45 27.7L39.45 36.3L32 40.6L24.55 36.3L24.55 27.7Z" fill="#000"/>
+      <g stroke="#000" stroke-width="2.2" stroke-linecap="round"><path d="M32 23.4L53.53 35.83"/><path d="M39.45 27.7L39.45 52.56"/><path d="M39.45 36.3L17.92 48.73"/><path d="M32 40.6L10.47 28.17"/><path d="M24.55 36.3L24.55 11.44"/><path d="M24.55 27.7L46.08 15.27"/></g>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#oi-bg)"/>
+  <rect x=".75" y=".75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="20" fill="#2e1065" fill-opacity=".35"/>
+  <rect width="64" height="64" fill="#fff" mask="url(#oi-m)"/>
+  <path d="M32 23.4L39.45 27.7L39.45 36.3L32 40.6L24.55 36.3L24.55 27.7Z" fill="url(#oi-glow)" fill-opacity=".9" transform="translate(32 32) scale(.5) translate(-32 -32)"/>
+</svg>
