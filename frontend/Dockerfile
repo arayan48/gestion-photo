@@ -11,7 +11,9 @@ CMD ["npm", "run", "dev"]
 
 # Production build
 FROM base AS builder
-RUN npm install
+# --include=dev : vite est une devDependency, nécessaire au build même si
+# NODE_ENV=production est injecté au build (ex. Coolify)
+RUN npm install --include=dev
 COPY . .
 RUN npm run build
 
