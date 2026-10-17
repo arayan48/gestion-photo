@@ -1,24 +1,27 @@
-# Déploiement via Coolify
+# Obscura — déploiement via Coolify
 # ------------------------------------------------------------
-# Aucun port n'est publié sur l'hôte : le proxy de Coolify (Traefik) occupe
-# déjà 80/443 et route vers le service `nginx` par le réseau Docker.
-# Dans Coolify : Docker Compose Location = /docker-compose.coolify.yml,
-# puis renseigner le domaine sur le service `nginx` (port 80).
+# Aucun port n'est publié sur l'hôte : le proxy de Coolify (Traefik) occupe déjà
+# 80/443, termine le TLS et route vers le service `nginx` par le réseau Docker.
+#   • Docker Compose Location : /docker-compose.coolify.yml
+#   • Domaine : uniquement sur le service `nginx` (port 80), ex. https://photos.exemple.com
+#   • Variables : DB_PASSWORD (obligatoire), DB_NAME / DB_USER (optionnels)
+# La vraie IP des visiteurs est lue dans X-Forwarded-For envoyé par Traefik
+# (réseaux privés de confiance par défaut, cf. TRUSTED_PROXIES).
 
 services:
   postgres:
     image: postgres:16-alpine
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-obscura}
       POSTGRES_USER: ${DB_USER:-obscura}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - obscura_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-obscura}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-obscura} -d ${DB_NAME:-obscura}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,13 +29,15 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
       target: production
-    restart: always
-    env_file: .env
+    restart: unless-stopped
     environment:
       NODE_ENV: production
       DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-obscura}
+      DB_USER: ${DB_USER:-obscura}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      MASTER_KEY: ${MASTER_KEY:-}
     volumes:
       - storage_data:/app/storage
       - backend_data:/app/data   # clé maître de chiffrement (master.key)
@@ -45,24 +50,26 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
       target: production
-    restart: always
+    restart: unless-stopped
     networks:
       - obscura_net
 
   nginx:
     build:
       context: ./nginx
-      dockerfile: Dockerfile
-    restart: always
+    restart: unless-stopped
+    environment:
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     expose:
       - "80"
     volumes:
       - storage_data:/var/www/storage:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - obscura_net
 

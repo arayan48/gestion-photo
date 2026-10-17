@@ -167,4 +167,17 @@ async function start() {
   }
 }
 
+// ── Arrêt propre (redéploiement, docker stop) ────────────────────────────────
+// Sans ce handler, node en PID 1 ignore SIGTERM et Docker le tue au bout de 10 s.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.once(signal, async () => {
+    try {
+      await fastify.close()
+      await pool.end()
+    } finally {
+      process.exit(0)
+    }
+  })
+}
+
 start()

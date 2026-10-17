@@ -38,6 +38,14 @@ Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vid�
 
 ## Installation
 
+Trois façons de déployer, avec les mêmes images :
+
+| Fichier | Usage |
+| --- | --- |
+| `docker-compose.yml` | **Production** sur un VPS / serveur : nginx publie 80/443, HTTPS Let's Encrypt automatique |
+| `docker-compose.coolify.yml` | **Coolify** (ou tout proxy qui gère déjà le TLS) : aucun port publié |
+| `docker-compose.dev.yml` | **Développement** : rechargement à chaud, interface sur `http://localhost:5173` |
+
 ### 1. Cloner le dépôt
 
 ```bash
@@ -53,7 +61,7 @@ cp .env.example .env
 
 ### 3. Éditer `.env`
 
-Le `.env` ne contient que l'infrastructure. Seul `DB_PASSWORD` est à changer :
+Le `.env` ne contient que l'infrastructure :
 
 ```bash
 openssl rand -base64 32   # → copier dans DB_PASSWORD
@@ -61,9 +69,13 @@ openssl rand -base64 32   # → copier dans DB_PASSWORD
 
 | Variable | Description |
 | --- | --- |
-| `DB_PASSWORD` | Mot de passe PostgreSQL (obligatoire) |
+| `DB_PASSWORD` | Mot de passe PostgreSQL (**obligatoire**, le démarrage échoue sinon) |
+| `DOMAIN` | Domaine public (ex. `photos.mondomaine.fr`) : active le HTTPS Let's Encrypt automatique |
+| `LETSENCRYPT_EMAIL` | Email pour les alertes d'expiration du certificat (recommandé) |
 | `DB_NAME`, `DB_USER` | Nom de la base et utilisateur (défaut : `obscura`) |
 | `MASTER_KEY` | *Optionnel* — clé de chiffrement des secrets (sinon générée automatiquement) |
+| `HTTP_PORT`, `HTTPS_PORT` | *Optionnel* — ports publiés sur l'hôte (défaut : 80 / 443) |
+| `TRUSTED_PROXIES` | *Optionnel* — proxys placés devant nginx (Cloudflare…), voir ci-dessous |
 
 Tout le reste se configure dans l'interface (voir [Configuration](#configuration)).
 
@@ -76,21 +88,53 @@ docker compose up -d --build
 Les services démarrés :
 
 - `postgres` — base de données
-- `backend` — API Fastify (port 3000)
-- `frontend` — interface React (port 80 via nginx)
-- `nginx` — reverse proxy (ports 80 / 443)
+- `backend` — API Fastify (interne, non exposée)
+- `frontend` — interface React (interne, servie via nginx)
+- `nginx` — reverse proxy, seul service exposé (ports 80 / 443)
+- `certbot` — obtient et renouvelle le certificat HTTPS (inactif si `DOMAIN` est vide)
 
-### 5. Base de données
+Les migrations de la base sont appliquées **automatiquement** à chaque démarrage du backend.
 
-Les migrations sont appliquées **automatiquement** à chaque démarrage du backend (seules les migrations manquantes sont exécutées). Pour les lancer manuellement si besoin :
+### 5. HTTPS
 
-```bash
-docker compose run --rm backend node src/models/migrate.js
-```
+**HTTPS est obligatoire en production** : le cookie de session n'est envoyé qu'en HTTPS. Sans lui, la connexion expire au bout de 15 minutes.
+
+- **Avec `DOMAIN`** : faites pointer le DNS du domaine vers le serveur et ouvrez les ports 80 et 443. Le certificat est obtenu en moins d'une minute après le démarrage, puis renouvelé automatiquement. nginx bascule seul en HTTPS et redirige HTTP → HTTPS. Suivi : `docker compose logs certbot nginx`.
+- **Derrière un proxy qui gère déjà le TLS** (Caddy, Traefik, nginx de l'hôte…) : laissez `DOMAIN` vide et faites pointer le proxy vers le port `HTTP_PORT`.
+- **Test en réseau local en HTTP** (IP sans domaine) : ajoutez `COOKIE_SECURE=false` au `.env`. Ne jamais l'utiliser sur Internet.
+
+**Vraie IP des visiteurs** : les bans et la liste blanche IP reposent sur l'IP du visiteur. Si un proxy est placé devant nginx, nginx lit l'en-tête `X-Forwarded-For` qu'il envoie, mais seulement depuis les adresses de `TRUSTED_PROXIES` (par défaut les réseaux privés : proxy sur le même serveur ou sur le réseau Docker). Derrière **Cloudflare**, ajoutez ses plages d'IP ([cloudflare.com/ips](https://www.cloudflare.com/ips/)) à `TRUSTED_PROXIES`.
 
 ### 6. Premier lancement
 
-Ouvrir `http://votre-serveur` dans le navigateur. La page de setup s'affiche automatiquement : elle demande l'**URL publique**, le **nom de l'instance** et le **compte Super Admin**. Une fois validé, la plateforme est opérationnelle.
+Ouvrir `https://votre-domaine` dans le navigateur. La page de setup s'affiche automatiquement : elle demande l'**URL publique**, le **nom de l'instance** et le **compte Super Admin**. Une fois validé, la plateforme est opérationnelle.
+
+> ⚠️ Le premier visiteur de la page de setup devient Super Admin : faites le setup juste après le premier démarrage.
+
+### Mise à jour
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+### Déploiement avec Coolify
+
+1. Nouvelle ressource → dépôt Git → build pack **Docker Compose**.
+2. **Docker Compose Location** : `/docker-compose.coolify.yml`.
+3. Variables d'environnement : `DB_PASSWORD` (obligatoire), `MASTER_KEY` (optionnel). Cochez « Runtime only » si Coolify affiche un avertissement sur `NODE_ENV`.
+4. Domaine : **uniquement sur le service `nginx`**, port 80 (ex. `https://photos.mondomaine.fr`). Ne mettez pas de domaine sur `backend` ni `frontend` : nginx route `/api`, `/ws` et `/media` vers le backend, et le reste vers le frontend.
+5. Déployez, puis ouvrez le domaine pour faire le setup.
+
+Coolify termine le TLS. La vraie IP des visiteurs est lue dans l'en-tête envoyé par son proxy, sans réglage supplémentaire.
+
+### Développement
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Interface sur `http://localhost:5173` (rechargement à chaud du frontend et du backend), API sur `http://localhost:3000`.
 
 ---
 

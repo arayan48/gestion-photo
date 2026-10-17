@@ -5,6 +5,13 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.APP_PORT) || 3000,
 
+  // Cookies (refresh token, état OAuth) réservés à HTTPS en production.
+  // COOKIE_SECURE=false uniquement pour un accès en HTTP simple (ex. IP du réseau local) :
+  // sinon le navigateur refuse le cookie et la session expire au bout de 15 minutes.
+  secureCookies: process.env.COOKIE_SECURE
+    ? process.env.COOKIE_SECURE === 'true'
+    : (process.env.NODE_ENV || 'development') === 'production',
+
   jwt: {
     // Renseigné au démarrage depuis la base (généré automatiquement, stocké chiffré)
     accessSecret: null,
