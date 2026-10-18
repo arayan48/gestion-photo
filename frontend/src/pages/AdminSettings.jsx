@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import api from '../utils/api.js'
-import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info } from 'lucide-react'
+import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, HardDrive, Cpu, MemoryStick, Server, RefreshCw, X } from 'lucide-react'
 import { Button } from '../components/ui/Button.jsx'
 import { Switch } from '../components/ui/Form.jsx'
 import { Tooltip as UiTooltip } from '../components/ui/Tooltip.jsx'
@@ -576,6 +576,125 @@ function StorageLegend({ segments, totalGb }) {
   )
 }
 
+// ── Infrastructure détectée ───────────────────────────────────────────────────
+const GiB = 1024 ** 3
+const fmtGb = (b) => `${(b / GiB).toFixed(b < 10 * GiB ? 1 : 0)} Go`
+
+function fmtUptime(sec) {
+  const d = Math.floor(sec / 86400)
+  const h = Math.floor((sec % 86400) / 3600)
+  return d > 0 ? `${d} j ${h} h` : `${h} h ${Math.floor((sec % 3600) / 60)} min`
+}
+
+function InfraStat({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="rounded-xl border border-line bg-overlay/40 p-3 min-w-0">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-subtle">
+        <Icon size={13} strokeWidth={1.75} /> {label}
+      </div>
+      <p className="mt-1 truncate text-sm font-medium text-fg" title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="mt-0.5 truncate text-xs text-subtle" title={typeof sub === 'string' ? sub : undefined}>{sub}</p>}
+    </div>
+  )
+}
+
+function ToolBadge({ name, tool }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${tool.available ? 'border-line text-fg' : 'border-red-500/40 text-red-600 dark:text-red-400'}`}>
+      {tool.available ? <Check size={11} /> : <X size={11} />}
+      {name}{tool.version ? ` ${tool.version}` : ''}
+    </span>
+  )
+}
+
+function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb }) {
+  const { disk, allocation, host, cpu, memory, tools, warnings } = infra
+  const pct = (b) => (disk.size > 0 ? (b / disk.size) * 100 : 0)
+  const diskSegments = [
+    { color: 'bg-accent-500', label: 'Médias Obscura', bytes: disk.obscura.media },
+    { color: 'bg-blue-400', label: 'Sauvegardes', bytes: disk.obscura.backups },
+    { color: 'bg-zinc-400 dark:bg-zinc-600', label: 'Autres données', bytes: disk.other },
+  ]
+  const recommended = allocation.recommendedTotalGb
+
+  return (
+    <Section title="Infrastructure détectée">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-subtle">
+          Analyse du serveur le {new Date(infra.detectedAt).toLocaleString('fr-FR')}
+        </p>
+        <Button size="sm" variant="outline" icon={RefreshCw} loading={redetecting} onClick={onRedetect}>
+          Re-détecter
+        </Button>
+      </div>
+
+      {/* Occupation réelle du disque */}
+      <div className="rounded-xl border border-line p-4 space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+          <span className="flex items-center gap-1.5 font-medium text-fg"><HardDrive size={14} /> Disque <code className="font-mono text-xs text-subtle">{disk.path}</code></span>
+          <span className="text-xs text-muted">{fmtGb(disk.free)} libres sur {fmtGb(disk.size)}</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-overlay">
+          {diskSegments.map((s) => s.bytes > 0 && (
+            <div key={s.label} className={s.color} style={{ width: `${pct(s.bytes)}%` }} title={`${s.label} : ${fmtGb(s.bytes)}`} />
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+          {diskSegments.map((s) => (
+            <span key={s.label} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${s.color}`} />{s.label} : {fmtGb(s.bytes)}
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-overlay border border-line" />Libre : {fmtGb(disk.free)}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <InfraStat icon={Server} label="Système" value={host.os}
+          sub={`${host.container ? `Conteneur ${host.container} · ` : ''}${host.arch} · en ligne depuis ${fmtUptime(host.uptime)}`} />
+        <InfraStat icon={Cpu} label="Processeur"
+          value={cpu.limit ? `${cpu.limit} cœur(s) alloué(s) / ${cpu.cores}` : `${cpu.cores} cœur(s)`}
+          sub={`${cpu.model} · charge ${cpu.load[0]}`} />
+        <InfraStat icon={MemoryStick} label="Mémoire"
+          value={`${fmtGb(memory.total)}${memory.limited ? ' (limite conteneur)' : ''}`}
+          sub={`${fmtGb(memory.free)} libres${memory.limited ? ` · hôte ${fmtGb(memory.host)}` : ''}`} />
+        <InfraStat icon={HardDrive} label="Espace utilisable"
+          value={fmtGb(allocation.autoSafe)}
+          sub="Libre + déjà utilisé par Obscura − 5% de marge" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-subtle mr-1">Outils :</span>
+        <ToolBadge name="FFmpeg" tool={tools.ffmpeg} />
+        <ToolBadge name="FFprobe" tool={tools.ffprobe} />
+        <ToolBadge name="Rclone" tool={tools.rclone} />
+        <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">Node {host.node}</span>
+        {host.postgres && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">PostgreSQL {host.postgres}</span>}
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+          {warnings.map((w) => (
+            <p key={w} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle size={13} className="mt-px shrink-0" /> {w}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {recommended > 0 && currentTotalGb !== recommended && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-3">
+          <p className="text-xs text-muted">
+            Taille recommandée pour ce serveur : <span className="font-medium text-fg">{recommended} Go</span>
+            {!currentTotalGb && ' (appliquée automatiquement tant que le champ reste vide)'}
+          </p>
+          <Button size="xs" variant="secondary" onClick={() => onApply(recommended)}>Fixer à {recommended} Go</Button>
+        </div>
+      )}
+    </Section>
+  )
+}
+
 function TabGeneral({ config }) {
   const keys = [
     'app.name', 'app.url',
@@ -583,8 +702,26 @@ function TabGeneral({ config }) {
     'storage.total_gb', 'storage.logs_gb',
   ]
   const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+  const queryClient = useQueryClient()
 
-  const totalGb    = parseFloat(form['storage.total_gb'] || 0) || null
+  // Réservé à system.manage_storage : sans cette permission, le panneau est masqué
+  const { data: infra } = useQuery({
+    queryKey: ['admin-infra'],
+    queryFn: () => api.get('/admin/infra').then((r) => r.data),
+    retry: false,
+  })
+  const redetect = useMutation({
+    mutationFn: () => api.post('/admin/infra/redetect').then((r) => r.data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['admin-infra'], data)
+      queryClient.invalidateQueries({ queryKey: ['admin-config'] })
+    },
+  })
+
+  const manualGb   = parseFloat(form['storage.total_gb'] || 0) || null
+  // Champ vide : on affiche les tailles réelles à partir de l'espace auto-détecté
+  const autoGb     = infra ? Math.floor(infra.allocation.autoSafe / GiB) || null : null
+  const totalGb    = manualGb || autoGb
   const mediaPct   = parseInt(form['storage.media_pct']  || 70)
   const backupPct  = parseInt(form['storage.backup_pct'] || 10)
   const logsGb     = parseFloat(form['storage.logs_gb']  || 2)
@@ -632,13 +769,23 @@ function TabGeneral({ config }) {
         </Field>
       </Section>
 
+      {infra && (
+        <InfraPanel
+          infra={infra}
+          onRedetect={() => redetect.mutate()}
+          redetecting={redetect.isPending}
+          onApply={(gb) => set('storage.total_gb', String(gb))}
+          currentTotalGb={manualGb}
+        />
+      )}
+
       <Section title="Allocation du stockage">
         {/* Espace total */}
         <Field
           label={
             <span className="flex items-center gap-1.5">
               Espace total alloué au projet
-              <Tooltip text="Taille maximale qu'Obscura peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte (95% du disque disponible)." />
+              <Tooltip text="Taille maximale qu'Obscura peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte : espace libre + espace déjà utilisé par Obscura, moins 5% de marge. Recalculé toutes les heures." />
             </span>
           }
           hint={totalGb ? `Min recommandé : ${minRecommended} Go — Max médias possible : ${maxMedia} Go` : 'Renseignez la taille pour voir les tailles en Go dans le graphe'}
@@ -649,10 +796,10 @@ function TabGeneral({ config }) {
               className="input w-32"
               value={form['storage.total_gb'] || ''}
               onChange={(e) => set('storage.total_gb', e.target.value)}
-              placeholder="Auto"
+              placeholder={autoGb ? `Auto (${autoGb})` : 'Auto'}
             />
             <span className="text-muted text-sm">Go</span>
-            {totalGb && (
+            {manualGb && (
               <span className="text-xs text-subtle ml-1">
                 = {(totalGb * 1024).toFixed(0)} Mo
               </span>
@@ -711,7 +858,7 @@ function TabGeneral({ config }) {
           <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>0 {totalGb ? 'Go' : '%'}</span>
             <span className="font-medium text-fg">
-              {totalGb ? `${totalGb} Go total` : 'Répartition (%)'}
+              {totalGb ? `${totalGb} Go total${manualGb ? '' : ' (auto)'}` : 'Répartition (%)'}
             </span>
             <span>{totalGb ? `${totalGb} Go` : '100%'}</span>
           </div>
