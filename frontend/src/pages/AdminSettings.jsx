@@ -1,28 +1,24 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../utils/api.js'
-import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info } from 'lucide-react'
+import { Button } from '../components/ui/Button.jsx'
+import { Switch } from '../components/ui/Form.jsx'
+import { Tooltip as UiTooltip } from '../components/ui/Tooltip.jsx'
+import { Tabs, SideTabs } from '../components/ui/Tabs.jsx'
+import { Spinner } from '../components/ui/Spinner.jsx'
+import { useIsDesktop } from '../hooks/useMediaQuery.js'
 
 function Toggle({ checked, onChange, label }) {
-  return (
-    <label className="flex items-center gap-2 cursor-pointer select-none">
-      <button type="button" onClick={() => onChange(!checked)}
-        className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-violet-600' : 'bg-slate-300 dark:bg-gray-700'}`}>
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
-      </button>
-      {label && <span className="text-sm text-slate-700 dark:text-gray-300">{label}</span>}
-    </label>
-  )
+  return <Switch checked={checked} onChange={onChange} label={label} />
 }
 
 function Tooltip({ text }) {
   return (
-    <span className="group relative inline-flex items-center">
-      <Info size={14} className="text-slate-400 dark:text-gray-600 cursor-help" />
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-72 bg-slate-900 dark:bg-black text-white text-xs rounded-lg px-3 py-2 shadow-xl z-50 leading-relaxed pointer-events-none">
-        {text}
-      </span>
-    </span>
+    <UiTooltip content={<span className="block max-w-xs whitespace-normal leading-relaxed">{text}</span>} side="top">
+      <span className="inline-flex cursor-help items-center"><Info size={14} className="text-subtle" /></span>
+    </UiTooltip>
   )
 }
 
@@ -30,7 +26,7 @@ function Tooltip({ text }) {
 function Section({ title, children }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-widest">{title}</h3>
+      <h3 className="text-[11px] font-medium uppercase tracking-wider text-subtle">{title}</h3>
       {children}
     </div>
   )
@@ -39,9 +35,9 @@ function Section({ title, children }) {
 function Field({ label, hint, children }) {
   return (
     <div>
-      <div className="text-sm font-medium text-slate-700 dark:text-gray-300 mb-1 flex items-center gap-1">{label}</div>
+      <div className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-fg">{label}</div>
       {children}
-      {hint && <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs text-subtle">{hint}</p>}
     </div>
   )
 }
@@ -69,7 +65,7 @@ function PasswordInput({ value, onChange, placeholder, ...props }) {
           <button
             type="button"
             onClick={() => setShow((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-subtle hover:text-fg"
             tabIndex={-1}
           >
             {show ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -85,21 +81,14 @@ function PasswordInput({ value, onChange, placeholder, ...props }) {
   )
 }
 
-function SaveBar({ saving, saved, error, onSave }) {
+function SaveBar({ saving, saved, error }) {
   return (
-    <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-gray-800">
+    <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-between gap-3 rounded-b-2xl border-t border-line bg-surface px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6">
       <div className="text-sm">
-        {saved && <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400"><Check size={14} /> Enregistré</span>}
+        {saved && <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><Check size={14} /> Enregistré</span>}
         {error && <span className="text-red-500">{error}</span>}
       </div>
-      <button
-        type="submit"
-        disabled={saving}
-        className="btn-primary flex items-center gap-2 text-sm"
-      >
-        <Save size={14} />
-        {saving ? 'Enregistrement...' : 'Enregistrer'}
-      </button>
+      <Button type="submit" loading={saving}>Enregistrer</Button>
     </div>
   )
 }
@@ -174,14 +163,14 @@ function TabEmail({ config }) {
               onClick={() => set('email.provider', p.value)}
               className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all text-center ${
                 provider === p.value
-                  ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
-                  : 'border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700'
+                  ? 'border-accent-500 bg-accent-500/10'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
-              <span className={`text-sm font-semibold ${provider === p.value ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-gray-300'}`}>
+              <span className={`text-sm font-medium ${provider === p.value ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>
                 {p.label}
               </span>
-              <span className="text-xs text-slate-400 dark:text-gray-500">{p.desc}</span>
+              <span className="text-xs text-subtle">{p.desc}</span>
             </button>
           ))}
         </div>
@@ -225,9 +214,9 @@ function TabEmail({ config }) {
                 type="checkbox"
                 checked={form['email.smtp_secure'] === 'true'}
                 onChange={(e) => set('email.smtp_secure', String(e.target.checked))}
-                className="w-4 h-4 rounded text-violet-600"
+                className="w-4 h-4 rounded text-accent-600"
               />
-              <span className="text-sm text-slate-700 dark:text-gray-300">Activer TLS (port 465)</span>
+              <span className="text-sm text-fg">Activer TLS (port 465)</span>
             </label>
           </Field>
         </Section>
@@ -281,8 +270,8 @@ function TabDiscord({ config }) {
         </svg>
         <div>
           <p className="text-sm font-medium text-[#5865F2]">OAuth2 Discord</p>
-          <p className="text-xs text-slate-500 dark:text-gray-500 mt-0.5">
-            Créez une application sur <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="underline hover:text-violet-500">discord.com/developers</a>, puis copiez les identifiants OAuth2.
+          <p className="text-xs text-muted mt-0.5">
+            Créez une application sur <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="underline hover:text-accent-500">discord.com/developers</a>, puis copiez les identifiants OAuth2.
           </p>
         </div>
       </div>
@@ -329,24 +318,24 @@ function TabNotifications({ config }) {
     <form onSubmit={save} className="space-y-6">
       {/* Email notifications */}
       <Section title="Notifications Email">
-        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
+        <div className="flex items-center justify-between p-3 bg-overlay/50 rounded-xl border border-line">
           <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">Notifications par email</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600">Envoie un email aux admins pour les événements sélectionnés</p>
+            <p className="text-sm font-medium text-fg">Notifications par email</p>
+            <p className="text-xs text-subtle">Envoie un email aux admins pour les événements sélectionnés</p>
           </div>
           <Toggle checked={emailEnabled} onChange={(v) => set('notif.email.enabled', String(v))} />
         </div>
         {emailEnabled && (
           <div className="space-y-2 mt-2">
             {NOTIF_EVENTS.map(({ key, label, desc }) => (
-              <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+              <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-overlay cursor-pointer transition-colors">
                 <input type="checkbox"
                   checked={form[`notif.email.${key}`] === 'true'}
                   onChange={(e) => set(`notif.email.${key}`, String(e.target.checked))}
-                  className="mt-0.5 w-4 h-4 rounded text-violet-600" />
+                  className="mt-0.5 w-4 h-4 rounded text-accent-600" />
                 <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</p>
-                  <p className="text-xs text-slate-400 dark:text-gray-600">{desc}</p>
+                  <p className="text-sm font-medium text-fg">{label}</p>
+                  <p className="text-xs text-subtle">{desc}</p>
                 </div>
               </label>
             ))}
@@ -356,10 +345,10 @@ function TabNotifications({ config }) {
 
       {/* Discord webhook */}
       <Section title="Notifications Discord (Webhook)">
-        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
+        <div className="flex items-center justify-between p-3 bg-overlay/50 rounded-xl border border-line">
           <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-gray-300">Notifications Discord</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600">Envoie des messages dans un channel Discord via Webhook</p>
+            <p className="text-sm font-medium text-fg">Notifications Discord</p>
+            <p className="text-xs text-subtle">Envoie des messages dans un channel Discord via Webhook</p>
           </div>
           <Toggle checked={discordEnabled} onChange={(v) => set('notif.discord.enabled', String(v))} />
         </div>
@@ -370,14 +359,14 @@ function TabNotifications({ config }) {
             </Field>
             <div className="space-y-2">
               {NOTIF_EVENTS.map(({ key, label, desc }) => (
-                <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-overlay cursor-pointer transition-colors">
                   <input type="checkbox"
                     checked={form[`notif.discord.${key}`] === 'true'}
                     onChange={(e) => set(`notif.discord.${key}`, String(e.target.checked))}
-                    className="mt-0.5 w-4 h-4 rounded text-violet-600" />
+                    className="mt-0.5 w-4 h-4 rounded text-accent-600" />
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</p>
-                    <p className="text-xs text-slate-400 dark:text-gray-600">{desc}</p>
+                    <p className="text-sm font-medium text-fg">{label}</p>
+                    <p className="text-xs text-subtle">{desc}</p>
                   </div>
                 </label>
               ))}
@@ -508,19 +497,19 @@ function TabBackblaze({ config }) {
   return (
     <form onSubmit={save} className="space-y-6">
       <Section title="Destinations">
-        <p className="text-xs text-slate-500 dark:text-gray-500">Activez plusieurs destinations pour sauvegarder simultanément sur différents supports.</p>
+        <p className="text-xs text-muted">Activez plusieurs destinations pour sauvegarder simultanément sur différents supports.</p>
         <div className="space-y-2">
           {providers.map((p) => (
-            <div key={p.value} className={`rounded-xl border-2 overflow-hidden transition-all ${isOn(p.value) ? 'border-violet-500' : 'border-slate-200 dark:border-gray-800'}`}>
-              <div className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isOn(p.value) ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-white dark:bg-gray-900'}`} onClick={() => toggle(p.value)}>
+            <div key={p.value} className={`rounded-xl border-2 overflow-hidden transition-all ${isOn(p.value) ? 'border-accent-500' : 'border-line'}`}>
+              <div className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isOn(p.value) ? 'bg-accent-500/10' : 'bg-surface'}`} onClick={() => toggle(p.value)}>
                 <div>
-                  <p className={`text-sm font-semibold ${isOn(p.value) ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-gray-300'}`}>{p.label}</p>
-                  <p className="text-xs text-slate-400 dark:text-gray-500">{p.desc}</p>
+                  <p className={`text-sm font-medium ${isOn(p.value) ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>{p.label}</p>
+                  <p className="text-xs text-subtle">{p.desc}</p>
                 </div>
                 <Toggle checked={isOn(p.value)} onChange={() => toggle(p.value)} />
               </div>
               {isOn(p.value) && p.value !== 'local' && (
-                <div className="px-4 pb-4 pt-3 border-t border-slate-200 dark:border-gray-800 bg-slate-50/50 dark:bg-gray-900/50">
+                <div className="px-4 pb-4 pt-3 border-t border-line bg-overlay/30">
                   <ProviderConfig name={p.value} form={form} set={set} />
                 </div>
               )}
@@ -533,8 +522,8 @@ function TabBackblaze({ config }) {
         <Field label="Fréquence">
           <div className="flex flex-wrap gap-2">
             {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3h)' }, { v: 'weekly', l: 'Hebdomadaire' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
-              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' : 'border-slate-200 dark:border-gray-800 text-slate-700 dark:text-gray-300 hover:border-slate-300'}`}>
-                <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-violet-600" />
+              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-accent-500 bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'border-line text-fg hover:border-line-strong'}`}>
+                <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-accent-600" />
                 {l}
               </label>
             ))}
@@ -553,7 +542,7 @@ function TabBackblaze({ config }) {
 // ── Onglet Général ────────────────────────────────────────────────────────────
 function StorageBar({ segments }) {
   return (
-    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-bold shadow-inner">
+    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-medium shadow-inner">
       {segments.map(({ color, pct, label, gb }) =>
         pct > 0 ? (
           <div
@@ -576,11 +565,11 @@ function StorageLegend({ segments, totalGb }) {
       {segments.map(({ color, label, pct, gb, fixed }) => (
         <div key={label} className="flex items-center gap-2">
           <span className={`w-3 h-3 rounded-sm shrink-0 ${color}`} />
-          <span className="text-slate-600 dark:text-gray-400 flex-1 truncate">{label}</span>
-          <span className="font-semibold text-slate-700 dark:text-gray-300">
+          <span className="text-muted flex-1 truncate">{label}</span>
+          <span className="font-medium text-fg">
             {fixed ? `${gb} Go` : totalGb ? `${((pct / 100) * totalGb).toFixed(1)} Go` : `${pct}%`}
           </span>
-          {!fixed && <span className="text-slate-400 dark:text-gray-600">({pct}%)</span>}
+          {!fixed && <span className="text-subtle">({pct}%)</span>}
         </div>
       ))}
     </div>
@@ -611,10 +600,10 @@ function TabGeneral({ config }) {
   const maxMedia       = totalGb ? (totalGb * 0.85).toFixed(1) : null
 
   const segments = [
-    { color: 'bg-violet-500', label: 'Médias',      pct: mediaPct,  gb: totalGb ? ((mediaPct / 100) * totalGb).toFixed(1) : null },
+    { color: 'bg-accent-500', label: 'Médias',      pct: mediaPct,  gb: totalGb ? ((mediaPct / 100) * totalGb).toFixed(1) : null },
     { color: 'bg-blue-400',   label: 'Sauvegardes', pct: backupPct, gb: totalGb ? ((backupPct / 100) * totalGb).toFixed(1) : null },
     { color: 'bg-amber-400',  label: 'Logs',        pct: logsPct,   gb: logsGb, fixed: true },
-    { color: 'bg-slate-300 dark:bg-gray-600', label: 'Système',   pct: systemPct, gb: totalGb ? ((systemPct / 100) * totalGb).toFixed(1) : null },
+    { color: 'bg-zinc-400 dark:bg-zinc-600', label: 'Système',   pct: systemPct, gb: totalGb ? ((systemPct / 100) * totalGb).toFixed(1) : null },
   ]
 
   return (
@@ -662,9 +651,9 @@ function TabGeneral({ config }) {
               onChange={(e) => set('storage.total_gb', e.target.value)}
               placeholder="Auto"
             />
-            <span className="text-slate-500 dark:text-gray-500 text-sm">Go</span>
+            <span className="text-muted text-sm">Go</span>
             {totalGb && (
-              <span className="text-xs text-slate-400 dark:text-gray-600 ml-1">
+              <span className="text-xs text-subtle ml-1">
                 = {(totalGb * 1024).toFixed(0)} Mo
               </span>
             )}
@@ -674,7 +663,7 @@ function TabGeneral({ config }) {
         {/* Sliders */}
         <div className="space-y-4">
           {[
-            { key: 'storage.media_pct',  label: 'Médias',       min: 10, max: 85, default: 70, color: 'text-violet-600', hint: 'Images et vidéos uploadées' },
+            { key: 'storage.media_pct',  label: 'Médias',       min: 10, max: 85, default: 70, color: 'text-accent-600', hint: 'Images et vidéos uploadées' },
             { key: 'storage.backup_pct', label: 'Sauvegardes',  min: 5,  max: 40, default: 10, color: 'text-blue-500',   hint: 'Sauvegardes locales (avant envoi cloud)' },
           ].map(({ key, label, min, max, default: def, color, hint }) => {
             const val = parseInt(form[key] || def)
@@ -682,19 +671,19 @@ function TabGeneral({ config }) {
             return (
               <div key={key}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</span>
+                  <span className="text-sm font-medium text-fg">{label}</span>
                   <span className="flex items-center gap-2">
-                    {gb && <span className="text-xs text-slate-400 dark:text-gray-500">{gb} Go</span>}
-                    <span className={`text-sm font-bold w-10 text-right ${color}`}>{val}%</span>
+                    {gb && <span className="text-xs text-subtle">{gb} Go</span>}
+                    <span className={`text-sm font-medium w-10 text-right ${color}`}>{val}%</span>
                   </span>
                 </div>
                 <input
                   type="range" min={min} max={max}
-                  className="w-full accent-violet-600 h-2 rounded-full"
+                  className="w-full accent-accent-600 h-2 rounded-full"
                   value={val}
                   onChange={(e) => set(key, e.target.value)}
                 />
-                <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">{hint} — min {min}%, max {max}%</p>
+                <p className="text-xs text-subtle mt-0.5">{hint} — min {min}%, max {max}%</p>
               </div>
             )
           })}
@@ -702,8 +691,8 @@ function TabGeneral({ config }) {
           {/* Logs en Go fixe */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-slate-700 dark:text-gray-300">Logs</span>
-              <span className={`text-sm font-bold text-amber-500`}>{logsGb} Go</span>
+              <span className="text-sm font-medium text-fg">Logs</span>
+              <span className={`text-sm font-medium text-amber-500`}>{logsGb} Go</span>
             </div>
             <div className="flex items-center gap-3">
               <input
@@ -712,16 +701,16 @@ function TabGeneral({ config }) {
                 value={form['storage.logs_gb'] || 2}
                 onChange={(e) => set('storage.logs_gb', e.target.value)}
               />
-              <span className="text-sm text-slate-500 dark:text-gray-500">Go — rotation automatique</span>
+              <span className="text-sm text-muted">Go — rotation automatique</span>
             </div>
           </div>
         </div>
 
         {/* Graphe visuel */}
-        <div className="space-y-3 mt-4 p-4 bg-slate-50 dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-800">
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-gray-500 mb-1">
+        <div className="space-y-3 mt-4 p-4 bg-overlay/50 rounded-xl border border-line">
+          <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>0 {totalGb ? 'Go' : '%'}</span>
-            <span className="font-semibold text-slate-700 dark:text-gray-300">
+            <span className="font-medium text-fg">
               {totalGb ? `${totalGb} Go total` : 'Répartition (%)'}
             </span>
             <span>{totalGb ? `${totalGb} Go` : '100%'}</span>
@@ -753,7 +742,12 @@ const TABS = [
 ]
 
 export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState('email')
+  const [params, setParams] = useSearchParams()
+  const isDesktop = useIsDesktop()
+  const requested = params.get('tab')
+  const activeTab = TABS.some((t) => t.key === requested) ? requested : 'email'
+  const setActiveTab = (t) => setParams({ tab: t }, { replace: true })
+  const tabs = TABS.map((t) => ({ value: t.key, label: t.label, icon: t.icon }))
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['admin-config'],
@@ -761,45 +755,28 @@ export default function AdminSettings() {
   })
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-gray-100">Configuration système</h2>
-        <p className="text-sm text-slate-500 dark:text-gray-500 mt-1">Connexions externes et paramètres serveur.</p>
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Configuration système</h1>
+        <p className="mt-1 text-sm text-muted">Connexions externes et paramètres serveur. Les secrets sont chiffrés en base.</p>
       </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-gray-900 rounded-xl p-1 border border-slate-200 dark:border-gray-800 w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === key
-                ? 'bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 shadow-sm'
-                : 'text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-300'
-            }`}
-          >
-            <Icon size={14} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Contenu */}
-      <div className="card">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <>
-            {activeTab === 'email'   && <TabEmail         config={config} />}
-            {activeTab === 'discord' && <TabDiscord        config={config} />}
-            {activeTab === 'notifs'  && <TabNotifications  config={config} />}
-            {activeTab === 'backups' && <TabBackblaze      config={config} />}
-            {activeTab === 'general' && <TabGeneral        config={config} />}
-          </>
-        )}
+      <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+        {isDesktop
+          ? <div className="sticky top-6 self-start"><SideTabs value={activeTab} onChange={setActiveTab} tabs={tabs} /></div>
+          : <Tabs value={activeTab} onChange={setActiveTab} tabs={tabs} className="mb-5" />}
+        <div className="card min-w-0 p-5 sm:p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16"><Spinner /></div>
+          ) : (
+            <>
+              {activeTab === 'email' && <TabEmail config={config} />}
+              {activeTab === 'discord' && <TabDiscord config={config} />}
+              {activeTab === 'notifs' && <TabNotifications config={config} />}
+              {activeTab === 'backups' && <TabBackblaze config={config} />}
+              {activeTab === 'general' && <TabGeneral config={config} />}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

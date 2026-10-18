@@ -1,30 +1,12 @@
-import { create } from 'zustand'
+import { toast as sonner } from 'sonner'
 
-const MAX_TOASTS = 5
-let _id = 0
-
-export const useToastStore = create((set, get) => ({
-  toasts: [],
-
-  add(message, type = 'info', duration = 4000) {
-    const id = ++_id
-    set((s) => {
-      const toasts = [...s.toasts, { id, message, type }]
-      // Garder seulement les MAX_TOASTS derniers pour éviter l'empilement
-      return { toasts: toasts.slice(-MAX_TOASTS) }
-    })
-    if (duration > 0) setTimeout(() => get().remove(id), duration)
-    return id
-  },
-
-  remove(id) {
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
-  },
-}))
-
+// API conservée (toast.success/error/warn/info) au-dessus de Sonner
 export const toast = {
-  success: (msg, d) => useToastStore.getState().add(msg, 'success', d),
-  error:   (msg, d) => useToastStore.getState().add(msg, 'error',   d ?? 6000),
-  warn:    (msg, d) => useToastStore.getState().add(msg, 'warn',    d),
-  info:    (msg, d) => useToastStore.getState().add(msg, 'info',    d),
+  success: (msg, opts) => sonner.success(msg, opts),
+  error: (msg, opts) => sonner.error(msg, { duration: 6000, ...opts }),
+  warn: (msg, opts) => sonner.warning(msg, opts),
+  info: (msg, opts) => sonner.info(msg, opts),
+  message: (msg, opts) => sonner(msg, opts),
+  promise: (p, opts) => sonner.promise(p, opts),
+  dismiss: (id) => sonner.dismiss(id),
 }

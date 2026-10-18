@@ -30,6 +30,7 @@ export default async function roleRoutes(fastify) {
   fastify.get('/', { preHandler: [authenticate] }, async (request, reply) => {
     const { rows } = await pool.query(
       `SELECT r.id, r.name, r.is_super_admin, r.created_at,
+              (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id)::int AS user_count,
               json_agg(json_build_object('key', p.key, 'label', p.label, 'category', p.category))
                 FILTER (WHERE p.id IS NOT NULL) AS permissions
        FROM roles r

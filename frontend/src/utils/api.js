@@ -67,3 +67,7 @@ api.interceptors.response.use(
 )
 
 export default api
+
+// Message d'erreur lisible renvoyé par l'API
+export const apiError = (err, fallback = 'Une erreur est survenue') =>
+  err?.response?.data?.error || fallback

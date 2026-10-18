@@ -303,6 +303,7 @@ export default async function authRoutes(fastify) {
         storage_used: user.storage_used,
         totp_enabled: user.totp_enabled,
         created_at: user.created_at,
+        preferences: user.preferences || {},
         permissions: await getUserPermissions(user.role_id, user.is_super_admin),
       },
     })
@@ -637,7 +638,7 @@ export default async function authRoutes(fastify) {
     const { rows } = await pool.query(
       `SELECT u.id, u.email, u.pseudo, u.first_name, u.last_name, u.avatar_path,
               u.discord_id, u.discord_avatar, u.discord_pseudo,
-              u.storage_quota, u.storage_used, u.totp_enabled, u.created_at,
+              u.storage_quota, u.storage_used, u.totp_enabled, u.created_at, u.preferences,
               r.id AS role_id, r.name AS role_name, r.is_super_admin
        FROM users u LEFT JOIN roles r ON u.role_id = r.id
        WHERE u.id = $1`,

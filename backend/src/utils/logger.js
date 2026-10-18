@@ -32,6 +32,13 @@ export async function notifyAdmins({ type, message }) {
 
 export async function notify({ userId, type, message }) {
   try {
+    // L'utilisateur peut couper un type de notification depuis Paramètres → Notifications
+    const { rows: [prefs] } = await pool.query(
+      `SELECT preferences->'notifications'->>$2 AS enabled FROM users WHERE id = $1`,
+      [userId, type]
+    )
+    if (prefs?.enabled === 'false') return
+
     const { rows } = await pool.query(
       `INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3) RETURNING *`,
       [userId, type, message]
