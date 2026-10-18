@@ -5,7 +5,14 @@ import pool from '../../config/database.js'
 import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp } from '../../utils/fingerprint.js'
-import { hashPassword, verifyPassword, revokeAllUserTokens } from '../../services/auth.service.js'
+import {
+  hashPassword,
+  verifyPassword,
+  revokeAllUserTokens,
+  generateTokenPair,
+  saveRefreshToken,
+  setRefreshCookie,
+} from '../../services/auth.service.js'
 import { sendEmail } from '../../services/email/email.service.js'
 import { deleteMediaFiles } from '../../services/storage.service.js'
 import { config } from '../../config/env.js'
@@ -18,6 +25,7 @@ import {
   normalizeEmail,
   optionalString,
   parsePagination,
+  likePattern,
 } from '../../utils/validation.js'
 
 const DEFAULT_QUOTA = 1073741824 // 1 Go
@@ -64,7 +72,7 @@ export default async function userRoutes(fastify) {
     const params = []
 
     if (search) {
-      params.push(`%${search}%`)
+      params.push(likePattern(search))
       where += ` AND (u.email ILIKE $${params.length} OR u.pseudo ILIKE $${params.length})`
     }
 
@@ -332,7 +340,14 @@ export default async function userRoutes(fastify) {
     await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params)
 
     if (passwordChanged) {
-      await log({ category: 'auth', level: 'info', action: 'password_changed', userId: user.id, ipAddress: extractIp(request) })
+      // Les autres appareils sont déconnectés ; cette session reçoit de nouveaux jetons
+      const ip = extractIp(request)
+      await revokeAllUserTokens(user.id)
+      const { accessToken, refreshToken } = generateTokenPair(fastify, user.id, user.email)
+      await saveRefreshToken(user.id, refreshToken, ip, request.headers['user-agent'] || '')
+      setRefreshCookie(reply, refreshToken)
+      await log({ category: 'auth', level: 'info', action: 'password_changed', userId: user.id, ipAddress: ip })
+      return reply.send({ message: 'Mot de passe mis à jour. Vos autres sessions ont été déconnectées.', accessToken })
     }
 
     return reply.send({ message: 'Profil mis à jour.' })

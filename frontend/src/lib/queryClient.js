@@ -9,6 +9,7 @@ export const queryClient = new QueryClient({
 
 export const invalidateFiles = () => {
   queryClient.invalidateQueries({ queryKey: ['files'] })
+  queryClient.invalidateQueries({ queryKey: ['file'] }) // fiches détaillées (panneau Informations)
   queryClient.invalidateQueries({ queryKey: ['folders'] })
   queryClient.invalidateQueries({ queryKey: ['folder-tree'] })
   queryClient.invalidateQueries({ queryKey: ['my-stats'] })

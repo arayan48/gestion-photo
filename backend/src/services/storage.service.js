@@ -16,19 +16,28 @@ export async function ensureStorageDirs() {
   }
 }
 
-export function sanitizeFilename(name) {
+// Nom affiché d'un fichier ou d'un dossier (le fichier sur disque porte toujours un nom
+// aléatoire, cf. generateStoredName). Accents, espaces et majuscules sont conservés :
+// seuls les caractères de contrôle et ceux interdits par les systèmes de fichiers
+// (utile pour les ZIP et les téléchargements) sont remplacés.
+export function sanitizeFilename(name, fallback = 'fichier') {
   const clean = String(name ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^\.+/, '') // pas de fichier caché / ".." 
+    .normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+/, '') // pas de fichier caché / ".."
+    .replace(/[. ]+$/, '') // Windows refuse un nom terminé par un point ou une espace
     .substring(0, 200)
-  return clean || 'fichier'
+    .trim()
+  return clean || fallback
 }
 
+// Extension d'un fichier média reconnu (« .JPG » → retirée du nom de base à l'envoi)
+export const MEDIA_EXT_RE = /\.(jpe?g|png|webp|gif|svg|avif|heic|heif|mp4|m4v|webm|mov)$/i
+
 export function generateStoredName(originalName) {
-  const ext = extname(originalName).toLowerCase()
+  const ext = (extname(originalName).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0]
   return `${nanoid(24)}${ext}`
 }
 
@@ -76,11 +85,15 @@ export async function processImage(inputBuffer, qualityPreset) {
   }
 
   if (qualityPreset === 'original' && meta.format !== 'svg') {
+    // Orientation EXIF 5 à 8 (photo de téléphone tenu à la verticale) : l'image
+    // s'affiche pivotée d'un quart de tour, largeur et hauteur sont donc inversées
+    const height = meta.pageHeight || meta.height
+    const rotated = meta.orientation >= 5
     return {
       data: inputBuffer,
       mime: detected.mime,
       ext: detected.ext,
-      info: { width: meta.width, height: meta.pageHeight || meta.height, format: meta.format },
+      info: { width: rotated ? height : meta.width, height: rotated ? meta.width : height, format: meta.format },
     }
   }
 
@@ -107,7 +120,10 @@ export async function generateImageThumbnail(inputPath) {
   const thumbName = `thumb_${nanoid(16)}.jpg`
   const thumbPath = join(STORAGE_BASE, 'thumbnails', thumbName)
 
+  // rotate() applique l'orientation EXIF : sans lui, la miniature (qui perd les
+  // métadonnées) d'une photo prise à la verticale apparaîtrait couchée
   await sharp(inputPath)
+    .rotate()
     .resize(400, 300, { fit: 'inside' })
     .jpeg({ quality: 70 })
     .toFile(thumbPath)

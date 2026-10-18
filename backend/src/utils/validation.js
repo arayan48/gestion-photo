@@ -37,6 +37,11 @@ export function parsePagination(query, { defaultLimit = 50, maxLimit = 200 } = {
   return { page, limit, offset: (page - 1) * limit }
 }
 
+// Motif ILIKE « contient » : les caractères % et _ saisis sont cherchés littéralement
+export function likePattern(value) {
+  return `%${String(value).replace(/[\\%_]/g, '\\$&')}%`
+}
+
 export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')

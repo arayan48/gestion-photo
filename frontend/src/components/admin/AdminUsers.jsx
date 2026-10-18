@@ -49,7 +49,7 @@ function RoleDialog({ user, roles, onClose, onSave }) {
   const [roleId, setRoleId] = useState(user.role_id || '')
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Rôle de ${user.pseudo}`} icon={Key} size="sm"
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={() => onSave({ roleId: roleId || null })}>Enregistrer</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!roleId || roleId === user.role_id} onClick={() => onSave({ roleId })}>Enregistrer</Button></>}>
       <div className="space-y-1.5">
         {roles.filter((r) => !r.is_super_admin).map((r) => (
           <button key={r.id} onClick={() => setRoleId(r.id)}
@@ -67,14 +67,17 @@ function RoleDialog({ user, roles, onClose, onSave }) {
 }
 
 function AddUserDialog({ roles, onClose, onDone }) {
-  const [form, setForm] = useState({ email: '', pseudo: '', password: '', firstName: '', lastName: '', roleId: '', storageQuota: 5 })
+  const can = usePermission()
+  // Quota personnalisé seulement avec la permission dédiée (sinon le serveur refuse la création)
+  const canQuota = can('users.change_quota')
+  const [form, setForm] = useState({ email: '', pseudo: '', password: '', firstName: '', lastName: '', roleId: '', storageQuota: 1 })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const submit = async (e) => {
     e.preventDefault()
     setLoading(true)
     try {
-      await api.post('/users', { ...form, roleId: form.roleId || undefined, storageQuota: Number(form.storageQuota) * GiB })
+      await api.post('/users', { ...form, roleId: form.roleId || undefined, storageQuota: canQuota ? Math.round(Number(form.storageQuota) * GiB) : undefined })
       toast.success(`Utilisateur « ${form.pseudo} » créé`)
       onDone()
       onClose()
@@ -97,7 +100,7 @@ function AddUserDialog({ roles, onClose, onDone }) {
               {roles.filter((r) => !r.is_super_admin).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </Select>
           </Field>
-          <Field label="Quota (Go)"><Input type="number" min={1} max={2000} value={form.storageQuota} onChange={(e) => set('storageQuota', e.target.value)} /></Field>
+          {canQuota && <Field label="Quota (Go)"><Input type="number" min={1} max={2000} value={form.storageQuota} onChange={(e) => set('storageQuota', e.target.value)} /></Field>}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
@@ -177,6 +180,8 @@ export default function AdminUsers() {
   }
 
   const selectedUsers = users.filter((u) => selected.has(u.id))
+  // Ni le Super Admin ni soi-même ne peuvent être supprimés
+  const deletable = selectedUsers.filter((u) => !u.is_super_admin && u.id !== me?.id)
   const toggle = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const allSel = users.length > 0 && users.every((u) => selected.has(u.id))
 
@@ -198,7 +203,7 @@ export default function AdminUsers() {
       {selected.size > 0 && (
         <div className="flex items-center gap-3 border-l-2 border-accent-500 bg-overlay/40 px-4 py-2">
           <span className="text-sm font-medium text-fg">{selected.size} sélectionné(s)</span>
-          {can('users.delete') && <Button size="sm" variant="danger-soft" onClick={() => remove(selectedUsers.filter((u) => !u.is_super_admin && u.id !== me?.id))}>Supprimer</Button>}
+          {can('users.delete') && deletable.length > 0 && <Button size="sm" variant="danger-soft" onClick={() => remove(deletable)}>Supprimer ({deletable.length})</Button>}
           <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted hover:text-fg"><X size={15} /></button>
         </div>
       )}

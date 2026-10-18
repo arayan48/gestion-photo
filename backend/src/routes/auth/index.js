@@ -17,6 +17,8 @@ import {
   generateOtp,
   verifyOtp,
   hashToken,
+  setRefreshCookie,
+  clearRefreshCookie,
 } from '../../services/auth.service.js'
 import { checkBan, recordFailedAttempt, resetAttempts } from '../../services/ban.service.js'
 import { getConfigValues, setConfigValues, getAppUrl } from '../../services/config.service.js'
@@ -34,28 +36,7 @@ import {
   optionalString,
 } from '../../utils/validation.js'
 
-// Le cookie doit être envoyé à /refresh ET /logout (sinon la déconnexion ne peut pas
-// révoquer le refresh token) → chemin commun /api/auth
-const REFRESH_COOKIE_PATH = '/api/auth'
-const LEGACY_REFRESH_COOKIE_PATH = '/api/auth/refresh'
 const DISCORD_STATE_COOKIE = 'discord_oauth_state'
-
-function setRefreshCookie(reply, token) {
-  // Supprime l'ancien cookie (anciennes versions) pour éviter deux cookies homonymes
-  reply.clearCookie('refresh_token', { path: LEGACY_REFRESH_COOKIE_PATH })
-  reply.setCookie('refresh_token', token, {
-    httpOnly: true,
-    secure: config.secureCookies,
-    sameSite: 'strict',
-    path: REFRESH_COOKIE_PATH,
-    maxAge: 7 * 24 * 60 * 60,
-  })
-}
-
-function clearRefreshCookie(reply) {
-  reply.clearCookie('refresh_token', { path: LEGACY_REFRESH_COOKIE_PATH })
-  reply.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH })
-}
 
 const PASSWORD_ERROR = `Le mot de passe doit contenir au moins ${PASSWORD_MIN_LENGTH} caractères`
 

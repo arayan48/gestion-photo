@@ -30,7 +30,16 @@ const NOTIF_ICONS = {
   backup_failed: { icon: ShieldAlert, tone: 'text-red-500' },
 }
 
-function NotificationsPanel() {
+// Page ouverte au clic sur une notification
+const NOTIF_TARGETS = {
+  new_account_request: '/dashboard?tab=requests',
+  file_deleted: '/explorer?view=trash',
+  storage_warning: '/dashboard?tab=overview',
+  backup_success: '/dashboard?tab=backups',
+  backup_failed: '/dashboard?tab=backups',
+}
+
+function NotificationsPanel({ onNavigate }) {
   const { notifications, unreadCount, markRead, markAllRead, remove, clearAll } = useNotificationStore()
   const [filter, setFilter] = useState('all')
   const navigate = useNavigate()
@@ -41,7 +50,11 @@ function NotificationsPanel() {
       markRead(n.id)
       api.post(`/admin/notifications/${n.id}/read`).catch(() => {})
     }
-    if (n.type === 'new_account_request') navigate('/dashboard?tab=requests')
+    const target = NOTIF_TARGETS[n.type]
+    if (target) {
+      onNavigate?.()
+      navigate(target)
+    }
   }
 
   return (
@@ -87,7 +100,7 @@ function NotificationsPanel() {
                   <button
                     onClick={(e) => { e.stopPropagation(); remove(n.id); api.delete(`/admin/notifications/${n.id}`).catch(() => {}) }}
                     aria-label="Supprimer la notification"
-                    className="hidden h-6 w-6 shrink-0 items-center justify-center text-subtle hover:text-red-500 group-hover:flex"
+                    className="hidden h-6 w-6 shrink-0 items-center justify-center text-subtle hover:text-red-500 group-hover:flex [@media(hover:none)]:flex"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -121,6 +134,7 @@ export default function Topbar() {
   const { setCommandOpen, setShortcutsOpen, setMobileNavOpen } = useUiStore()
   const can = usePermission()
   const navigate = useNavigate()
+  const [notifOpen, setNotifOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -169,6 +183,8 @@ export default function Topbar() {
         />
 
         <Popover
+          open={notifOpen}
+          onOpenChange={setNotifOpen}
           trigger={
             <button className="relative flex h-9 w-9 items-center justify-center text-muted transition-colors hover:text-fg data-[state=open]:text-fg" aria-label="Notifications">
               <Bell size={16} strokeWidth={1.75} />
@@ -185,7 +201,7 @@ export default function Topbar() {
             </button>
           }
         >
-          <NotificationsPanel />
+          <NotificationsPanel onNavigate={() => setNotifOpen(false)} />
         </Popover>
 
         <DropdownMenu

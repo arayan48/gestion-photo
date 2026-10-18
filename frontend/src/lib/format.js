@@ -1,13 +1,16 @@
-import { format, formatDistanceToNowStrict, isToday, isYesterday, isThisWeek, isThisYear, differenceInHours } from 'date-fns'
+import { format, formatDistanceToNowStrict, isToday, isYesterday, isThisWeek, isThisYear, differenceInMinutes } from 'date-fns'
 import { fr } from 'date-fns/locale'
+
+// Virgule décimale à la française, zéros inutiles retirés (« 1,5 Mo », « 12 Mo »)
+const decimal = (value, digits) => value.toLocaleString('fr-FR', { maximumFractionDigits: digits })
 
 export function formatSize(bytes) {
   bytes = Number(bytes) || 0 // les BIGINT PostgreSQL arrivent sous forme de chaîne
   if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1).replace('.0', '')} Ko`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1).replace('.0', '')} Mo`
-  if (bytes < 1024 ** 4) return `${(bytes / 1024 ** 3).toFixed(2)} Go`
-  return `${(bytes / 1024 ** 4).toFixed(2)} To`
+  if (bytes < 1024 ** 2) return `${decimal(bytes / 1024, 1)} Ko`
+  if (bytes < 1024 ** 3) return `${decimal(bytes / 1024 ** 2, 1)} Mo`
+  if (bytes < 1024 ** 4) return `${decimal(bytes / 1024 ** 3, 2)} Go`
+  return `${decimal(bytes / 1024 ** 4, 2)} To`
 }
 
 export function formatDuration(seconds) {
@@ -46,10 +49,10 @@ export function dateGroupLabel(date) {
 export const TRASH_RETENTION_HOURS = 48
 export function trashRemaining(deletedAt) {
   if (!deletedAt) return null
-  const left = TRASH_RETENTION_HOURS - differenceInHours(new Date(), new Date(deletedAt))
-  if (left <= 0) return 'Suppression imminente'
-  if (left < 1) return "Moins d'une heure"
-  return `Supprimé dans ${left} h`
+  const minutesLeft = TRASH_RETENTION_HOURS * 60 - differenceInMinutes(new Date(), new Date(deletedAt))
+  if (minutesLeft <= 0) return 'Suppression imminente'
+  if (minutesLeft < 60) return "Moins d'une heure"
+  return `Supprimé dans ${Math.floor(minutesLeft / 60)} h`
 }
 
 export function pluralize(count, singular, plural = `${singular}s`) {

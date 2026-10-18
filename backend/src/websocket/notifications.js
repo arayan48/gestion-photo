@@ -1,5 +1,6 @@
 // Map userId -> Set<WebSocket>
 const clients = new Map()
+const HEARTBEAT_MS = 30_000
 
 export function registerClient(userId, ws) {
   if (!clients.has(userId)) clients.set(userId, new Set())
@@ -41,7 +42,18 @@ export function registerWebsocketRoutes(fastify) {
 
     registerClient(userId, socket)
 
+    // Ping régulier : les proxys (Traefik, Nginx…) coupent les connexions muettes,
+    // et une connexion morte (mobile en veille) est détectée puis libérée
+    let alive = true
+    socket.on('pong', () => { alive = true })
+    const heartbeat = setInterval(() => {
+      if (!alive) return socket.terminate()
+      alive = false
+      socket.ping()
+    }, HEARTBEAT_MS)
+
     socket.on('close', () => {
+      clearInterval(heartbeat)
       unregisterClient(userId, socket)
     })
 

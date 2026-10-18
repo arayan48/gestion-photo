@@ -13,6 +13,7 @@ import { downloadFile, copyFileLink, shareFile } from '../../lib/actions.js'
 import { useHotkeys } from '../../hooks/useHotkeys.js'
 import { useIsDesktop } from '../../hooks/useMediaQuery.js'
 import { useConfirmStore } from '../../stores/confirm.store.js'
+import { refreshAccessToken } from '../../utils/api.js'
 import { useAuthStore, usePermission } from '../../stores/auth.store.js'
 import { setFavorite, trashFiles, fileMenu } from '../explorer/itemActions.js'
 import { IconButton } from '../ui/Button.jsx'
@@ -24,8 +25,15 @@ const SLIDESHOW_MS = 4500
 function ImageStage({ file, onZoomChange, zoomApi, onSwipe, onClose }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [scale, setScale] = useState(1)
-  useEffect(() => { setLoaded(false); setError(false) }, [file.id])
+  useEffect(() => { setLoaded(false); setError(false); setAttempt(0) }, [file.id])
+
+  // Échec de chargement : le token de l'URL a pu expirer → le renouveler et réessayer une fois
+  const onError = () => {
+    if (attempt > 0) return setError(true)
+    refreshAccessToken().then(() => setAttempt(1)).catch(() => setError(true))
+  }
 
   if (error) {
     return (
@@ -67,11 +75,12 @@ function ImageStage({ file, onZoomChange, zoomApi, onSwipe, onClose }) {
           )}
           {!loaded && <Loader2 size={30} className="absolute animate-spin text-white/70" />}
           <img
+            key={attempt}
             src={mediaUrl(file)}
             alt={file.original_name}
             draggable={false}
             onLoad={() => setLoaded(true)}
-            onError={() => setError(true)}
+            onError={onError}
             className={cn('max-h-full max-w-full select-none object-contain transition-opacity duration-300', loaded ? 'opacity-100' : 'opacity-0', file.mime_type === 'image/svg+xml' && 'bg-checker')}
           />
         </motion.div>
