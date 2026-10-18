@@ -16,7 +16,14 @@ Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vid�
 ## Fonctionnalités
 
 - Upload d'images (JPG, PNG, WEBP, GIF, SVG, AVIF) et vidéos (MP4, WEBM, MOV)
-- Explorateur de fichiers style Google Drive (grille / liste, dossiers, drag & drop)
+- Explorateur de fichiers style Google Drive (grille / liste, dossiers, regroupement par date, défilement infini)
+- Clic droit partout (fichier, dossier, sélection, fond, fil d'Ariane, arborescence, tableaux admin) ; appui long sur écran tactile
+- Sélection façon bureau : Ctrl/Cmd+clic, Maj+clic, lasso, Ctrl+A, navigation aux flèches
+- Glisser-déposer vers un dossier, le fil d'Ariane ou l'arborescence de la barre latérale ; dépôt de fichiers depuis l'ordinateur n'importe où
+- Pavé tactile : pincer pour changer la taille des vignettes ou zoomer, balayage deux doigts dans la visionneuse
+- Visionneuse plein écran (zoom, pellicule, diaporama, panneau d'infos, tags), palette de commandes Ctrl+K, raccourcis clavier (?)
+- Gestionnaire d'envoi global (file d'attente, progression, annulation, nouvelle tentative)
+- Thème clair / sombre, 6 couleurs d'accent, préférences synchronisées entre appareils ; interface mobile avec navigation basse
 - Liens permanents protégés par liste blanche IP
 - Miniatures automatiques (Sharp + FFmpeg)
 - Gestion des comptes avec validation manuelle par l'admin
@@ -136,6 +143,8 @@ docker compose -f docker-compose.dev.yml up --build
 
 Interface sur `http://localhost:5173` (rechargement à chaud du frontend et du backend), API sur `http://localhost:3000`.
 
+Sans Docker, lancez le frontend avec `BACKEND_URL=http://localhost:3000 npm run dev` pour que le proxy Vite pointe vers votre backend local.
+
 ---
 
 ## Configuration
@@ -173,7 +182,7 @@ Les anciennes variables (`APP_URL`, `JWT_ACCESS_SECRET`, `DISCORD_*`, `EMAIL_*`,
 | --- | --- |
 | Backend | Node.js + Fastify |
 | Base de données | PostgreSQL 16 |
-| Frontend | React + Vite + Tailwind CSS |
+| Frontend | React + Vite + Tailwind CSS, Radix UI (menus, dialogues), Framer Motion, TanStack Query, dnd-kit, cmdk, Recharts |
 | Reverse proxy | Nginx |
 | Conteneurisation | Docker + Docker Compose |
 | Traitement médias | Sharp (images) + FFmpeg (vidéos) |

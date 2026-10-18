@@ -1,41 +1,38 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
+import {
+  User, Palette, Lock, Link2, Bell, HardDrive, MousePointerClick, Camera, Sun, Moon, Monitor, Check,
+  ShieldCheck, Unlink, Save, Images, Film, Trash2, Heart, Folder, Keyboard,
+} from 'lucide-react'
+import api, { apiError } from '../utils/api.js'
+import { cn } from '../lib/cn.js'
+import { formatSize, formatDate } from '../lib/format.js'
+import { QUALITY_PRESETS } from '../lib/media.js'
+import { saveNotificationPreferences } from '../lib/prefsSync.js'
 import { useAuthStore } from '../stores/auth.store.js'
-import { useThemeStore } from '../stores/theme.store.js'
-import api from '../utils/api.js'
-import { Camera, Shield, Link2, Unlink, HardDrive, Sun, Moon, Monitor, Check, Eye, EyeOff, User, Bell, Palette, Lock } from 'lucide-react'
+import { useThemeStore, ACCENTS } from '../stores/theme.store.js'
+import { usePreferencesStore, GRID_SIZES } from '../stores/preferences.store.js'
+import { useUiStore } from '../stores/ui.store.js'
 import { toast } from '../stores/toast.store.js'
-
-const GiB = 1024 * 1024 * 1024
-const MiB = 1024 * 1024
-
-function formatBytes(b) {
-  if (b >= GiB) return `${(b / GiB).toFixed(2)} Go`
-  if (b >= MiB) return `${(b / MiB).toFixed(0)} Mo`
-  return `${Math.round(b / 1024)} Ko`
-}
-
-// ── Onglet thème ──────────────────────────────────────────────────────────────
-function ThemeOption({ value, label, icon: Icon, current, onChange }) {
-  const active = current === value
-  return (
-    <button type="button" onClick={() => onChange(value)}
-      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all w-28 ${
-        active ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20' : 'border-slate-200 dark:border-gray-800 hover:border-slate-300 dark:hover:border-gray-700'
-      }`}>
-      <Icon size={22} className={active ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400 dark:text-gray-500'} />
-      <span className={`text-xs font-medium ${active ? 'text-violet-700 dark:text-violet-300' : 'text-slate-600 dark:text-gray-400'}`}>{label}</span>
-      {active && <Check size={12} className="text-violet-600 dark:text-violet-400" />}
-    </button>
-  )
-}
+import { useIsDesktop } from '../hooks/useMediaQuery.js'
+import { Tabs, SideTabs } from '../components/ui/Tabs.jsx'
+import { Button } from '../components/ui/Button.jsx'
+import { Field, Input, PasswordInput, PasswordStrength, Switch, OtpInput, Segmented } from '../components/ui/Form.jsx'
+import { Avatar, userAvatar } from '../components/ui/Avatar.jsx'
+import { Badge } from '../components/ui/Badge.jsx'
+import { Progress } from '../components/ui/Progress.jsx'
+import { DiscordIcon } from '../components/shared/AuthLayout.jsx'
 
 const TABS = [
-    { key: 'profile',    label: 'Mon profil',      icon: User },
-  { key: 'appearance', label: 'Apparence',      icon: Palette },
-  { key: 'security',   label: 'Sécurité',        icon: Lock },
-  { key: 'linked',     label: 'Comptes liés',    icon: Link2 },
-  { key: 'notifs',     label: 'Notifications',   icon: Bell },
+  { value: 'profile', label: 'Profil', icon: User },
+  { value: 'appearance', label: 'Apparence', icon: Palette },
+  { value: 'explorer', label: 'Explorateur', icon: MousePointerClick },
+  { value: 'security', label: 'Sécurité', icon: Lock },
+  { value: 'linked', label: 'Comptes liés', icon: Link2 },
+  { value: 'notifications', label: 'Notifications', icon: Bell },
+  { value: 'storage', label: 'Stockage', icon: HardDrive },
 ]
 
 const DISCORD_ERRORS = {
@@ -44,364 +41,421 @@ const DISCORD_ERRORS = {
   discord_cancelled: 'Liaison Discord annulée.',
 }
 
-export default function Settings() {
-  const { user, fetchMe } = useAuthStore()
-  const { theme, setTheme } = useThemeStore()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [tab, setTab] = useState(() =>
-    searchParams.get('discord') || searchParams.get('discord_error') ? 'linked' : 'appearance'
+function Section({ title, description, children, className }) {
+  return (
+    <section className={cn('border-t border-line-strong pt-4', className)}>
+      {title && (
+        <div className="mb-5 grid gap-1 sm:grid-cols-[200px_1fr] sm:gap-6">
+          <h2 className="text-sm text-fg">{title}</h2>
+          {description && <p className="text-[13px] leading-relaxed text-muted">{description}</p>}
+        </div>
+      )}
+      {children}
+    </section>
   )
+}
 
-  // Retour de la liaison Discord (redirection depuis /api/auth/discord/callback)
-  useEffect(() => {
-    const linked = searchParams.get('discord') === 'linked'
-    const linkError = searchParams.get('discord_error')
-    if (!linked && !linkError) return
-    if (linked) {
-      fetchMe().catch(() => {})
-      toast.success('Compte Discord lié')
-    } else {
-      toast.error(DISCORD_ERRORS[linkError] || DISCORD_ERRORS.discord_failed)
-    }
-    setSearchParams({}, { replace: true })
-  }, [])
-  const [form, setForm] = useState({
-    pseudo: user?.pseudo || '',
-    firstName: user?.first_name || '',
-    lastName: user?.last_name || '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  })
-  const [showPwd, setShowPwd] = useState(false)
-  const [totpQr, setTotpQr] = useState(null)
-  const [totpCode, setTotpCode] = useState('')
-  const [loading, setLoading] = useState(false)
+function Row({ children }) {
+  return <div className="border-t border-line py-4 first:border-t-0 first:pt-0 last:pb-0">{children}</div>
+}
 
-  const used = user?.storage_used ?? 0
-  const quota = user?.storage_quota ?? GiB
-  const pct = Math.min(100, Math.round((used / quota) * 100))
-  const quotaColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-violet-500'
+// ── Profil ───────────────────────────────────────────────────────────────────
+function ProfileTab() {
+  const { user, fetchMe } = useAuthStore()
+  const [form, setForm] = useState({ pseudo: user?.pseudo || '', firstName: user?.first_name || '', lastName: user?.last_name || '' })
+  const [saving, setSaving] = useState(false)
+  const dirty = form.pseudo !== (user?.pseudo || '') || form.firstName !== (user?.first_name || '') || form.lastName !== (user?.last_name || '')
 
-  const handleSaveProfile = async (e) => {
+  const save = async (e) => {
     e.preventDefault()
-    setLoading(true)
+    setSaving(true)
     try {
-      await api.patch('/users/me/profile', {
-        pseudo: form.pseudo !== user?.pseudo ? form.pseudo : undefined,
-        firstName: form.firstName,
-        lastName: form.lastName,
-      })
+      await api.patch('/users/me/profile', { pseudo: form.pseudo !== user?.pseudo ? form.pseudo : undefined, firstName: form.firstName, lastName: form.lastName })
       await fetchMe()
-      toast.success('Profil mis à jour !')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur')
-    } finally { setLoading(false) }
+      toast.success('Profil mis à jour')
+    } catch (err) { toast.error(apiError(err)) } finally { setSaving(false) }
   }
 
-  const handleSavePassword = async (e) => {
-    e.preventDefault()
-    if (form.newPassword !== form.confirmPassword) {
-      toast.error('Les mots de passe ne correspondent pas')
-      return
-    }
-    setLoading(true)
-    try {
-      await api.patch('/users/me/profile', { password: form.newPassword, currentPassword: form.currentPassword })
-      toast.success('Mot de passe mis à jour !')
-      setForm((f) => ({ ...f, currentPassword: '', newPassword: '', confirmPassword: '' }))
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur')
-    } finally { setLoading(false) }
-  }
-
-  const handleSetupTotp = async () => {
-    try {
-      const { data } = await api.post('/auth/totp/setup')
-      setTotpQr(data.qrCode)
-    } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de l\'activation 2FA') }
-  }
-
-  const handleConfirmTotp = async () => {
-    try {
-      await api.post('/auth/totp/confirm', { code: totpCode })
-      await fetchMe()
-      setTotpQr(null)
-      setTotpCode('')
-      toast.success('2FA activé !')
-    } catch { toast.error('Code invalide') }
-  }
-
-  const handleDisableTotp = async () => {
-    if (!totpCode) return
-    try {
-      await api.post('/auth/totp/disable', { code: totpCode })
-      await fetchMe()
-      toast.success('2FA désactivé')
-      setTotpCode('')
-    } catch { toast.error('Code invalide') }
-  }
-
-  const handleLinkDiscord = async () => {
-    try {
-      const { data } = await api.post('/auth/discord/link')
-      window.location.href = data.url
-    } catch (err) { toast.error(err.response?.data?.error || 'Impossible de lier Discord') }
-  }
-
-  const handleUnlinkDiscord = async () => {
-    try {
-      await api.delete('/users/me/discord')
-      await fetchMe()
-      toast.success('Compte Discord délié')
-    } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de la dissociation') }
-  }
-
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files[0]
+  const uploadAvatar = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     const fd = new FormData()
     fd.append('file', file)
     try {
-      await api.post('/users/me/avatar', fd)
+      await toast.promise(api.post('/users/me/avatar', fd), { loading: 'Envoi de la photo…', success: 'Photo de profil mise à jour', error: (err) => apiError(err, "Erreur lors de l'envoi") })
       await fetchMe()
-      toast.success('Photo de profil mise à jour')
-    } catch { toast.error('Erreur lors du téléversement') }
+    } catch {}
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h2 className="text-xl font-semibold text-slate-900 dark:text-gray-100">Paramètres</h2>
+    <div className="space-y-10">
+      <Section>
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <div className="group relative">
+            <Avatar src={userAvatar(user)} name={user?.pseudo} size={80} />
+            <label className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera size={22} />
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" className="hidden" onChange={uploadAvatar} />
+            </label>
+          </div>
+          <div className="text-center sm:text-left">
+            <p className="text-lg font-medium text-fg">{user?.pseudo}</p>
+            <p className="text-sm text-muted">{user?.email}</p>
+            <div className="mt-2 flex flex-wrap justify-center gap-1.5 sm:justify-start">
+              {user?.role_name && <Badge color={user.is_super_admin ? 'amber' : 'accent'}>{user.role_name}</Badge>}
+              {user?.totp_enabled && <Badge color="green">2FA</Badge>}
+              {user?.created_at && <Badge>Membre depuis {formatDate(user.created_at, 'MMMM yyyy')}</Badge>}
+            </div>
+          </div>
+          <label className="sm:ml-auto">
+            <span className="inline-flex h-8 cursor-pointer items-center rounded-sm border border-line-strong px-3 text-[13px] text-fg hover:bg-overlay">Changer la photo</span>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" className="hidden" onChange={uploadAvatar} />
+          </label>
+        </div>
+      </Section>
+      <Section title="Informations personnelles">
+        <form onSubmit={save} className="space-y-4">
+          <Field label="Pseudo"><Input value={form.pseudo} onChange={(e) => setForm({ ...form, pseudo: e.target.value })} /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Prénom" optional><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
+            <Field label="Nom" optional><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
+          </div>
+          <Field label="Email" hint="L'adresse email ne peut pas être modifiée."><Input value={user?.email || ''} readOnly disabled /></Field>
+          <div className="flex justify-end"><Button type="submit" loading={saving} disabled={!dirty}>Enregistrer</Button></div>
+        </form>
+      </Section>
+    </div>
+  )
+}
 
-      {/* Onglets */}
-      <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-gray-900 rounded-xl p-1 border border-slate-200 dark:border-gray-800">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 justify-center sm:flex-none ${
-              tab === key ? 'bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 shadow-sm' : 'text-slate-500 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-300'
-            }`}>
-            <Icon size={13} />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
+// ── Apparence ────────────────────────────────────────────────────────────────
+function ThemePreview({ mode }) {
+  const dark = mode === 'dark'
+  return (
+    <div className={cn('flex h-20 overflow-hidden border', dark ? 'border-[#272522] bg-[#0b0a09]' : 'border-[#dcd6cd] bg-[#f1eee8]')}>
+      <div className={cn('w-1/4 space-y-1 border-r p-1.5', dark ? 'border-[#272522] bg-[#11100f]' : 'border-[#dcd6cd] bg-[#f9f7f3]')}>
+        <div className="h-1 w-3/4 bg-accent-500" />
+        {[0, 1, 2].map((i) => <div key={i} className={cn('h-1', dark ? 'bg-[#3c3934]' : 'bg-[#c4bdb2]')} />)}
       </div>
+      <div className="grid flex-1 grid-cols-3 gap-px p-1.5">
+        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className={dark ? 'bg-[#1f1d1b]' : 'bg-[#dcd6cd]'} />)}
+      </div>
+    </div>
+  )
+}
 
-      {/* ── Apparence ── */}
-      {tab === 'appearance' && (
-        <div className="card space-y-4">
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-gray-100">Thème de l'interface</h3>
-            <p className="text-sm text-slate-500 dark:text-gray-500 mt-0.5">"Système" s'adapte automatiquement à votre OS.</p>
-          </div>
-          <div className="flex gap-3">
-            <ThemeOption value="light"  label="Clair"   icon={Sun}     current={theme} onChange={setTheme} />
-            <ThemeOption value="dark"   label="Sombre"  icon={Moon}    current={theme} onChange={setTheme} />
-            <ThemeOption value="system" label="Système" icon={Monitor} current={theme} onChange={setTheme} />
-          </div>
+function AppearanceTab() {
+  const { theme, setTheme, accent, setAccent } = useThemeStore()
+  const { reduceMotion, set } = usePreferencesStore()
+  const options = [
+    { value: 'light', label: 'Clair', icon: Sun },
+    { value: 'dark', label: 'Sombre', icon: Moon },
+    { value: 'system', label: 'Système', icon: Monitor },
+  ]
+  return (
+    <div className="space-y-10">
+      <Section title="Thème" description="« Système » suit automatiquement le réglage de votre appareil. Synchronisé sur tous vos appareils.">
+        <div className="grid grid-cols-3 gap-3">
+          {options.map(({ value, label, icon: Icon }) => (
+            <button key={value} onClick={() => setTheme(value)} className={cn('border p-2 text-left transition-colors', theme === value ? 'border-accent-500' : 'border-line hover:border-line-strong')}>
+              {value === 'system' ? (
+                <div className="grid grid-cols-2 overflow-hidden"><ThemePreview mode="light" /><ThemePreview mode="dark" /></div>
+              ) : <ThemePreview mode={value} />}
+              <p className="mt-2 flex items-center gap-1.5 text-[13px] text-fg">{label}{theme === value && <Check size={13} className="ml-auto text-accent-500" />}</p>
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* ── Mon profil ── */}
-      {tab === 'profile' && (
-        <div className="space-y-4">
-          {/* Avatar + identité */}
-          <div className="card flex items-center gap-5">
-            <div className="relative shrink-0">
-              {user?.avatar_path || user?.discord_avatar ? (
-                <img src={user.avatar_path || user.discord_avatar} alt={user.pseudo}
-                  className="w-20 h-20 rounded-2xl object-cover ring-2 ring-violet-500/20" />
-              ) : (
-                <div className="w-20 h-20 rounded-2xl bg-violet-600 flex items-center justify-center text-3xl font-bold text-white">
-                  {user?.pseudo?.[0]?.toUpperCase()}
-                </div>
-              )}
-              <label className="absolute -bottom-1.5 -right-1.5 p-1.5 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-                <Camera size={13} className="text-slate-600 dark:text-gray-300" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-              </label>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-900 dark:text-gray-100 text-lg">{user?.pseudo}</p>
-              <p className="text-sm text-slate-500 dark:text-gray-400">{user?.email}</p>
-              {user?.role_name && (
-                <span className="inline-flex items-center px-2 py-0.5 mt-1.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
-                  {user.role_name}
-                </span>
-              )}
-              <div className="mt-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="flex items-center gap-1 text-slate-500 dark:text-gray-500"><HardDrive size={11} /> Stockage</span>
-                  <span className={`font-medium ${pct >= 90 ? 'text-red-500' : 'text-slate-500 dark:text-gray-500'}`}>{formatBytes(used)} / {formatBytes(quota)}</span>
-                </div>
-                <div className="h-1.5 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${quotaColor}`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3 className="font-semibold text-slate-800 dark:text-gray-200 mb-4">Informations personnelles</h3>
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Pseudo</label>
-                <input className="input" value={form.pseudo} onChange={(e) => setForm({ ...form, pseudo: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Prénom</label>
-                  <input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="Optionnel" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nom</label>
-                  <input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Optionnel" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Email</label>
-                <input className="input opacity-60 cursor-not-allowed" value={user?.email || ''} readOnly />
-                <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">L'email ne peut pas être modifié.</p>
-              </div>
-              <button type="submit" disabled={loading} className="btn-primary text-sm">{loading ? 'Enregistrement...' : 'Enregistrer'}</button>
-            </form>
-          </div>
+      </Section>
+      <Section title="Couleur d'accent" description="Utilisée pour les boutons, la sélection et les éléments actifs.">
+        <div className="flex flex-wrap gap-2">
+          {ACCENTS.map((a) => (
+            <button key={a.value} onClick={() => setAccent(a.value)} className={cn('flex items-center gap-2.5 border py-1.5 pl-1.5 pr-3 transition-colors', accent === a.value ? 'border-fg/60' : 'border-line hover:border-line-strong')} aria-label={a.label}>
+              <span className="h-6 w-6" style={{ background: a.hex }} />
+              <span className={cn('text-[13px]', accent === a.value ? 'text-fg' : 'text-muted')}>{a.label}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </Section>
+      <Section title="Accessibilité">
+        <Switch checked={reduceMotion} onChange={(v) => set({ reduceMotion: v })} label="Réduire les animations" description="Désactive les transitions et effets de mouvement (le réglage de l'appareil est respecté par défaut)." />
+      </Section>
+    </div>
+  )
+}
 
-      {/* ── Sécurité ── */}
-      {tab === 'security' && (
-        <div className="space-y-4">
-          {/* Mot de passe */}
-          <div className="card space-y-4">
-            <h3 className="font-semibold text-slate-800 dark:text-gray-200">Changer le mot de passe</h3>
-            <form onSubmit={handleSavePassword} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Mot de passe actuel</label>
-                <input type={showPwd ? 'text' : 'password'} className="input" value={form.currentPassword}
-                  onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} autoComplete="current-password" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nouveau mot de passe</label>
-                <div className="relative">
-                  <input type={showPwd ? 'text' : 'password'} className="input pr-10" value={form.newPassword}
-                    onChange={(e) => setForm({ ...form, newPassword: e.target.value })} minLength={8} placeholder="Min. 8 caractères" />
-                  <button type="button" onClick={() => setShowPwd((v) => !v)} tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-              {form.newPassword && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Confirmer</label>
-                  <input type={showPwd ? 'text' : 'password'}
-                    className={`input ${form.confirmPassword && form.newPassword !== form.confirmPassword ? 'border-red-400' : ''}`}
-                    value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Confirmer le mot de passe" />
-                  {form.confirmPassword && form.newPassword !== form.confirmPassword && (
-                    <p className="text-xs text-red-500 mt-1">Ne correspond pas</p>
-                  )}
-                </div>
-              )}
-              <button type="submit" disabled={loading || !form.newPassword || !form.currentPassword} className="btn-primary text-sm">Changer le mot de passe</button>
-            </form>
-          </div>
-
-          {/* TOTP */}
-          <div className="card space-y-3">
-            <div className="flex items-center gap-2">
-              <Shield size={16} className="text-violet-500" />
-              <h3 className="font-semibold text-slate-800 dark:text-gray-200">Double authentification (TOTP)</h3>
+// ── Explorateur ──────────────────────────────────────────────────────────────
+function ExplorerTab() {
+  const p = usePreferencesStore()
+  const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen)
+  return (
+    <div className="space-y-10">
+      <Section title="Souris et clavier" description="Adaptez le comportement à votre façon de travailler.">
+        <Row><Switch checked={p.clickToOpen} onChange={(v) => p.set({ clickToOpen: v })} label="Ouvrir d'un simple clic" description="Désactivé : un clic sélectionne et un double-clic ouvre (comme Windows / macOS). Sur écran tactile, un appui ouvre toujours." /></Row>
+        <Row>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-fg">Raccourcis clavier</p>
+              <p className="mt-0.5 text-xs text-muted">Navigation aux flèches, Suppr, F2, Ctrl+A, lasso, pincement du pavé tactile…</p>
             </div>
-            {user?.totp_enabled ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <Check size={14} className="text-green-600 dark:text-green-400" />
-                  <p className="text-sm text-green-700 dark:text-green-400 font-medium">2FA activé — compte sécurisé</p>
-                </div>
-                <div className="flex gap-2">
-                  <input className="input flex-1" placeholder="Code TOTP pour désactiver" value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))} maxLength={6} />
-                  <button onClick={handleDisableTotp} disabled={totpCode.length !== 6} className="btn-danger text-sm shrink-0">Désactiver</button>
-                </div>
-              </div>
-            ) : totpQr ? (
-              <div className="space-y-3">
-                <p className="text-sm text-slate-500 dark:text-gray-400">Scannez avec Google Authenticator ou Authy :</p>
-                <img src={totpQr} alt="QR TOTP" className="w-40 h-40 rounded-xl border border-slate-200 dark:border-gray-700" />
-                <div className="flex gap-2">
-                  <input className="input flex-1 text-center text-xl tracking-widest font-mono" placeholder="000000" value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))} maxLength={6} autoFocus />
-                  <button onClick={handleConfirmTotp} disabled={totpCode.length !== 6} className="btn-primary text-sm shrink-0">Confirmer</button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-slate-500 dark:text-gray-500">Non activé. Activez-le pour renforcer la sécurité de votre compte.</p>
-                <button onClick={handleSetupTotp} className="btn-secondary text-sm">Activer la 2FA</button>
-              </div>
-            )}
+            <Button variant="secondary" size="sm" onClick={() => setShortcutsOpen(true)}>Voir</Button>
           </div>
-        </div>
-      )}
-
-      {/* ── Comptes liés ── */}
-      {tab === 'linked' && (
-        <div className="card space-y-4">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <svg width="16" height="12" viewBox="0 0 71 55" fill="#5865F2">
-                <path d="M60.1 4.9C55.5 2.8 50.6 1.2 45.5.5c-.6 1.1-1.3 2.6-1.8 3.8C38.4 3.7 33.2 3.7 28 4.3c-.5-1.2-1.2-2.7-1.9-3.8C20.9 1.2 16 2.8 11.4 4.9 1.6 20.1-1 35 .3 49.7c5.7 4.2 11.2 6.7 16.7 8.4 1.3-1.8 2.5-3.8 3.5-5.8-1.9-.7-3.7-1.6-5.5-2.7.5-.3.9-.7 1.4-1 11.2 5.2 23.4 5.2 34.5 0 .4.3.9.7 1.4 1-1.7 1.1-3.6 2-5.5 2.7 1 2 2.2 4 3.5 5.8 5.5-1.7 11-4.2 16.7-8.4 1.5-17.3-2.6-32-10.9-44.8zM23.7 40.7c-3.9 0-7.1-3.6-7.1-8s3.1-8 7.1-8 7.2 3.6 7.1 8c0 4.4-3.1 8-7.1 8zm23.6 0c-3.9 0-7.1-3.6-7.1-8s3.1-8 7.1-8 7.2 3.6 7.1 8c0 4.4-3.1 8-7.1 8z" />
-              </svg>
-              <h3 className="font-semibold text-slate-800 dark:text-gray-200">Discord</h3>
-            </div>
-            {user?.discord_id ? (
-              <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-gray-800 rounded-lg">
-                {user.discord_avatar && <img src={user.discord_avatar} alt="Discord" className="w-10 h-10 rounded-full" />}
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-800 dark:text-gray-200">{user.discord_pseudo}</p>
-                  <p className="text-xs text-slate-500 dark:text-gray-500">Compte lié</p>
-                </div>
-                <button onClick={handleUnlinkDiscord} className="btn-secondary text-xs flex items-center gap-1.5">
-                  <Unlink size={12} /> Délier
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-slate-500 dark:text-gray-500">Aucun compte Discord lié. Permet la connexion via Discord OAuth2.</p>
-                <button type="button" onClick={handleLinkDiscord} className="btn-secondary text-sm inline-flex items-center gap-2">
-                  <Link2 size={14} /> Lier Discord
-                </button>
-              </div>
-            )}
+        </Row>
+      </Section>
+      <Section title="Affichage">
+        <Row>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm font-medium text-fg">Vue par défaut</p>
+            <Segmented value={p.viewMode} onChange={p.setViewMode} options={[{ value: 'grid', label: 'Grille' }, { value: 'list', label: 'Liste' }]} />
           </div>
-        </div>
-      )}
-
-      {/* ── Notifications ── */}
-      {tab === 'notifs' && (
-        <div className="card space-y-5">
-          <div>
-            <h3 className="font-semibold text-slate-800 dark:text-gray-200">Préférences de notifications</h3>
-            <p className="text-sm text-slate-500 dark:text-gray-500 mt-0.5">Ces préférences s'appliquent uniquement à votre compte.</p>
-          </div>
-          <div className="space-y-3">
-            {[
-              { key: 'notif.login_email',    label: 'Email à chaque connexion', desc: 'Un email est envoyé à chaque connexion réussie' },
-              { key: 'notif.upload_bell',    label: 'Notification upload terminé', desc: 'Notifier dans la cloche quand un upload est fini' },
-              { key: 'notif.storage_warn',   label: 'Alerte quota à 90%', desc: 'Prévenir quand le stockage est presque plein' },
-              { key: 'notif.file_deleted',   label: 'Notifier si fichier supprimé par un admin', desc: 'Alerte si un administrateur supprime votre fichier' },
-            ].map(({ key, label, desc }) => (
-              <label key={key} className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-                <input type="checkbox" defaultChecked className="mt-0.5 w-4 h-4 rounded text-violet-600" />
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-gray-300">{label}</p>
-                  <p className="text-xs text-slate-400 dark:text-gray-600">{desc}</p>
-                </div>
-              </label>
+        </Row>
+        <Row>
+          <p className="mb-3 text-sm font-medium text-fg">Taille des vignettes <span className="text-subtle">· {GRID_SIZES[p.gridSize]} px</span></p>
+          <input type="range" min={0} max={GRID_SIZES.length - 1} value={p.gridSize} onChange={(e) => p.setGridSize(Number(e.target.value))} className="w-full accent-[rgb(var(--accent-500))]" />
+        </Row>
+        <Row><Switch checked={p.groupByDate} onChange={(v) => p.set({ groupByDate: v })} label="Grouper par date" description="Aujourd'hui, Hier, Cette semaine, par mois… (tri par date)." /></Row>
+        <Row><Switch checked={p.showNames} onChange={(v) => p.set({ showNames: v })} label="Afficher les noms sous les vignettes" /></Row>
+      </Section>
+      <Section title="Envoi de fichiers">
+        <Row><Switch checked={p.askQuality} onChange={(v) => p.set({ askQuality: v })} label="Préparer avant d'envoyer" description="Affiche la fenêtre pour renommer et choisir la qualité. Désactivé : l'envoi démarre immédiatement." /></Row>
+        <Row>
+          <p className="mb-3 text-sm font-medium text-fg">Qualité par défaut des images</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {QUALITY_PRESETS.map((q) => (
+              <button key={q.value} onClick={() => p.setDefaultQuality(q.value)} className={cn('rounded-xl border p-3 text-left transition-all', p.defaultQuality === q.value ? 'border-accent-500 bg-accent-500/10' : 'border-line hover:border-line-strong')}>
+                <p className="text-sm font-medium text-fg">{q.label}</p>
+                <p className="text-[11px] text-subtle">{q.desc}</p>
+              </button>
             ))}
           </div>
+        </Row>
+      </Section>
+    </div>
+  )
+}
+
+// ── Sécurité ─────────────────────────────────────────────────────────────────
+function SecurityTab() {
+  const { user, fetchMe } = useAuthStore()
+  const [pwd, setPwd] = useState({ current: '', next: '', confirm: '' })
+  const [saving, setSaving] = useState(false)
+  const [qr, setQr] = useState(null)
+  const [code, setCode] = useState('')
+
+  const savePassword = async (e) => {
+    e.preventDefault()
+    if (pwd.next !== pwd.confirm) return toast.error('Les mots de passe ne correspondent pas')
+    setSaving(true)
+    try {
+      await api.patch('/users/me/profile', { password: pwd.next, currentPassword: pwd.current })
+      toast.success('Mot de passe mis à jour')
+      setPwd({ current: '', next: '', confirm: '' })
+    } catch (err) { toast.error(apiError(err)) } finally { setSaving(false) }
+  }
+
+  const totp = {
+    setup: async () => { try { setQr((await api.post('/auth/totp/setup')).data.qrCode) } catch (err) { toast.error(apiError(err)) } },
+    confirm: async () => {
+      try { await api.post('/auth/totp/confirm', { code }); await fetchMe(); setQr(null); setCode(''); toast.success('Double authentification activée') } catch { toast.error('Code invalide'); setCode('') }
+    },
+    disable: async () => {
+      try { await api.post('/auth/totp/disable', { code }); await fetchMe(); setCode(''); toast.success('Double authentification désactivée') } catch { toast.error('Code invalide'); setCode('') }
+    },
+  }
+
+  return (
+    <div className="space-y-10">
+      <Section title="Mot de passe" description="Toutes vos sessions restent actives après le changement.">
+        <form onSubmit={savePassword} className="space-y-4">
+          <Field label="Mot de passe actuel"><PasswordInput value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} autoComplete="current-password" required /></Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nouveau mot de passe">
+              <PasswordInput value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} minLength={8} autoComplete="new-password" required />
+              <PasswordStrength password={pwd.next} />
+            </Field>
+            <Field label="Confirmer" error={pwd.confirm && pwd.next !== pwd.confirm ? 'Ne correspond pas' : null}>
+              <PasswordInput value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} autoComplete="new-password" required />
+            </Field>
+          </div>
+          <div className="flex justify-end"><Button type="submit" loading={saving} disabled={!pwd.current || !pwd.next}>Changer le mot de passe</Button></div>
+        </form>
+      </Section>
+
+      <Section title="Double authentification (TOTP)" description="Un code à 6 chiffres de votre application (Google Authenticator, Authy, 1Password…) est demandé à chaque connexion.">
+        {user?.totp_enabled ? (
+          <div className="space-y-10">
+            <p className="border-l-2 border-emerald-600 pl-3 text-sm text-fg">Activée. Un code est demandé à chaque connexion.</p>
+            <div className="space-y-3">
+              <p className="text-[13px] text-muted">Pour désactiver, saisissez un code de votre application :</p>
+              <OtpInput value={code} onChange={setCode} />
+              <div className="flex justify-center"><Button variant="danger-soft" onClick={totp.disable} disabled={code.length !== 6}>Désactiver la 2FA</Button></div>
+            </div>
+          </div>
+        ) : qr ? (
+          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+            <img src={qr} alt="QR code TOTP" className="h-44 w-44 border border-line bg-white p-2" />
+            <div className="flex-1 space-y-4">
+              <ol className="list-inside list-decimal space-y-1 text-[13px] text-muted">
+                <li>Scannez le QR code avec votre application.</li>
+                <li>Saisissez le code à 6 chiffres affiché.</li>
+              </ol>
+              <OtpInput value={code} onChange={setCode} autoFocus />
+              <div className="flex gap-2">
+                <Button onClick={totp.confirm} disabled={code.length !== 6}>Activer</Button>
+                <Button variant="ghost" onClick={() => { setQr(null); setCode('') }}>Annuler</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={totp.setup}>Activer la double authentification</Button>
+        )}
+      </Section>
+    </div>
+  )
+}
+
+// ── Comptes liés ─────────────────────────────────────────────────────────────
+function LinkedTab() {
+  const { user, fetchMe } = useAuthStore()
+  const link = async () => {
+    try { window.location.href = (await api.post('/auth/discord/link')).data.url } catch (err) { toast.error(apiError(err, 'Impossible de lier Discord')) }
+  }
+  const unlink = async () => {
+    try { await api.delete('/users/me/discord'); await fetchMe(); toast.success('Compte Discord délié') } catch (err) { toast.error(apiError(err)) }
+  }
+  return (
+    <Section title="Discord" description="Liez votre compte pour vous connecter en un clic avec Discord.">
+      <div className="flex flex-wrap items-center gap-4 border border-line p-4">
+        <DiscordIcon size={20} className="text-[#5865F2]" />
+        {user?.discord_id ? (
+          <>
+            {user.discord_avatar && <img src={user.discord_avatar} alt="" className="h-10 w-10 rounded-full" />}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-fg">{user.discord_pseudo}</p>
+              <p className="text-xs text-muted">Compte lié</p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={unlink}>Délier</Button>
+          </>
+        ) : (
+          <>
+            <p className="min-w-0 flex-1 text-sm text-muted">Aucun compte Discord lié.</p>
+            <Button size="sm" variant="secondary" onClick={link}>Lier Discord</Button>
+          </>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+// ── Notifications (enregistrées en base, respectées par le serveur) ──────────
+const NOTIFS = [
+  { key: 'upload_done', label: 'Envoi terminé', desc: 'Quand un fichier a fini d’être traité.' },
+  { key: 'file_deleted', label: 'Fichier supprimé par un administrateur', desc: 'Si un admin met l’un de vos fichiers à la corbeille.' },
+]
+const ADMIN_NOTIFS = [
+  { key: 'new_account_request', label: 'Nouvelle demande de compte', desc: 'Une personne demande un accès.' },
+  { key: 'storage_warning', label: 'Alerte de stockage', desc: 'Le serveur dépasse 90 % de sa capacité médias.' },
+  { key: 'backup_success', label: 'Sauvegarde réussie' },
+  { key: 'backup_failed', label: 'Échec de sauvegarde', desc: 'Recommandé : à garder activé.' },
+]
+
+function NotificationsTab() {
+  const { user, fetchMe } = useAuthStore()
+  const [prefs, setPrefs] = useState(() => user?.preferences?.notifications || {})
+  const toggle = async (key, value) => {
+    const next = { ...prefs, [key]: value }
+    setPrefs(next)
+    try { await saveNotificationPreferences({ [key]: value }); fetchMe().catch(() => {}) } catch { toast.error('Enregistrement impossible'); setPrefs(prefs) }
+  }
+  const list = (items) => items.map((n) => (
+    <Row key={n.key}><Switch checked={prefs[n.key] !== false} onChange={(v) => toggle(n.key, v)} label={n.label} description={n.desc} /></Row>
+  ))
+  return (
+    <div className="space-y-10">
+      <Section title="Cloche de notifications" description="Choisissez ce qui apparaît dans la cloche et en temps réel. Appliqué immédiatement.">{list(NOTIFS)}</Section>
+      {user?.is_super_admin && <Section title="Administration">{list(ADMIN_NOTIFS)}</Section>}
+    </div>
+  )
+}
+
+// ── Stockage ─────────────────────────────────────────────────────────────────
+function StorageTab() {
+  const user = useAuthStore((s) => s.user)
+  const { data } = useQuery({ queryKey: ['my-stats'], queryFn: () => api.get('/files/stats').then((r) => r.data) })
+  const used = Number(user?.storage_used || 0)
+  const quota = Number(user?.storage_quota || 1)
+  const pct = Math.min(100, Math.round((used / quota) * 100))
+  const by = (t) => data?.byType?.find((x) => x.type === t) || { count: 0, size: 0 }
+  const img = by('image')
+  const vid = by('video')
+  // Palette catégorielle validée pour les graphiques (cf. AdminOverview)
+  const seg = [
+    { label: 'Photos', icon: Images, size: Number(img.size), count: img.count, color: '#c2410c' },
+    { label: 'Vidéos', icon: Film, size: Number(vid.size), count: vid.count, color: '#0891b2' },
+    { label: 'Corbeille', icon: Trash2, size: Number(data?.trash_size || 0), count: data?.trash_count || 0, color: '#a16207' },
+  ]
+  return (
+    <div className="space-y-10">
+      <Section>
+        <p className="label-mono">Espace utilisé</p>
+        <p className="mt-2 font-mono text-3xl tracking-[-0.03em] text-fg">{formatSize(used)} <span className="text-base text-subtle">/ {formatSize(quota)}</span></p>
+        <div className="mt-5 flex h-2 gap-[2px] overflow-hidden bg-overlay">
+          {seg.map((s) => s.size > 0 && <motion.div key={s.label} initial={{ width: 0 }} animate={{ width: `${(s.size / quota) * 100}%` }} className="h-full first:rounded-l-full" style={{ background: s.color }} title={`${s.label} : ${formatSize(s.size)}`} />)}
         </div>
-      )}
+        <p className={cn('mt-2 text-xs', pct >= 90 ? 'text-red-500' : 'text-subtle')}>{pct} % utilisé · {formatSize(Math.max(0, quota - used))} disponibles</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {seg.map(({ label, icon: Icon, size, count, color }) => (
+            <div key={label} className="border-t border-line pt-3">
+              <div className="flex items-center gap-2 text-[13px] text-muted"><span className="h-2.5 w-2.5" style={{ background: color }} /> {label}</div>
+              <p className="mt-2 font-mono text-lg text-fg">{formatSize(size)}</p>
+              <p className="font-mono text-[11px] text-subtle">{count} fichier(s)</p>
+            </div>
+          ))}
+        </div>
+        {pct >= 90 && <Progress value={pct} className="mt-5" />}
+      </Section>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex items-baseline justify-between border-t border-line pt-3"><span className="text-sm text-muted">Favoris</span><span className="font-mono text-fg">{data?.favorites ?? '—'}</span></div>
+        <div className="flex items-baseline justify-between border-t border-line pt-3"><span className="text-sm text-muted">Dossiers</span><span className="font-mono text-fg">{data?.folders ?? '—'}</span></div>
+      </div>
+    </div>
+  )
+}
+
+export default function Settings() {
+  const { fetchMe } = useAuthStore()
+  const [params, setParams] = useSearchParams()
+  const isDesktop = useIsDesktop()
+  const initial = params.get('discord') || params.get('discord_error') ? 'linked' : params.get('tab')
+  const tab = TABS.some((t) => t.value === initial) ? initial : 'profile'
+  const setTab = (t) => setParams({ tab: t }, { replace: true })
+
+  // Retour de la liaison Discord (redirection depuis /api/auth/discord/callback)
+  useEffect(() => {
+    const linked = params.get('discord') === 'linked'
+    const err = params.get('discord_error')
+    if (!linked && !err) return
+    if (linked) { fetchMe().catch(() => {}); toast.success('Compte Discord lié') } else toast.error(DISCORD_ERRORS[err] || DISCORD_ERRORS.discord_failed)
+    setParams({ tab: 'linked' }, { replace: true })
+  }, [])
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Paramètres</h1>
+      </div>
+      <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+        {isDesktop ? <div className="sticky top-6 self-start"><SideTabs value={tab} onChange={setTab} tabs={TABS} /></div> : <Tabs value={tab} onChange={setTab} tabs={TABS} className="mb-5" />}
+        <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="min-w-0">
+          {tab === 'profile' && <ProfileTab />}
+          {tab === 'appearance' && <AppearanceTab />}
+          {tab === 'explorer' && <ExplorerTab />}
+          {tab === 'security' && <SecurityTab />}
+          {tab === 'linked' && <LinkedTab />}
+          {tab === 'notifications' && <NotificationsTab />}
+          {tab === 'storage' && <StorageTab />}
+        </motion.div>
+      </div>
     </div>
   )
 }

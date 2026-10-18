@@ -1,0 +1,64 @@
+import { useId } from 'react'
+import { motion } from 'framer-motion'
+import { cn } from '../../lib/cn.js'
+
+// Onglets soulignés animés (défilement horizontal sur mobile)
+export function Tabs({ value, onChange, tabs, className }) {
+  const id = useId()
+  return (
+    <div className={cn('scrollbar-none -mx-1 flex gap-1 overflow-x-auto border-b border-line px-1', className)} role="tablist">
+      {tabs.map((tab) => {
+        const active = tab.value === value
+        return (
+          <button
+            key={tab.value}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.value)}
+            className={cn(
+              'relative flex shrink-0 items-center gap-2 px-3 pb-3 pt-2 text-[13px] transition-colors',
+              active ? 'text-fg' : 'text-muted hover:text-fg'
+            )}
+          >
+            {tab.label}
+            {tab.count > 0 && (
+              <span className={cn('font-mono text-[11px]', active ? 'text-accent-600 dark:text-accent-400' : 'text-subtle')}>
+                {tab.count}
+              </span>
+            )}
+            {active && (
+              <motion.span
+                layoutId={`tab-${id}`}
+                className="absolute inset-x-1 -bottom-px h-px bg-fg"
+                transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+              />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Navigation verticale (paramètres sur grand écran)
+export function SideTabs({ value, onChange, tabs }) {
+  return (
+    <nav className="flex flex-col gap-0.5">
+      {tabs.map((tab) => {
+        const active = tab.value === value
+        return (
+          <button
+            key={tab.value}
+            onClick={() => onChange(tab.value)}
+            className={cn(
+              'relative flex items-center gap-3 border-l px-3 py-2 text-left text-sm transition-colors',
+              active ? 'border-accent-500 text-fg' : 'border-line text-muted hover:border-line-strong hover:text-fg'
+            )}
+          >
+            <span className="relative">{tab.label}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}

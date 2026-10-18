@@ -27,11 +27,34 @@ export default async function adminRoutes(fastify) {
   fastify.get('/stats', {
     preHandler: [authenticate, requirePermission('system.view_stats')],
   }, async (_, reply) => {
-    const [users, files, storage, requests] = await Promise.all([
+    const [users, files, storage, requests, timeline, types, topUsers, security] = await Promise.all([
       pool.query('SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE is_active) AS active, COUNT(*) FILTER (WHERE is_banned) AS banned FROM users'),
       pool.query('SELECT COUNT(*) AS total, COALESCE(SUM(size), 0) AS total_size FROM files WHERE is_deleted = false'),
       checkMediaStorageLimit(),
       pool.query('SELECT COUNT(*) FROM account_requests WHERE status = $1', ['pending']),
+      // Uploads des 30 derniers jours (jours sans upload inclus, en UTC)
+      pool.query(
+        `SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+                COUNT(f.id)::int AS count, COALESCE(SUM(f.size), 0) AS size
+         FROM generate_series((NOW() AT TIME ZONE 'UTC')::date - 29, (NOW() AT TIME ZONE 'UTC')::date, '1 day') AS d(day)
+         LEFT JOIN files f ON f.created_at >= NOW() - INTERVAL '31 days' AND f.created_at::date = d.day
+         GROUP BY d.day ORDER BY d.day`
+      ),
+      pool.query(
+        `SELECT CASE WHEN mime_type LIKE 'image/%' THEN 'image' WHEN mime_type LIKE 'video/%' THEN 'video' ELSE 'other' END AS type,
+                COUNT(*)::int AS count, COALESCE(SUM(size), 0) AS size
+         FROM files WHERE is_deleted = false GROUP BY 1`
+      ),
+      pool.query(
+        `SELECT id, pseudo, avatar_path, storage_used, storage_quota FROM users
+         ORDER BY storage_used DESC LIMIT 5`
+      ),
+      pool.query(
+        `SELECT COUNT(*) FILTER (WHERE level = 'warning')::int AS warnings,
+                COUNT(*) FILTER (WHERE level = 'error')::int AS errors,
+                COUNT(*) FILTER (WHERE category = 'security')::int AS security
+         FROM logs WHERE created_at > NOW() - INTERVAL '24 hours'`
+      ),
     ])
 
     return reply.send({
@@ -39,6 +62,10 @@ export default async function adminRoutes(fastify) {
       files: files.rows[0],
       storage,
       pendingRequests: parseInt(requests.rows[0].count),
+      timeline: timeline.rows,
+      types: types.rows,
+      topUsers: topUsers.rows,
+      last24h: security.rows[0],
     })
   })
 
