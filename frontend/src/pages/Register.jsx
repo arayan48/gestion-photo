@@ -1,23 +1,23 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Send, CheckCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Send, CheckCircle2, Mail, AtSign } from 'lucide-react'
+import { motion } from 'framer-motion'
 import api from '../utils/api.js'
-import { LogoMark, APP_NAME } from '../components/shared/Logo.jsx'
+import AuthLayout, { Alert } from '../components/shared/AuthLayout.jsx'
+import { Button } from '../components/ui/Button.jsx'
+import { Field, Input, PasswordInput, PasswordStrength, Textarea } from '../components/ui/Form.jsx'
 
 export default function Register() {
-  const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', pseudo: '', password: '', confirmPassword: '', firstName: '', lastName: '', reason: '' })
-  const [showPwd, setShowPwd] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const mismatch = form.confirmPassword && form.password !== form.confirmPassword
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (form.password !== form.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas')
-      return
-    }
+    if (form.password !== form.confirmPassword) return setError('Les mots de passe ne correspondent pas')
     setError('')
     setLoading(true)
     try {
@@ -32,128 +32,53 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-gray-950 px-4">
-        <div className="card text-center max-w-sm w-full space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
-            <CheckCircle size={28} className="text-green-600 dark:text-green-400" />
+      <AuthLayout title="Demande envoyée !" subtitle="Un administrateur va étudier votre demande.">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="card space-y-5 p-6 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20">
+            <CheckCircle2 size={30} />
           </div>
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-gray-100">Demande envoyée !</h2>
-            <p className="text-slate-500 dark:text-gray-400 text-sm mt-2">
-              Un administrateur traitera votre demande. Vous recevrez un email de confirmation à l'acceptation.
-            </p>
-          </div>
-          <Link to="/login" className="btn-primary inline-block">Retour à la connexion</Link>
-        </div>
-      </div>
+          <p className="text-sm text-muted">Vous recevrez un email de confirmation dès que votre compte sera activé.</p>
+          <Link to="/login"><Button className="w-full">Retour à la connexion</Button></Link>
+        </motion.div>
+      </AuthLayout>
     )
   }
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-gray-950 px-4 py-8">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <LogoMark size={56} className="mx-auto mb-4 drop-shadow-[0_6px_18px_rgba(124,58,237,0.4)]" />
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-gray-100">{APP_NAME}</h1>
-          <p className="text-slate-500 dark:text-gray-400 mt-1 text-sm">Demande de création de compte</p>
+    <AuthLayout
+      wide
+      title="Demander un accès"
+      subtitle="Les comptes sont validés manuellement par un administrateur."
+      footer={<>Déjà un compte ? <Link to="/login" className="font-medium text-accent-600 hover:text-accent-500 dark:text-accent-400">Se connecter</Link></>}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email" htmlFor="email">
+            <Input id="email" type="email" icon={Mail} value={form.email} onChange={(e) => set('email', e.target.value)} required placeholder="vous@exemple.com" autoComplete="email" />
+          </Field>
+          <Field label="Pseudo" htmlFor="pseudo">
+            <Input id="pseudo" icon={AtSign} value={form.pseudo} onChange={(e) => set('pseudo', e.target.value)} required placeholder="monpseudo" autoComplete="username" />
+          </Field>
+          <Field label="Prénom" optional>
+            <Input value={form.firstName} onChange={(e) => set('firstName', e.target.value)} placeholder="Jean" autoComplete="given-name" />
+          </Field>
+          <Field label="Nom" optional>
+            <Input value={form.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="Dupont" autoComplete="family-name" />
+          </Field>
         </div>
-
-        <div className="card">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email + Pseudo */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Email *</label>
-                <input type="email" className="input" value={form.email} onChange={(e) => set('email', e.target.value)} required placeholder="vous@exemple.com" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Pseudo *</label>
-                <input className="input" value={form.pseudo} onChange={(e) => set('pseudo', e.target.value)} required placeholder="monpseudo" />
-              </div>
-            </div>
-
-            {/* Prénom + Nom */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Prénom</label>
-                <input className="input" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} placeholder="Jean" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Nom</label>
-                <input className="input" value={form.lastName} onChange={(e) => set('lastName', e.target.value)} placeholder="Dupont" />
-              </div>
-            </div>
-
-            {/* Mot de passe */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Mot de passe * <span className="text-xs font-normal text-slate-400">(min. 8 caractères)</span></label>
-              <div className="relative">
-                <input
-                  type={showPwd ? 'text' : 'password'}
-                  className="input pr-10"
-                  value={form.password}
-                  onChange={(e) => set('password', e.target.value)}
-                  required
-                  minLength={8}
-                  placeholder="••••••••"
-                />
-                <button type="button" onClick={() => setShowPwd((v) => !v)} tabIndex={-1}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300">
-                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Confirmer le mot de passe *</label>
-              <input
-                type={showPwd ? 'text' : 'password'}
-                className={`input ${form.confirmPassword && form.password !== form.confirmPassword ? 'border-red-400 dark:border-red-600' : ''}`}
-                value={form.confirmPassword}
-                onChange={(e) => set('confirmPassword', e.target.value)}
-                required
-                placeholder="••••••••"
-              />
-              {form.confirmPassword && form.password !== form.confirmPassword && (
-                <p className="text-xs text-red-500 mt-1">Les mots de passe ne correspondent pas</p>
-              )}
-            </div>
-
-            {/* Raison */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1">Raison de la demande *</label>
-              <textarea
-                className="input resize-none"
-                rows={3}
-                placeholder="Pourquoi souhaitez-vous accéder à Obscura ?"
-                value={form.reason}
-                onChange={(e) => set('reason', e.target.value)}
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-              </div>
-            )}
-
-            <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
-              {loading
-                ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                : <Send size={15} />}
-              {loading ? 'Envoi...' : 'Envoyer la demande'}
-            </button>
-          </form>
-
-          <p className="text-center text-sm text-slate-500 dark:text-gray-500 mt-4">
-            Déjà un compte ?{' '}
-            <Link to="/login" className="text-violet-500 hover:text-violet-400 font-medium transition-colors">Se connecter</Link>
-          </p>
-        </div>
-      </div>
-    </div>
+        <Field label="Mot de passe">
+          <PasswordInput value={form.password} onChange={(e) => set('password', e.target.value)} required minLength={8} placeholder="8 caractères minimum" autoComplete="new-password" />
+          <PasswordStrength password={form.password} />
+        </Field>
+        <Field label="Confirmer le mot de passe" error={mismatch && 'Les mots de passe ne correspondent pas'}>
+          <PasswordInput value={form.confirmPassword} onChange={(e) => set('confirmPassword', e.target.value)} required placeholder="••••••••" autoComplete="new-password" className={mismatch ? 'input-invalid' : ''} />
+        </Field>
+        <Field label="Pourquoi souhaitez-vous un accès ?" hint="Quelques mots pour aider l'administrateur à valider votre demande.">
+          <Textarea rows={3} value={form.reason} onChange={(e) => set('reason', e.target.value)} required placeholder="Je fais partie de l'équipe…" />
+        </Field>
+        {error && <Alert>{error}</Alert>}
+        <Button type="submit" size="lg" className="w-full" loading={loading} icon={Send}>Envoyer la demande</Button>
+      </form>
+    </AuthLayout>
   )
 }

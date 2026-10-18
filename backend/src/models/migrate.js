@@ -331,6 +331,22 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
     `,
   },
+  {
+    // Préférences d'interface synchronisées entre appareils (thème, accent, vue…)
+    // et préférences de notifications respectées par notify()
+    name: '023_add_user_preferences',
+    sql: `
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'::jsonb;
+    `,
+  },
+  {
+    name: '024_add_files_listing_indexes',
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_files_owner_folder_active ON files(owner_id, folder_id, created_at DESC) WHERE is_deleted = false;
+      CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at DESC);
+    `,
+  },
 ]
 
 export async function runMigrations({ closePool = false } = {}) {
