@@ -4,7 +4,7 @@ import {
   LayoutGrid, List, ArrowDownAZ, ArrowUpZA, CalendarArrowDown, CalendarArrowUp, HardDrive, XCircle,
 } from 'lucide-react'
 import api, { apiError } from '../../utils/api.js'
-import { invalidateFiles } from '../../lib/queryClient.js'
+import { queryClient, invalidateFiles } from '../../lib/queryClient.js'
 import { confirm, prompt } from '../../stores/confirm.store.js'
 import { toast } from '../../stores/toast.store.js'
 import { useUiStore } from '../../stores/ui.store.js'
@@ -98,12 +98,21 @@ export async function setFavorite(files, value) {
 }
 
 export async function setLink(files, on) {
+  // Mise à jour optimiste des fiches ouvertes : l'interrupteur bascule immédiatement
+  const previous = files.map((f) => [f.id, queryClient.getQueryData(['file', f.id])])
+  for (const [id, data] of previous) {
+    if (data) queryClient.setQueryData(['file', id], { ...data, link_active: on })
+  }
   try {
     const { count, skipped } = await bulk(on ? 'link_on' : 'link_off', files)
-    invalidateFiles()
     toast.success(on ? `Lien public activé (${count})` : `Lien public désactivé (${count})`)
     if (skipped) toast.warn(`${skipped} fichier(s) ignoré(s) : permission insuffisante`)
-  } catch (err) { toast.error(apiError(err)) }
+  } catch (err) {
+    for (const [id, data] of previous) if (data) queryClient.setQueryData(['file', id], data)
+    toast.error(apiError(err))
+  } finally {
+    invalidateFiles()
+  }
 }
 
 // ── Dossiers ─────────────────────────────────────────────────────────────────
