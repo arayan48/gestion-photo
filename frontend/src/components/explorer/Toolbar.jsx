@@ -23,7 +23,7 @@ const SORTS = [
 
 export const Toolbar = forwardRef(function Toolbar({
   filter, setFilter, type, setType, dateRange, setDateRange, hideFilter, showSort = true,
-  isTouch, touchSelect, setTouchSelect, countLabel,
+  isTouch, touchSelect, setTouchSelect, countLabel, filterPlaceholder = 'Filtrer…',
 }, filterRef) {
   const { viewMode, setViewMode, sortBy, sortDir, setSort, gridSize, setGridSize, groupByDate, showNames, set } = usePreferencesStore()
   const currentSort = SORTS.find((s) => s.by === sortBy && s.dir === sortDir) || SORTS[0]
@@ -39,7 +39,7 @@ export const Toolbar = forwardRef(function Toolbar({
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') { setFilter(''); e.currentTarget.blur() } }}
-            placeholder="Filtrer ce dossier…"
+            placeholder={filterPlaceholder}
             className="h-[34px] w-full rounded-sm border border-line bg-transparent pl-8 pr-8 text-[13px] text-fg outline-none transition-colors placeholder:text-subtle hover:border-line-strong focus:border-fg/60"
           />
           {filter ? (

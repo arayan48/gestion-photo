@@ -247,8 +247,10 @@ function SecurityTab() {
     if (pwd.next !== pwd.confirm) return toast.error('Les mots de passe ne correspondent pas')
     setSaving(true)
     try {
-      await api.patch('/users/me/profile', { password: pwd.next, currentPassword: pwd.current })
-      toast.success('Mot de passe mis à jour')
+      const { data } = await api.patch('/users/me/profile', { password: pwd.next, currentPassword: pwd.current })
+      // Les autres sessions sont révoquées : cette session repart avec un nouveau jeton
+      if (data.accessToken) useAuthStore.getState().setAccessToken(data.accessToken)
+      toast.success(data.message || 'Mot de passe mis à jour')
       setPwd({ current: '', next: '', confirm: '' })
     } catch (err) { toast.error(apiError(err)) } finally { setSaving(false) }
   }
@@ -265,7 +267,7 @@ function SecurityTab() {
 
   return (
     <div className="space-y-10">
-      <Section title="Mot de passe" description="Toutes vos sessions restent actives après le changement.">
+      <Section title="Mot de passe" description="Vos autres appareils seront déconnectés après le changement.">
         <form onSubmit={savePassword} className="space-y-4">
           <Field label="Mot de passe actuel"><PasswordInput value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} autoComplete="current-password" required /></Field>
           <div className="grid gap-4 sm:grid-cols-2">

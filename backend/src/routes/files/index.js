@@ -20,11 +20,12 @@ import {
   getMediaSubdir,
   deleteMediaFiles,
   QUALITY_PRESETS,
+  MEDIA_EXT_RE,
 } from '../../services/storage.service.js'
 import { checkMediaStorageLimit } from '../../config/storage.js'
 import { config } from '../../config/env.js'
 import { extractIp } from '../../utils/fingerprint.js'
-import { isUuid, isNonEmptyString, parsePagination } from '../../utils/validation.js'
+import { isUuid, isNonEmptyString, parsePagination, likePattern } from '../../utils/validation.js'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const MAX_ZIP_FILES = 500
@@ -58,6 +59,21 @@ async function getActiveFile(id) {
   const { rows } = await pool.query('SELECT * FROM files WHERE id = $1 AND is_deleted = false', [id])
   return rows[0] || null
 }
+
+// Fichier consultable (aperçu, téléchargement) : actif, ou dans la corbeille de son
+// propriétaire — sinon la visionneuse ne peut rien afficher depuis la Corbeille
+async function getViewableFile(id, user) {
+  if (!isUuid(id)) return null
+  const { rows } = await pool.query('SELECT * FROM files WHERE id = $1', [id])
+  const file = rows[0]
+  if (!file) return null
+  if (file.is_deleted) return canEditFile(user, file) ? file : null
+  return (await canViewFile(user, file)) ? file : null
+}
+
+// Alerte « stockage serveur à 90 % » : une fois toutes les 6 h, pas à chaque envoi
+const STORAGE_WARNING_INTERVAL = 6 * 60 * 60 * 1000
+let lastStorageWarning = 0
 
 export default async function fileRoutes(fastify) {
   // ─── Upload ───────────────────────────────────────────────────────────────
@@ -116,7 +132,8 @@ export default async function fileRoutes(fastify) {
     if (!(await isOwnFolder(folderId, user.id))) return fail(400, 'Dossier de destination invalide')
 
     const isImage = upload.mimetype.startsWith('image/')
-    const baseName = sanitizeFilename(fields.name || upload.filename).replace(/\.[^.]+$/, '') || 'fichier'
+    // Seule une extension média est retirée : « Fête.2024 » reste « Fête.2024 »
+    const baseName = sanitizeFilename(String(fields.name || upload.filename).replace(MEDIA_EXT_RE, ''))
 
     let storedName, finalPath, mimeType, originalName, fileSize
     let metadata = {}
@@ -136,17 +153,15 @@ export default async function fileRoutes(fastify) {
         fileSize = data.length
         metadata = { width: info.width, height: info.height, format: info.format }
 
-        if (qualityPreset !== 'thumbnail') {
-          const thumbPath = await generateImageThumbnail(finalPath)
-          createdPaths.push(thumbPath)
-          metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
-        }
+        const thumbPath = await generateImageThumbnail(finalPath)
+        createdPaths.push(thumbPath)
+        metadata.thumbnailPath = thumbPath.replace(config.storage.path, '/storage')
         await cleanupTemp()
       } else {
         // ffprobe valide qu'il s'agit bien d'une vidéo lisible
         metadata = await getVideoMetadata(upload.tempPath)
         mimeType = upload.mimetype
-        const ext = sanitizeFilename(upload.filename).match(/\.[a-z0-9]+$/i)?.[0] || ''
+        const ext = String(upload.filename).match(/\.[a-z0-9]{1,8}$/i)?.[0] || ''
         originalName = baseName + ext.toLowerCase()
         storedName = generateStoredName(originalName)
         finalPath = getFilePath('videos', storedName)
@@ -210,11 +225,12 @@ export default async function fileRoutes(fastify) {
     }
 
     // Alerte si 90% de la limite serveur
-    if (storageStatus.percent >= 90) {
-      await notifyAdmins({ type: 'storage_warning', message: `Stockage serveur à ${storageStatus.percent}%` })
+    if (storageStatus.percent >= 90 && Date.now() - lastStorageWarning > STORAGE_WARNING_INTERVAL) {
+      lastStorageWarning = Date.now()
+      await notifyAdmins({ type: 'storage_warning', message: `Stockage serveur à ${storageStatus.percent} %` })
     }
 
-    await notify({ userId: user.id, type: 'upload_done', message: `Fichier "${originalName}" uploadé avec succès` })
+    await notify({ userId: user.id, type: 'upload_done', message: `« ${originalName} » a bien été envoyé` })
     await log({ category: 'files', level: 'info', action: 'file_uploaded', userId: user.id, ipAddress: ip, metadata: { fileId: file.id, name: originalName, size: fileSize, mime: mimeType, qualityPreset } })
 
     return reply.code(201).send(file)
@@ -254,7 +270,7 @@ export default async function fileRoutes(fastify) {
     }
 
     if (search) {
-      params.push(`%${search}%`)
+      params.push(likePattern(search))
       where += ` AND f.original_name ILIKE $${params.length}`
     }
 
@@ -417,7 +433,7 @@ export default async function fileRoutes(fastify) {
     const params = []
     if (name !== undefined) {
       if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom invalide' })
-      params.push(sanitizeFilename(name.trim()))
+      params.push(sanitizeFilename(name))
       updates.push(`original_name = $${params.length}`)
     }
     if (folderId !== undefined) {
@@ -507,8 +523,12 @@ export default async function fileRoutes(fastify) {
 
     const file = rows[0]
 
-    await pool.query('UPDATE files SET link_access_count = link_access_count + 1 WHERE id = $1', [file.id])
-    await log({ category: 'security', level: 'info', action: 'media_accessed', ipAddress: extractIp(request), metadata: { fileId: file.id } })
+    // Une vidéo lue émet plusieurs requêtes Range : seule la première (début du fichier) compte
+    const range = request.headers.range
+    if (!range || /^bytes=0-/.test(range)) {
+      await pool.query('UPDATE files SET link_access_count = link_access_count + 1 WHERE id = $1', [file.id])
+      await log({ category: 'security', level: 'info', action: 'media_accessed', ipAddress: extractIp(request), metadata: { fileId: file.id } })
+    }
 
     reply.header('X-Content-Type-Options', 'nosniff')
     return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)))
@@ -516,10 +536,8 @@ export default async function fileRoutes(fastify) {
 
   // ─── Visionner un fichier (authentifié, sans whitelist IP) ──────────────
   fastify.get('/:id/view', { preHandler: [authenticate] }, async (request, reply) => {
-    const file = await getActiveFile(request.params.id)
-    if (!file || !(await canViewFile(request.currentUser, file))) {
-      return reply.code(404).send({ error: 'Fichier introuvable' })
-    }
+    const file = await getViewableFile(request.params.id, request.currentUser)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
 
     reply.header('Content-Disposition', contentDisposition('inline', file.original_name))
     reply.header('Cache-Control', 'private, max-age=3600')
@@ -531,10 +549,8 @@ export default async function fileRoutes(fastify) {
 
   // ─── Télécharger un fichier ───────────────────────────────────────────────
   fastify.get('/:id/download', { preHandler: [authenticate] }, async (request, reply) => {
-    const file = await getActiveFile(request.params.id)
-    if (!file || !(await canViewFile(request.currentUser, file))) {
-      return reply.code(404).send({ error: 'Fichier introuvable' })
-    }
+    const file = await getViewableFile(request.params.id, request.currentUser)
+    if (!file) return reply.code(404).send({ error: 'Fichier introuvable' })
 
     reply.header('Content-Disposition', contentDisposition('attachment', file.original_name))
     reply.header('X-Content-Type-Options', 'nosniff')
@@ -594,7 +610,7 @@ export default async function fileRoutes(fastify) {
 
     const { rows } = await pool.query(
       'INSERT INTO folders (name, parent_id, owner_id) VALUES ($1, $2, $3) RETURNING *',
-      [sanitizeFilename(name.trim()), parentId || null, request.currentUser.id]
+      [sanitizeFilename(name, 'Nouveau dossier'), parentId || null, request.currentUser.id]
     )
 
     await log({ category: 'files', level: 'info', action: 'folder_created', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { folderId: rows[0].id, name: rows[0].name } })
@@ -615,7 +631,7 @@ export default async function fileRoutes(fastify) {
     const params = []
     if (name !== undefined) {
       if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom requis' })
-      params.push(sanitizeFilename(name.trim()))
+      params.push(sanitizeFilename(name, 'Dossier'))
       updates.push(`name = $${params.length}`)
     }
     if (parentId !== undefined) {

@@ -7,6 +7,7 @@ import { usePreferencesStore } from '../../stores/preferences.store.js'
 import { formatSize, pluralize } from '../../lib/format.js'
 import { QUALITY_PRESETS, ACCEPT_ATTR, isAcceptedFile } from '../../lib/media.js'
 import { cn } from '../../lib/cn.js'
+import { toast } from '../../stores/toast.store.js'
 import { Dialog } from '../ui/Dialog.jsx'
 import { Button } from '../ui/Button.jsx'
 import { Segmented, Switch } from '../ui/Form.jsx'
@@ -46,6 +47,8 @@ export default function UploadDialog() {
     input.accept = ACCEPT_ATTR
     input.onchange = () => {
       const files = [...input.files].filter(isAcceptedFile)
+      const rejected = input.files.length - files.length
+      if (rejected) toast.warn(`${rejected} fichier(s) ignoré(s) : seules les images et vidéos sont acceptées`)
       setEntries((prev) => [...prev, ...files.map((file, i) => ({
         key: `${file.name}-${file.size}-${Date.now()}-${i}`,
         file,
