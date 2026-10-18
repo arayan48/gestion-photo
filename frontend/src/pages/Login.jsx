@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { LogIn, Mail, ShieldCheck, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuthStore } from '../stores/auth.store.js'
 import api from '../utils/api.js'
@@ -76,10 +76,10 @@ export default function Login() {
 
   return (
     <AuthLayout
-      title={requireTotp ? 'Double authentification' : 'Bon retour 👋'}
-      subtitle={requireTotp ? "Saisissez le code à 6 chiffres de votre application d'authentification." : 'Connectez-vous pour accéder à votre espace.'}
+      title={requireTotp ? 'Code de vérification' : 'Connexion'}
+      subtitle={requireTotp ? "Saisissez le code à 6 chiffres affiché par votre application d'authentification." : 'Accédez à vos photos et vidéos.'}
       footer={!requireTotp && (
-        <>Pas encore de compte ? <Link to="/register" className="font-medium text-accent-600 hover:text-accent-500 dark:text-accent-400">Faire une demande</Link></>
+        <>Pas de compte ? <Link to="/register" className="text-fg underline decoration-line-strong underline-offset-4 hover:decoration-fg">Demander un accès</Link></>
       )}
     >
       <AnimatePresence mode="wait" initial={false}>
@@ -89,44 +89,38 @@ export default function Login() {
             {error && <Alert>{error}</Alert>}
 
             <Field label="Adresse email" htmlFor="email">
-              <Input id="email" type="email" icon={Mail} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" autoFocus placeholder="vous@exemple.com" />
+              <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" autoFocus placeholder="vous@exemple.com" />
             </Field>
             <Field
               label="Mot de passe"
               htmlFor="password"
-              right={<Link to="/forgot-password" className="text-xs font-medium text-accent-600 hover:text-accent-500 dark:text-accent-400">Mot de passe oublié ?</Link>}
+              right={<Link to="/forgot-password" className="text-xs text-subtle hover:text-fg">Oublié ?</Link>}
             >
               <PasswordInput id="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required autoComplete="current-password" placeholder="••••••••" />
             </Field>
 
-            <Button type="submit" size="lg" className="w-full" loading={loading} icon={LogIn}>
+            <Button type="submit" size="lg" className="w-full" loading={loading}>
               {loading ? 'Connexion…' : 'Se connecter'}
             </Button>
 
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-line" /></div>
-              <div className="relative flex justify-center"><span className="bg-bg px-3 text-xs text-subtle">ou</span></div>
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-px flex-1 bg-line" /><span className="label-mono">ou</span><div className="h-px flex-1 bg-line" />
             </div>
 
             <button
               type="button"
               onClick={() => { window.location.href = '/api/auth/discord' }}
-              className="flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-[#5865F2] text-[15px] font-medium text-white shadow-[0_8px_20px_-8px_rgb(88_101_242/0.7)] transition-all hover:bg-[#4752C4] active:scale-[0.98]"
+              className="flex h-11 w-full items-center justify-center gap-2.5 rounded-sm border border-line-strong text-sm text-fg transition-colors hover:border-fg/40 hover:bg-overlay"
             >
-              <DiscordIcon /> Continuer avec Discord
+              <DiscordIcon size={16} className="text-[#5865F2]" /> Continuer avec Discord
             </button>
           </motion.form>
         ) : (
           <motion.form key="totp" onSubmit={submit} className="space-y-6" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-            <div className="flex justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-500 ring-1 ring-accent-500/20">
-                <ShieldCheck size={26} />
-              </div>
-            </div>
             <OtpInput value={form.totp} onChange={(v) => setForm({ ...form, totp: v })} autoFocus disabled={loading} />
             {error && <Alert>{error}</Alert>}
             <Button type="submit" size="lg" className="w-full" loading={loading} disabled={form.totp.length !== 6}>Vérifier</Button>
-            <Button variant="ghost" className="w-full" icon={ArrowLeft} onClick={() => { setRequireTotp(false); setError(''); setForm((f) => ({ ...f, totp: '' })) }}>
+            <Button variant="ghost" className="w-full" onClick={() => { setRequireTotp(false); setError(''); setForm((f) => ({ ...f, totp: '' })) }}>
               Retour
             </Button>
           </motion.form>

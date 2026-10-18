@@ -9,7 +9,6 @@ export function Tabs({ value, onChange, tabs, className }) {
     <div className={cn('scrollbar-none -mx-1 flex gap-1 overflow-x-auto border-b border-line px-1', className)} role="tablist">
       {tabs.map((tab) => {
         const active = tab.value === value
-        const Icon = tab.icon
         return (
           <button
             key={tab.value}
@@ -17,21 +16,20 @@ export function Tabs({ value, onChange, tabs, className }) {
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'relative flex shrink-0 items-center gap-2 px-3 pb-3 pt-2 text-[13px] font-medium transition-colors',
+              'relative flex shrink-0 items-center gap-2 px-3 pb-3 pt-2 text-[13px] transition-colors',
               active ? 'text-fg' : 'text-muted hover:text-fg'
             )}
           >
-            {Icon && <Icon size={15} />}
             {tab.label}
             {tab.count > 0 && (
-              <span className={cn('rounded-full px-1.5 py-px text-[10px] font-bold', active ? 'bg-accent-600 text-white' : 'bg-overlay text-muted')}>
+              <span className={cn('font-mono text-[11px]', active ? 'text-accent-600 dark:text-accent-400' : 'text-subtle')}>
                 {tab.count}
               </span>
             )}
             {active && (
               <motion.span
                 layoutId={`tab-${id}`}
-                className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-accent-500"
+                className="absolute inset-x-1 -bottom-px h-px bg-fg"
                 transition={{ type: 'spring', stiffness: 500, damping: 40 }}
               />
             )}
@@ -44,29 +42,19 @@ export function Tabs({ value, onChange, tabs, className }) {
 
 // Navigation verticale (paramètres sur grand écran)
 export function SideTabs({ value, onChange, tabs }) {
-  const id = useId()
   return (
     <nav className="flex flex-col gap-0.5">
       {tabs.map((tab) => {
         const active = tab.value === value
-        const Icon = tab.icon
         return (
           <button
             key={tab.value}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors',
-              active ? 'text-fg' : 'text-muted hover:bg-overlay/60 hover:text-fg'
+              'relative flex items-center gap-3 border-l px-3 py-2 text-left text-sm transition-colors',
+              active ? 'border-accent-500 text-fg' : 'border-line text-muted hover:border-line-strong hover:text-fg'
             )}
           >
-            {active && (
-              <motion.span
-                layoutId={`stab-${id}`}
-                className="absolute inset-0 rounded-xl bg-overlay ring-1 ring-line"
-                transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-              />
-            )}
-            {Icon && <Icon size={17} className={cn('relative', active && 'text-accent-500')} />}
             <span className="relative">{tab.label}</span>
           </button>
         )

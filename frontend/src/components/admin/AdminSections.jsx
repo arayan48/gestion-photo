@@ -26,7 +26,7 @@ const MoreTrigger = (
   </button>
 )
 
-const ListSkeleton = () => <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
+const ListSkeleton = () => <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 " />)}</div>
 
 // ── Demandes de compte ───────────────────────────────────────────────────────
 export function AdminRequests() {
@@ -65,8 +65,8 @@ export function AdminRequests() {
         <Checkbox checked={allSel} indeterminate={selected.size > 0 && !allSel} onChange={() => setSelected(allSel ? new Set() : new Set(requests.map((r) => r.id)))} label={`${pluralize(requests.length, 'demande')} en attente`} />
         {selected.size > 0 && (
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="success" icon={UserCheck} onClick={() => review([...selected], 'accept')}>Accepter ({selected.size})</Button>
-            <Button size="sm" variant="danger-soft" icon={UserX} onClick={() => review([...selected], 'refuse')}>Refuser</Button>
+            <Button size="sm" variant="success" onClick={() => review([...selected], 'accept')}>Accepter ({selected.size})</Button>
+            <Button size="sm" variant="danger-soft" onClick={() => review([...selected], 'refuse')}>Refuser</Button>
           </div>
         )}
       </div>
@@ -78,16 +78,16 @@ export function AdminRequests() {
                 <Checkbox checked={selected.has(r.id)} onChange={() => setSelected((s) => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} className="mt-2.5" />
                 <Avatar name={r.pseudo} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-fg">{r.pseudo} {(r.first_name || r.last_name) && <span className="font-normal text-muted">· {[r.first_name, r.last_name].filter(Boolean).join(' ')}</span>}</p>
+                  <p className="truncate text-sm font-medium text-fg">{r.pseudo} {(r.first_name || r.last_name) && <span className="font-normal text-muted">· {[r.first_name, r.last_name].filter(Boolean).join(' ')}</span>}</p>
                   <p className="truncate text-xs text-muted">{r.email}</p>
                   <p className="mt-0.5 text-[11px] text-subtle">{formatRelative(r.created_at)}</p>
                 </div>
                 <DropdownMenu items={() => menu(r)} trigger={MoreTrigger} />
               </div>
-              <blockquote className="rounded-xl bg-overlay/60 px-3.5 py-2.5 text-[13px] italic leading-relaxed text-muted">« {r.reason} »</blockquote>
+              <blockquote className="border-l-2 border-line-strong pl-3 text-[13px] leading-relaxed text-muted">{r.reason}</blockquote>
               <div className="flex gap-2">
-                <Button size="sm" variant="success" icon={UserCheck} className="flex-1" onClick={() => review([r.id], 'accept')}>Accepter</Button>
-                <Button size="sm" variant="secondary" icon={UserX} className="flex-1" onClick={() => review([r.id], 'refuse')}>Refuser</Button>
+                <Button size="sm" variant="success" className="flex-1" onClick={() => review([r.id], 'accept')}>Accepter</Button>
+                <Button size="sm" variant="secondary" className="flex-1" onClick={() => review([r.id], 'refuse')}>Refuser</Button>
               </div>
             </div>
           </ContextMenu>
@@ -117,7 +117,7 @@ function RoleDialog({ role, allPermissions, onClose, onSave }) {
   }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={role ? `Modifier « ${role.name} »` : 'Nouveau rôle'} icon={Key} size="lg"
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button icon={Save} disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), permissionKeys: [...selected] })}>{role ? 'Enregistrer' : 'Créer'}</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), permissionKeys: [...selected] })}>{role ? 'Enregistrer' : 'Créer'}</Button></>}>
       <div className="space-y-5">
         <Field label="Nom du rôle"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Modérateur" autoFocus /></Field>
         <div className="flex items-center justify-between">
@@ -132,10 +132,10 @@ function RoleDialog({ role, allPermissions, onClose, onSave }) {
             const perms = grouped[cat]
             const n = perms.filter((p) => selected.has(p.key)).length
             return (
-              <div key={cat} className="overflow-hidden rounded-2xl border border-line">
+              <div key={cat} className="overflow-hidden border border-line">
                 <button type="button" onClick={() => toggleCat(cat)} className="flex w-full items-center gap-3 bg-overlay/50 px-4 py-2.5 text-left hover:bg-overlay">
                   <Checkbox checked={n === perms.length} indeterminate={n > 0 && n < perms.length} onChange={() => toggleCat(cat)} />
-                  <span className="flex-1 text-[13px] font-semibold text-fg">{cat}</span>
+                  <span className="flex-1 text-[13px] font-medium text-fg">{cat}</span>
                   <Badge>{n}/{perms.length}</Badge>
                 </button>
                 <div className="divide-y divide-line">
@@ -193,20 +193,17 @@ export function AdminRoles({ isSuperAdmin }) {
 
   return (
     <div className="space-y-4">
-      {isSuperAdmin && <div className="flex justify-end"><Button icon={Plus} onClick={() => setModal('create')}>Nouveau rôle</Button></div>}
+      {isSuperAdmin && <div className="flex justify-end"><Button onClick={() => setModal('create')}>Nouveau rôle</Button></div>}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {roles.map((r) => {
           const perms = r.permissions || []
           return (
             <ContextMenu key={r.id} items={() => menu(r)}>
-              <div className={cn('card flex flex-col p-5', r.is_super_admin && 'border-amber-500/30 bg-gradient-to-br from-amber-500/[0.06] to-transparent')}>
+              <div className={cn('card flex flex-col p-5', r.is_super_admin && 'border-l-2 border-l-amber-500')}>
                 <div className="flex items-start gap-3">
-                  <span className={cn('flex h-10 w-10 items-center justify-center rounded-xl', r.is_super_admin ? 'bg-amber-500/15 text-amber-500' : 'bg-accent-500/10 text-accent-500')}>
-                    {r.is_super_admin ? <Lock size={18} /> : <Key size={18} />}
-                  </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-fg">{r.name}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted"><Users size={12} /> {pluralize(r.user_count || 0, 'membre')}</p>
+                    <p className="truncate text-fg">{r.name}</p>
+                    <p className="font-mono text-[11px] text-subtle">{pluralize(r.user_count || 0, 'membre')}</p>
                   </div>
                   {isSuperAdmin && !r.is_super_admin && <DropdownMenu items={() => menu(r)} trigger={MoreTrigger} />}
                 </div>
@@ -219,7 +216,7 @@ export function AdminRoles({ isSuperAdmin }) {
                   ) : <span className="text-xs text-subtle">Aucune permission</span>}
                 </div>
                 {isSuperAdmin && !r.is_super_admin && (
-                  <Button size="sm" variant="secondary" icon={Pencil} className="mt-4 self-start" onClick={() => setModal(r)}>Modifier les permissions</Button>
+                  <Button size="sm" variant="secondary" className="mt-4 self-start" onClick={() => setModal(r)}>Modifier les permissions</Button>
                 )}
               </div>
             </ContextMenu>
@@ -237,7 +234,7 @@ function WhitelistDialog({ entry, onClose, onSave }) {
   const [label, setLabel] = useState(entry?.label || '')
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={entry ? "Modifier l'entrée" : 'Ajouter une IP'} icon={Shield} size="sm"
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button icon={Save} disabled={!ip.trim()} onClick={() => onSave({ ip: ip.trim(), label: label.trim() })}>Enregistrer</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!ip.trim()} onClick={() => onSave({ ip: ip.trim(), label: label.trim() })}>Enregistrer</Button></>}>
       <div className="space-y-4">
         <Field label="Adresse IP" hint="IPv4 ou IPv6. Seules ces adresses peuvent ouvrir les liens /media/…"><Input className="font-mono" value={ip} onChange={(e) => setIp(e.target.value)} placeholder="203.0.113.42" autoFocus /></Field>
         <Field label="Étiquette" optional><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Serveur FiveM, bureau…" /></Field>
@@ -276,10 +273,9 @@ export function AdminWhitelist() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-accent-500/20 bg-accent-500/[0.05] p-4">
-        <Globe size={18} className="shrink-0 text-accent-500" />
+      <div className="flex flex-wrap items-center gap-3 border-l-2 border-accent-500 bg-overlay/40 px-4 py-3">
         <p className="min-w-0 flex-1 text-[13px] text-muted">Toute requête vers <code className="rounded bg-overlay px-1 font-mono text-xs text-fg">/media/:token</code> provenant d'une IP absente de cette liste reçoit une erreur 403 (Nginx et API).</p>
-        {manage && <Button icon={Plus} onClick={() => setModal('add')}>Ajouter une IP</Button>}
+        {manage && <Button onClick={() => setModal('add')}>Ajouter une IP</Button>}
       </div>
       {isLoading ? <ListSkeleton /> : !list.length ? (
         <EmptyState icon={Shield} title="Liste blanche vide" description="Aucun lien public ne peut être consulté tant qu'aucune IP n'est autorisée." compact />
@@ -288,8 +284,7 @@ export function AdminWhitelist() {
           {list.map((e) => (
             <ContextMenu key={e.id} items={() => menu(e)}>
               <div className="flex items-center gap-4 px-4 py-3 hover:bg-overlay/50">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500"><Shield size={16} /></span>
-                <div className="min-w-0 flex-1">
+                                <div className="min-w-0 flex-1">
                   <p className="font-mono text-sm text-fg">{e.ip_address}</p>
                   <p className="truncate text-xs text-muted">{e.label || 'Sans étiquette'} · ajoutée par {e.added_by_pseudo || '—'} {formatRelative(e.created_at)}</p>
                 </div>
@@ -329,21 +324,21 @@ export function AdminBackups() {
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <div className="card p-5 md:col-span-2">
-          <p className="font-semibold text-fg">Lancer une sauvegarde</p>
+          <p className="label-mono">Sauvegarde manuelle</p>
           <p className="mt-1 text-xs text-muted">Copie compressée de la base de données et des médias. La planification se règle dans Configuration → Sauvegardes.</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Select value={type} onChange={(e) => setType(e.target.value)} className="h-10 w-48 py-2">
               <option value="local">Locale (serveur)</option>
               <option value="backblaze">Backblaze B2</option>
             </Select>
-            <Button icon={running ? RefreshCw : Play} loading={running} onClick={run}>{running ? 'Sauvegarde en cours…' : 'Lancer maintenant'}</Button>
+            <Button loading={running} onClick={run}>{running ? 'Sauvegarde en cours…' : 'Lancer maintenant'}</Button>
           </div>
         </div>
         <div className="card p-5">
-          <p className="text-[13px] font-medium text-muted">Dernière sauvegarde</p>
+          <p className="label-mono">Dernière sauvegarde</p>
           {last ? (
             <>
-              <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-fg">
+              <p className="mt-2 flex items-center gap-2 text-lg font-medium text-fg">
                 {last.status === 'success' ? <CheckCircle2 size={18} className="text-emerald-500" /> : <XCircle size={18} className="text-red-500" />}
                 {formatRelative(last.created_at)}
               </p>
@@ -359,9 +354,6 @@ export function AdminBackups() {
         <div className="table-wrapper divide-y divide-line">
           {backups.map((b) => (
             <div key={b.id} className="flex items-center gap-4 px-4 py-3">
-              <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', b.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500')}>
-                {b.type === 'local' ? <HardDrive size={16} /> : <Cloud size={16} />}
-              </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium capitalize text-fg">{b.type === 'local' ? 'Locale' : b.type}</p>
                 <p className="truncate text-xs text-muted" title={b.error_message || ''}>{b.error_message || formatDateTime(b.created_at)}</p>

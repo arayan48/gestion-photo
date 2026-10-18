@@ -81,19 +81,19 @@ export default function MoveDialog() {
           onDoubleClick={() => kids.length && setExpanded((e) => { const n = new Set(e); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n })}
           className={cn(
             'flex cursor-pointer items-center gap-1.5 rounded-lg py-2 pr-3 text-sm transition-colors',
-            selected ? 'bg-accent-500/15 font-medium text-accent-700 dark:text-accent-300' : 'text-fg hover:bg-overlay',
+            selected ? 'bg-accent-600 text-white' : 'text-fg hover:bg-overlay',
             disabled && 'cursor-not-allowed opacity-40'
           )}
           style={{ paddingLeft: 8 + depth * 18 }}
         >
           <button
             type="button"
-            className={cn('flex h-6 w-6 items-center justify-center rounded-md hover:bg-line/60', !kids.length && 'invisible')}
+            className={cn('flex h-6 w-6 items-center justify-center', !kids.length && 'invisible')}
             onClick={(e) => { e.stopPropagation(); setExpanded((s) => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n }) }}
           >
             <ChevronRight size={14} className={cn('transition-transform', open && 'rotate-90')} />
           </button>
-          {selected ? <FolderOpen size={17} className="text-accent-500" /> : <Folder size={17} className="text-amber-500/80" fill="currentColor" fillOpacity={0.15} />}
+          {selected ? <FolderOpen size={15} strokeWidth={1.75} /> : <Folder size={15} strokeWidth={1.75} className="text-subtle" />}
           <span className="truncate">{folder.name}</span>
         </div>
         {open && kids.map((k) => <Row key={k.id} folder={k} depth={depth + 1} />)}
@@ -113,26 +113,26 @@ export default function MoveDialog() {
       size="md"
       footer={
         <>
-          <Button variant="ghost" icon={FolderPlus} onClick={handleNewFolder} className="md:mr-auto">Nouveau dossier</Button>
+          <Button variant="ghost" onClick={handleNewFolder} className="md:mr-auto">Nouveau dossier</Button>
           <Button variant="ghost" onClick={close}>Annuler</Button>
           <Button onClick={submit} loading={busy}>Déplacer dans « {targetName} »</Button>
         </>
       }
     >
       <Input icon={Search} placeholder="Filtrer les dossiers…" value={filter} onChange={(e) => setFilter(e.target.value)} className="mb-3" />
-      <div className="max-h-[46vh] min-h-[220px] overflow-y-auto rounded-xl border border-line p-1.5">
+      <div className="max-h-[46vh] min-h-[220px] overflow-y-auto border border-line py-1">
         <div
           onClick={() => setTarget(null)}
-          className={cn('flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm', target === null ? 'bg-accent-500/15 font-medium text-accent-700 dark:text-accent-300' : 'hover:bg-overlay')}
+          className={cn('flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm', target === null ? 'bg-accent-600 text-white' : 'hover:bg-overlay')}
         >
-          <Home size={16} className={target === null ? 'text-accent-500' : 'text-muted'} /> Mon espace (racine)
+          <span className="font-mono text-subtle">/</span> Mon espace
         </div>
         {filtered
           ? filtered.map((f) => (
             <div key={f.id}
               onClick={() => !forbidden.has(f.id) && setTarget(f.id)}
-              className={cn('flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm', target === f.id ? 'bg-accent-500/15 font-medium text-accent-700 dark:text-accent-300' : 'hover:bg-overlay', forbidden.has(f.id) && 'opacity-40')}>
-              <Folder size={16} className="text-amber-500/80" /> {f.name}
+              className={cn('flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm', target === f.id ? 'bg-accent-600 text-white' : 'hover:bg-overlay', forbidden.has(f.id) && 'opacity-40')}>
+              <Folder size={15} strokeWidth={1.75} /> {f.name}
             </div>
           ))
           : (childrenMap.get('root') || []).map((f) => <Row key={f.id} folder={f} depth={0} />)}

@@ -74,7 +74,7 @@ export default function UploadDialog() {
       open={!!pending}
       onOpenChange={(o) => !o && close()}
       title={`Importer ${pluralize(entries.length, 'fichier')}`}
-      description={<span className="inline-flex items-center gap-1.5"><Folder size={13} /> Destination : <strong className="font-medium text-fg">{pending?.folderName || 'Mon espace'}</strong> · {formatSize(total)}</span>}
+      description={<span>Vers <span className="text-fg">{pending?.folderName || 'Mon espace'}</span> <span className="font-mono text-[11px] text-subtle">· {formatSize(total)}</span></span>}
       icon={CloudUpload}
       size="lg"
       footer={
@@ -84,7 +84,7 @@ export default function UploadDialog() {
             Ne plus demander (utiliser cette qualité)
           </label>
           <Button variant="ghost" onClick={close}>Annuler</Button>
-          <Button icon={CloudUpload} onClick={submit} disabled={!entries.length}>
+          <Button onClick={submit} disabled={!entries.length}>
             Envoyer {entries.length > 1 ? `les ${entries.length} fichiers` : ''}
           </Button>
         </>
@@ -92,7 +92,7 @@ export default function UploadDialog() {
     >
       <div className="space-y-4">
         <div>
-          <p className="mb-2 text-[13px] font-medium text-fg">Qualité des images</p>
+          <p className="label-mono mb-2">Qualité des images</p>
           <div className="grid grid-cols-3 gap-2">
             {QUALITY_PRESETS.map((q) => (
               <button
@@ -100,10 +100,10 @@ export default function UploadDialog() {
                 onClick={() => setQuality(q.value)}
                 className={cn(
                   'rounded-xl border p-3 text-left transition-all',
-                  quality === q.value ? 'border-accent-500 bg-accent-500/10 ring-4 ring-accent-500/10' : 'border-line hover:border-line-strong'
+                  quality === q.value ? 'border-accent-500 bg-accent-600/10' : 'border-line hover:border-line-strong'
                 )}
               >
-                <p className={cn('text-sm font-semibold', quality === q.value ? 'text-accent-700 dark:text-accent-300' : 'text-fg')}>{q.label}</p>
+                <p className="text-sm text-fg">{q.label}</p>
                 <p className="mt-0.5 text-[11px] leading-snug text-subtle">{q.desc}</p>
               </button>
             ))}
@@ -111,7 +111,7 @@ export default function UploadDialog() {
           <p className="mt-2 text-[11px] text-subtle">Les vidéos sont toujours conservées en qualité originale.</p>
         </div>
 
-        <div className="space-y-1.5">
+        <div>
           <AnimatePresence initial={false}>
             {entries.map((e, i) => (
               <motion.div
@@ -120,10 +120,10 @@ export default function UploadDialog() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="flex items-center gap-3 rounded-xl border border-line bg-surface p-2"
+                className="flex items-center gap-3 border-b border-line py-2"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-overlay">
-                  {e.preview ? <img src={e.preview} alt="" className="h-full w-full object-cover" /> : <FileVideo size={20} className="text-accent-400" />}
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-overlay">
+                  {e.preview ? <img src={e.preview} alt="" className="h-full w-full object-cover" /> : <FileVideo size={18} strokeWidth={1.5} className="text-subtle" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <input
@@ -132,7 +132,7 @@ export default function UploadDialog() {
                     className="w-full rounded-md bg-transparent px-1 py-0.5 text-sm font-medium text-fg outline-none hover:bg-overlay focus:bg-overlay"
                     aria-label="Nom du fichier"
                   />
-                  <p className="px-1 text-[11px] text-subtle">{formatSize(e.file.size)} · {e.file.type || 'inconnu'}</p>
+                  <p className="px-1 font-mono text-[10.5px] text-subtle">{formatSize(e.file.size)} · {e.file.type || 'inconnu'}</p>
                 </div>
                 {e.file.type.startsWith('image/') && (
                   <Segmented
@@ -145,7 +145,7 @@ export default function UploadDialog() {
                 )}
                 <button
                   onClick={() => { if (e.preview) URL.revokeObjectURL(e.preview); setEntries((prev) => prev.filter((_, j) => j !== i)) }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle hover:bg-red-500/10 hover:text-red-500"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center text-subtle hover:text-red-500"
                   aria-label="Retirer"
                 >
                   <X size={16} />
@@ -153,8 +153,8 @@ export default function UploadDialog() {
               </motion.div>
             ))}
           </AnimatePresence>
-          <button onClick={addMore} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong py-3 text-sm text-muted transition-colors hover:border-accent-500 hover:text-accent-500">
-            <Plus size={16} /> Ajouter d'autres fichiers
+          <button onClick={addMore} className="mt-2 flex w-full items-center justify-center border border-dashed border-line-strong py-2.5 text-[13px] text-muted transition-colors hover:border-fg/50 hover:text-fg">
+            + Ajouter d'autres fichiers
           </button>
         </div>
       </div>

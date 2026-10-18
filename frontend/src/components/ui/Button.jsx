@@ -4,43 +4,43 @@ import { cn } from '../../lib/cn.js'
 import { Tooltip } from './Tooltip.jsx'
 
 const VARIANTS = {
-  primary: 'bg-accent-600 text-white shadow-[0_1px_0_rgb(255_255_255/0.15)_inset,0_6px_16px_-6px_rgb(var(--accent-600)/0.6)] hover:bg-accent-500 active:bg-accent-700',
-  secondary: 'bg-overlay text-fg border border-line hover:bg-line/60 hover:border-line-strong',
-  outline: 'border border-line bg-surface text-fg hover:bg-overlay hover:border-line-strong',
+  primary: 'bg-accent-600 text-white hover:bg-accent-500 active:bg-accent-700',
+  secondary: 'border border-line-strong text-fg hover:bg-overlay hover:border-fg/30',
+  outline: 'border border-line text-fg hover:bg-overlay hover:border-line-strong',
   ghost: 'text-muted hover:bg-overlay hover:text-fg',
-  danger: 'bg-red-600 text-white hover:bg-red-500 active:bg-red-700 shadow-[0_6px_16px_-6px_rgb(220_38_38/0.6)]',
-  'danger-soft': 'bg-red-500/10 text-red-600 hover:bg-red-500/15 dark:text-red-400',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700',
-  link: 'text-accent-600 hover:text-accent-500 dark:text-accent-400 dark:hover:text-accent-300 underline-offset-4 hover:underline px-0',
+  danger: 'bg-red-600 text-white hover:bg-red-500 active:bg-red-700',
+  'danger-soft': 'border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400',
+  success: 'bg-fg text-bg hover:bg-fg/85',
+  link: 'text-fg underline decoration-line-strong underline-offset-4 hover:decoration-fg px-0',
 }
 
 const SIZES = {
-  xs: 'h-7 px-2.5 text-xs gap-1.5 rounded-lg',
-  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-lg',
-  md: 'h-10 px-4 text-sm gap-2 rounded-xl',
-  lg: 'h-12 px-5 text-[15px] gap-2.5 rounded-xl',
+  xs: 'h-7 px-2.5 text-xs gap-1.5',
+  sm: 'h-8 px-3 text-[13px] gap-1.5',
+  md: 'h-9 px-4 text-[13px] gap-2',
+  lg: 'h-11 px-5 text-sm gap-2',
 }
 
 export const Button = forwardRef(function Button(
   { variant = 'primary', size = 'md', loading = false, icon: Icon, iconRight: IconRight, className, children, disabled, type = 'button', ...props },
   ref
 ) {
-  const iconSize = size === 'xs' ? 13 : size === 'sm' ? 14 : size === 'lg' ? 18 : 16
+  const iconSize = size === 'xs' ? 13 : size === 'sm' ? 14 : size === 'lg' ? 16 : 15
   return (
     <button
       ref={ref}
       type={type}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-all duration-150',
-        'disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+        'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-sm font-medium transition-colors duration-100',
+        'disabled:pointer-events-none disabled:opacity-40',
         VARIANTS[variant],
         SIZES[size],
         className
       )}
       {...props}
     >
-      {loading ? <Loader2 size={iconSize} className="animate-spin" /> : Icon && <Icon size={iconSize} strokeWidth={2} />}
+      {loading ? <Loader2 size={iconSize} className="animate-spin" /> : Icon && <Icon size={iconSize} strokeWidth={1.75} />}
       {children}
       {IconRight && !loading && <IconRight size={iconSize} />}
     </button>
@@ -52,8 +52,8 @@ export const IconButton = forwardRef(function IconButton(
   { icon: Icon, label, shortcut, size = 'md', variant = 'ghost', active, className, tooltip = true, side, iconClassName, ...props },
   ref
 ) {
-  const dims = { xs: 'h-7 w-7 rounded-lg', sm: 'h-8 w-8 rounded-lg', md: 'h-9 w-9 rounded-xl', lg: 'h-11 w-11 rounded-xl' }[size]
-  const iconSize = { xs: 14, sm: 15, md: 17, lg: 20 }[size]
+  const dims = { xs: 'h-7 w-7', sm: 'h-8 w-8', md: 'h-9 w-9', lg: 'h-11 w-11' }[size]
+  const iconSize = { xs: 14, sm: 15, md: 16, lg: 19 }[size]
   const button = (
     <button
       ref={ref}
@@ -61,18 +61,19 @@ export const IconButton = forwardRef(function IconButton(
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center transition-all duration-150 disabled:pointer-events-none disabled:opacity-40 active:scale-95',
+        'inline-flex shrink-0 items-center justify-center rounded-sm transition-colors duration-100 disabled:pointer-events-none disabled:opacity-30',
         variant === 'ghost' && 'text-muted hover:bg-overlay hover:text-fg',
-        variant === 'solid' && 'bg-overlay text-fg hover:bg-line/70',
-        variant === 'glass' && 'bg-black/40 text-white/90 backdrop-blur-md hover:bg-black/60 hover:text-white',
-        variant === 'primary' && 'bg-accent-600 text-white hover:bg-accent-500 shadow-glow',
-        active && 'bg-accent-500/15 text-accent-600 dark:text-accent-300 hover:bg-accent-500/20',
+        variant === 'solid' && 'border border-line text-fg hover:bg-overlay',
+        variant === 'glass' && 'text-white/75 hover:bg-white/10 hover:text-white',
+        variant === 'primary' && 'bg-accent-600 text-white hover:bg-accent-500',
+        active && variant === 'glass' && 'bg-white/15 text-white',
+        active && variant !== 'glass' && 'bg-overlay text-fg',
         dims,
         className
       )}
       {...props}
     >
-      <Icon size={iconSize} className={iconClassName} />
+      <Icon size={iconSize} strokeWidth={1.75} className={iconClassName} />
     </button>
   )
   if (!tooltip || !label) return button

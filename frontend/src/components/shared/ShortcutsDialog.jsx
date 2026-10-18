@@ -55,10 +55,10 @@ export default function ShortcutsDialog() {
       <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
         {GROUPS.map((g) => (
           <div key={g.title}>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-subtle">{g.title}</p>
-            <div className="divide-y divide-line rounded-xl border border-line">
+            <p className="label-mono mb-2">{g.title}</p>
+            <div className="border-t border-line">
               {g.items.map(([keys, label]) => (
-                <div key={label} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div key={label} className="flex items-center justify-between gap-3 border-b border-line py-1.5">
                   <span className="text-[13px] text-muted">{label}</span>
                   <span className="flex shrink-0 items-center gap-1">{keys.map((k) => <Kbd key={k}>{k}</Kbd>)}</span>
                 </div>

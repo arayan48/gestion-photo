@@ -44,7 +44,7 @@ export default function FolderDeleteDialog() {
       }
     >
       {hasContent && (
-        <div className="rounded-xl border border-line bg-overlay/50 p-3.5">
+        <div className="border-y border-line py-3.5">
           <Switch
             checked={moveToTrash}
             onChange={setMoveToTrash}

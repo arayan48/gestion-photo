@@ -1,21 +1,24 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+// Teintes inspirées du labo photo ; « inactinique » = la lampe rouge de la chambre noire
 export const ACCENTS = [
+  { value: 'safelight', label: 'Inactinique', hex: '#d63a0d' },
+  { value: 'amber', label: 'Sodium', hex: '#ca7604' },
+  { value: 'silver', label: 'Argentique', hex: '#78716c' },
+  { value: 'cyan', label: 'Cyanotype', hex: '#0891b2' },
+  { value: 'green', label: 'Minuterie', hex: '#16a34a' },
   { value: 'violet', label: 'Violet', hex: '#7c3aed' },
-  { value: 'blue', label: 'Bleu', hex: '#2563eb' },
-  { value: 'cyan', label: 'Cyan', hex: '#0891b2' },
-  { value: 'emerald', label: 'Émeraude', hex: '#059669' },
-  { value: 'amber', label: 'Ambre', hex: '#d97706' },
-  { value: 'rose', label: 'Rose', hex: '#e11d48' },
 ]
+const DEFAULT_ACCENT = 'safelight'
+const validAccent = (a) => (ACCENTS.some((x) => x.value === a) ? a : DEFAULT_ACCENT)
 
 const getSystemPreference = () =>
   window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 
 const applyTheme = (resolved) => {
   document.documentElement.classList.toggle('dark', resolved === 'dark')
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#09090b' : '#f5f5f7')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#0b0a09' : '#f1eee8')
 }
 
 const applyAccent = (accent) => {
@@ -27,14 +30,16 @@ export const useThemeStore = create(
     (set, get) => ({
       theme: 'dark', // thème sombre par défaut (modifiable dans Paramètres → Apparence)
       resolvedTheme: 'dark',
-      accent: 'violet',
+      accent: DEFAULT_ACCENT,
 
       init() {
-        const { theme, accent } = get()
+        const { theme } = get()
+        // Anciennes teintes (V2 : bleu, émeraude, rose…) ramenées à la teinte par défaut
+        const accent = validAccent(get().accent)
         const resolved = theme === 'system' ? getSystemPreference() : theme
         applyTheme(resolved)
         applyAccent(accent)
-        set({ resolvedTheme: resolved })
+        set({ resolvedTheme: resolved, accent })
 
         window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
           if (get().theme === 'system') {

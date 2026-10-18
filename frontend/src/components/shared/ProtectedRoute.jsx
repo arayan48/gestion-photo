@@ -5,12 +5,9 @@ import { LogoMark } from './Logo.jsx'
 
 export function SplashScreen() {
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-bg">
-      <div className="relative">
-        <div className="absolute inset-0 animate-pulse rounded-3xl bg-accent-500/30 blur-2xl" />
-        <LogoMark size={64} className="relative animate-[spin-slow_6s_linear_infinite]" />
-      </div>
-      <p className="text-sm text-subtle">Chargement…</p>
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-bg text-fg">
+      <LogoMark size={36} className="animate-[spin-slow_8s_linear_infinite]" />
+      <p className="label-mono">Chargement</p>
     </div>
   )
 }

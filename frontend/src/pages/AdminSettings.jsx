@@ -26,7 +26,7 @@ function Tooltip({ text }) {
 function Section({ title, children }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-subtle">{title}</h3>
+      <h3 className="text-[11px] font-medium uppercase tracking-wider text-subtle">{title}</h3>
       {children}
     </div>
   )
@@ -83,12 +83,12 @@ function PasswordInput({ value, onChange, placeholder, ...props }) {
 
 function SaveBar({ saving, saved, error }) {
   return (
-    <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-between gap-3 rounded-b-2xl border-t border-line bg-surface/90 px-5 py-3.5 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6">
+    <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-between gap-3 rounded-b-2xl border-t border-line bg-surface px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6">
       <div className="text-sm">
         {saved && <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><Check size={14} /> Enregistré</span>}
         {error && <span className="text-red-500">{error}</span>}
       </div>
-      <Button type="submit" loading={saving} icon={Save}>Enregistrer</Button>
+      <Button type="submit" loading={saving}>Enregistrer</Button>
     </div>
   )
 }
@@ -167,7 +167,7 @@ function TabEmail({ config }) {
                   : 'border-line hover:border-line-strong'
               }`}
             >
-              <span className={`text-sm font-semibold ${provider === p.value ? 'text-accent-700 dark:text-accent-300' : 'text-fg'}`}>
+              <span className={`text-sm font-medium ${provider === p.value ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>
                 {p.label}
               </span>
               <span className="text-xs text-subtle">{p.desc}</span>
@@ -503,7 +503,7 @@ function TabBackblaze({ config }) {
             <div key={p.value} className={`rounded-xl border-2 overflow-hidden transition-all ${isOn(p.value) ? 'border-accent-500' : 'border-line'}`}>
               <div className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isOn(p.value) ? 'bg-accent-500/10' : 'bg-surface'}`} onClick={() => toggle(p.value)}>
                 <div>
-                  <p className={`text-sm font-semibold ${isOn(p.value) ? 'text-accent-700 dark:text-accent-300' : 'text-fg'}`}>{p.label}</p>
+                  <p className={`text-sm font-medium ${isOn(p.value) ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>{p.label}</p>
                   <p className="text-xs text-subtle">{p.desc}</p>
                 </div>
                 <Toggle checked={isOn(p.value)} onChange={() => toggle(p.value)} />
@@ -522,7 +522,7 @@ function TabBackblaze({ config }) {
         <Field label="Fréquence">
           <div className="flex flex-wrap gap-2">
             {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3h)' }, { v: 'weekly', l: 'Hebdomadaire' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
-              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-accent-500 bg-accent-500/10 text-accent-700 dark:text-accent-300' : 'border-line text-fg hover:border-line-strong'}`}>
+              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-accent-500 bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'border-line text-fg hover:border-line-strong'}`}>
                 <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-accent-600" />
                 {l}
               </label>
@@ -542,7 +542,7 @@ function TabBackblaze({ config }) {
 // ── Onglet Général ────────────────────────────────────────────────────────────
 function StorageBar({ segments }) {
   return (
-    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-bold shadow-inner">
+    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-medium shadow-inner">
       {segments.map(({ color, pct, label, gb }) =>
         pct > 0 ? (
           <div
@@ -566,7 +566,7 @@ function StorageLegend({ segments, totalGb }) {
         <div key={label} className="flex items-center gap-2">
           <span className={`w-3 h-3 rounded-sm shrink-0 ${color}`} />
           <span className="text-muted flex-1 truncate">{label}</span>
-          <span className="font-semibold text-fg">
+          <span className="font-medium text-fg">
             {fixed ? `${gb} Go` : totalGb ? `${((pct / 100) * totalGb).toFixed(1)} Go` : `${pct}%`}
           </span>
           {!fixed && <span className="text-subtle">({pct}%)</span>}
@@ -674,7 +674,7 @@ function TabGeneral({ config }) {
                   <span className="text-sm font-medium text-fg">{label}</span>
                   <span className="flex items-center gap-2">
                     {gb && <span className="text-xs text-subtle">{gb} Go</span>}
-                    <span className={`text-sm font-bold w-10 text-right ${color}`}>{val}%</span>
+                    <span className={`text-sm font-medium w-10 text-right ${color}`}>{val}%</span>
                   </span>
                 </div>
                 <input
@@ -692,7 +692,7 @@ function TabGeneral({ config }) {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-sm font-medium text-fg">Logs</span>
-              <span className={`text-sm font-bold text-amber-500`}>{logsGb} Go</span>
+              <span className={`text-sm font-medium text-amber-500`}>{logsGb} Go</span>
             </div>
             <div className="flex items-center gap-3">
               <input
@@ -710,7 +710,7 @@ function TabGeneral({ config }) {
         <div className="space-y-3 mt-4 p-4 bg-overlay/50 rounded-xl border border-line">
           <div className="flex items-center justify-between text-xs text-muted mb-1">
             <span>0 {totalGb ? 'Go' : '%'}</span>
-            <span className="font-semibold text-fg">
+            <span className="font-medium text-fg">
               {totalGb ? `${totalGb} Go total` : 'Répartition (%)'}
             </span>
             <span>{totalGb ? `${totalGb} Go` : '100%'}</span>
@@ -757,7 +757,7 @@ export default function AdminSettings() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Configuration système</h1>
+        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Configuration système</h1>
         <p className="mt-1 text-sm text-muted">Connexions externes et paramètres serveur. Les secrets sont chiffrés en base.</p>
       </div>
       <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">

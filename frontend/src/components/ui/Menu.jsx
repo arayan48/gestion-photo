@@ -19,11 +19,11 @@ function ItemInner({ item }) {
       <span className="flex w-4 shrink-0 items-center justify-center">
         {item.checked !== undefined
           ? (item.checked ? <Check size={15} className="text-accent-500" /> : null)
-          : Icon && <Icon size={15} className={cn(!item.danger && 'text-muted')} />}
+          : Icon && <Icon size={15} strokeWidth={1.75} className={cn(!item.danger && 'text-subtle')} />}
       </span>
       <span className="flex-1 truncate">{item.label}</span>
-      {item.hint && <span className="text-[11px] text-subtle">{item.hint}</span>}
-      {item.shortcut && <span className="ml-3 [@media(hover:none)]:hidden text-[11px] font-medium tracking-wide text-subtle">{item.shortcut}</span>}
+      {item.hint && <span className="text-[11px] opacity-60">{item.hint}</span>}
+      {item.shortcut && <span className="ml-4 font-mono text-[10.5px] opacity-50 [@media(hover:none)]:hidden">{item.shortcut}</span>}
     </>
   )
 }
@@ -35,9 +35,9 @@ function renderItems(items, P) {
     if (item.type === 'sub') {
       return (
         <P.Sub key={item.label}>
-          <P.SubTrigger className="menu-item data-[state=open]:bg-overlay">
+          <P.SubTrigger className="menu-item data-[state=open]:bg-overlay data-[state=open]:text-fg">
             <ItemInner item={item} />
-            <ChevronRight size={14} className="text-subtle" />
+            <ChevronRight size={14} className="opacity-50" />
           </P.SubTrigger>
           <P.Portal>
             <P.SubContent sideOffset={6} alignOffset={-6} collisionPadding={8} className="menu-content max-h-[60vh] overflow-y-auto">
@@ -111,14 +111,14 @@ export function ActionSheet({ open, onOpenChange, title, subtitle, media, items 
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange}>
       <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 z-[260] bg-black/50" />
-        <Drawer.Content className="fixed inset-x-0 bottom-0 z-[261] flex max-h-[85dvh] flex-col rounded-t-3xl border border-line bg-elevated outline-none pb-safe">
-          <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-line-strong" />
+        <Drawer.Overlay className="fixed inset-0 z-[260] bg-black/60" />
+        <Drawer.Content className="fixed inset-x-0 bottom-0 z-[261] flex max-h-[85dvh] flex-col rounded-t-lg border-t border-line-strong bg-elevated outline-none pb-safe">
+          <div className="mx-auto mt-2 h-1 w-8 shrink-0 bg-line-strong" />
           {(title || media) && (
             <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
               {media}
               <div className="min-w-0">
-                <Drawer.Title className="truncate text-sm font-semibold text-fg">{title}</Drawer.Title>
+                <Drawer.Title className="truncate text-sm font-medium text-fg">{title}</Drawer.Title>
                 {subtitle && <Drawer.Description className="truncate text-xs text-muted">{subtitle}</Drawer.Description>}
               </div>
             </div>
@@ -127,7 +127,7 @@ export function ActionSheet({ open, onOpenChange, title, subtitle, media, items 
           <div className="overflow-y-auto p-2">
             {flat.map((item, i) => {
               if (item.type === 'separator') return <div key={i} className="mx-3 my-1.5 h-px bg-line" />
-              if (item.type === 'label') return <p key={i} className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-subtle">{item.label}</p>
+              if (item.type === 'label') return <p key={i} className="label-mono px-4 pb-1 pt-3">{item.label}</p>
               const Icon = item.icon
               return (
                 <button
@@ -135,13 +135,13 @@ export function ActionSheet({ open, onOpenChange, title, subtitle, media, items 
                   disabled={item.disabled}
                   onClick={() => { onOpenChange(false); setTimeout(() => item.onSelect?.(), 120) }}
                   className={cn(
-                    'flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-[15px] transition-colors active:bg-overlay disabled:opacity-40',
+                    'flex w-full items-center gap-3.5 px-4 py-3 text-left text-[15px] transition-colors active:bg-overlay disabled:opacity-40',
                     item.danger ? 'text-red-500' : 'text-fg'
                   )}
                 >
                   {item.checked !== undefined
                     ? <span className="w-5">{item.checked && <Check size={18} className="text-accent-500" />}</span>
-                    : Icon && <Icon size={19} className={item.danger ? '' : 'text-muted'} />}
+                    : Icon && <Icon size={18} strokeWidth={1.75} className={item.danger ? '' : 'text-subtle'} />}
                   <span className="flex-1">{item.label}</span>
                 </button>
               )

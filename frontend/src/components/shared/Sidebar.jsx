@@ -52,21 +52,14 @@ function NavLink({ item, active, collapsed, onNavigate, droppable }) {
       to={item.to}
       onClick={onNavigate}
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-colors',
-        collapsed && 'justify-center px-0',
-        active ? 'text-fg' : 'text-muted hover:bg-overlay/70 hover:text-fg',
-        isOver && 'bg-accent-500/15 text-accent-600 ring-2 ring-accent-500/50 dark:text-accent-300'
+        'group relative flex items-center gap-3 px-3 py-[7px] text-[13.5px] transition-colors',
+        collapsed && 'justify-center px-0 py-2.5',
+        active ? 'bg-overlay text-fg' : 'text-muted hover:text-fg',
+        isOver && 'bg-accent-600 text-white'
       )}
     >
-      {active && (
-        <motion.span
-          layoutId="nav-active"
-          className="absolute inset-0 rounded-xl bg-overlay ring-1 ring-line"
-          transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-        />
-      )}
-      {active && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent-500" />}
-      <Icon size={18} strokeWidth={active ? 2.2 : 1.8} className={cn('relative shrink-0', active ? 'text-accent-500' : 'text-subtle group-hover:text-fg')} />
+      {active && <span className="absolute inset-y-0 left-0 w-[2px] bg-accent-500" />}
+      <Icon size={16} strokeWidth={1.75} className={cn('relative shrink-0', active ? 'text-fg' : 'text-subtle group-hover:text-fg', isOver && 'text-white')} />
       {!collapsed && <span className="relative truncate">{item.label}</span>}
     </Link>
   )
@@ -95,21 +88,21 @@ function TreeNode({ node, depth, childrenMap, expanded, toggle, activeId, onNavi
           ref={setNodeRef}
           onClick={() => { navigate(`/explorer/${node.id}`); onNavigate?.() }}
           className={cn(
-            'group flex cursor-pointer items-center gap-1 rounded-lg py-1.5 pr-2 text-[13px] transition-colors',
-            active ? 'bg-accent-500/10 font-medium text-accent-700 dark:text-accent-300' : 'text-muted hover:bg-overlay/70 hover:text-fg',
-            isOver && 'bg-accent-500/15 text-accent-600 ring-2 ring-inset ring-accent-500/50'
+            'group flex cursor-pointer items-center gap-1 py-[5px] pr-2 text-[13px] transition-colors',
+            active ? 'bg-overlay text-fg' : 'text-muted hover:text-fg',
+            isOver && 'bg-accent-600 text-white'
           )}
           style={{ paddingLeft: 8 + depth * 14 }}
         >
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); toggle(node.id) }}
-            className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md hover:bg-line/70', !children.length && 'invisible')}
+            className={cn('flex h-5 w-5 shrink-0 items-center justify-center hover:text-fg', !children.length && 'invisible')}
             aria-label={isOpen ? 'Replier' : 'Déplier'}
           >
             <ChevronRight size={13} className={cn('transition-transform duration-200', isOpen && 'rotate-90')} />
           </button>
-          <Folder size={15} className={cn('shrink-0', active || isOver ? 'text-accent-500' : 'text-amber-500/80')} fill="currentColor" fillOpacity={0.15} />
+          <Folder size={14} strokeWidth={1.75} className={cn('shrink-0', isOver ? 'text-white' : active ? 'text-fg' : 'text-subtle')} />
           <span className="truncate">{node.name}</span>
         </div>
       </ContextMenu>
@@ -177,7 +170,7 @@ function FolderTree({ onNavigate }) {
 
   return (
     <div className="mt-4">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-1 px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle hover:text-muted">
+      <button onClick={() => setOpen((v) => !v)} className="label-mono flex w-full items-center gap-1 px-3 pb-2 hover:text-muted">
         <ChevronRight size={12} className={cn('transition-transform', open && 'rotate-90')} />
         Dossiers
       </button>
@@ -200,20 +193,20 @@ export function StorageMeter({ collapsed }) {
   if (collapsed) {
     return (
       <Tooltip content={`Stockage : ${formatSize(used)} / ${formatSize(quota)}`} side="right">
-        <Link to="/settings?tab=storage" className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl text-subtle hover:bg-overlay hover:text-fg">
-          <HardDrive size={18} />
+        <Link to="/settings?tab=storage" className="mx-auto flex h-10 w-10 items-center justify-center text-subtle hover:text-fg">
+          <HardDrive size={16} strokeWidth={1.75} />
         </Link>
       </Tooltip>
     )
   }
   return (
-    <Link to="/settings?tab=storage" className="group block rounded-xl border border-line bg-overlay/40 p-3 transition-colors hover:border-line-strong hover:bg-overlay/70">
-      <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1.5 font-medium text-muted group-hover:text-fg"><HardDrive size={13} /> Stockage</span>
-        <span className={cn('font-semibold', pct >= 90 ? 'text-red-500' : 'text-fg')}>{pct} %</span>
+    <Link to="/settings?tab=storage" className="group block px-1">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="label-mono group-hover:text-muted">Stockage</span>
+        <span className={cn('font-mono text-[11px]', pct >= 90 ? 'text-red-500' : 'text-muted')}>{pct} %</span>
       </div>
       <Progress value={pct} />
-      <p className="mt-2 text-[11px] text-subtle">{formatSize(used)} sur {formatSize(quota)}</p>
+      <p className="mt-2 font-mono text-[11px] text-subtle">{formatSize(used)} / {formatSize(quota)}</p>
     </Link>
   )
 }
@@ -235,36 +228,36 @@ export function SidebarContent({ collapsed = false, onNavigate }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className={cn('flex h-16 shrink-0 items-center', collapsed ? 'justify-center' : 'justify-between px-5')}>
-        <Link to="/explorer" onClick={onNavigate}>{collapsed ? <LogoMark size={30} /> : <Logo />}</Link>
+      <div className={cn('flex h-14 shrink-0 items-center border-b border-line', collapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
+        <Link to="/explorer" onClick={onNavigate} className="text-fg">{collapsed ? <LogoMark size={22} /> : <Logo />}</Link>
         {!collapsed && onNavigate === undefined && (
           <Tooltip content="Réduire la barre latérale" shortcut="[" side="right">
-            <button onClick={toggleSidebar} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-overlay hover:text-fg" aria-label="Réduire la barre latérale">
-              <PanelLeftClose size={17} />
+            <button onClick={toggleSidebar} className="flex h-8 w-8 items-center justify-center text-subtle hover:text-fg" aria-label="Réduire la barre latérale">
+              <PanelLeftClose size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>
         )}
       </div>
 
       {newItems.length > 0 && (
-        <div className={cn('mb-4', collapsed ? 'px-3' : 'px-4')}>
+        <div className={cn('mb-3 mt-4', collapsed ? 'px-3' : 'px-4')}>
           <DropdownMenu
             align="start"
             items={newItems}
             trigger={
               <button className={cn(
-                'group flex w-full items-center justify-center gap-2 rounded-2xl bg-accent-600 font-semibold text-white shadow-glow transition-all hover:bg-accent-500 active:scale-[0.98]',
-                collapsed ? 'h-11' : 'h-11 px-4 text-sm'
+                'group flex w-full items-center gap-2 rounded-sm border border-line-strong text-[13px] text-fg transition-colors hover:border-fg/40 hover:bg-overlay data-[state=open]:bg-overlay',
+                collapsed ? 'h-10 justify-center' : 'h-9 justify-between px-3'
               )} aria-label="Nouveau">
-                <Plus size={19} strokeWidth={2.4} className="transition-transform duration-300 group-data-[state=open]:rotate-45" />
                 {!collapsed && 'Nouveau'}
+                <Plus size={15} strokeWidth={1.75} className="text-subtle transition-transform duration-200 group-data-[state=open]:rotate-45" />
               </button>
             }
           />
         </div>
       )}
 
-      <nav className={cn('min-h-0 flex-1 overflow-y-auto pb-4', collapsed ? 'px-3' : 'px-3')}>
+      <nav className={cn('min-h-0 flex-1 overflow-y-auto pb-4', collapsed ? 'px-2' : 'px-2')}>
         <div className="space-y-0.5">
           {NAV_ITEMS.filter((i) => !i.permission || can(i.permission)).map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.view)} collapsed={collapsed} onNavigate={onNavigate} droppable={item.view === null} />
@@ -275,8 +268,8 @@ export function SidebarContent({ collapsed = false, onNavigate }) {
 
         {adminLinks.length > 0 && (
           <div className="mt-5">
-            {!collapsed && <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-subtle">Administration</p>}
-            {collapsed && <div className="mx-auto mb-3 h-px w-8 bg-line" />}
+            {!collapsed && <p className="label-mono px-3 pb-2">Administration</p>}
+            {collapsed && <div className="mx-auto mb-3 h-px w-6 bg-line" />}
             <div className="space-y-0.5">
               {adminLinks.map((item) => (
                 <NavLink key={item.to} item={{ ...item, view: '__admin' }} active={pathname === item.to} collapsed={collapsed} onNavigate={onNavigate} />
@@ -286,17 +279,17 @@ export function SidebarContent({ collapsed = false, onNavigate }) {
         )}
       </nav>
 
-      <div className={cn('shrink-0 space-y-3 border-t border-line py-4', collapsed ? 'px-3' : 'px-4')}>
+      <div className={cn('shrink-0 space-y-4 border-t border-line py-4', collapsed ? 'px-2' : 'px-4')}>
         <StorageMeter collapsed={collapsed} />
         {collapsed ? (
           <Tooltip content="Agrandir la barre latérale" shortcut="[" side="right">
-            <button onClick={toggleSidebar} className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl text-subtle hover:bg-overlay hover:text-fg" aria-label="Agrandir la barre latérale">
-              <PanelLeftOpen size={18} />
+            <button onClick={toggleSidebar} className="mx-auto flex h-10 w-10 items-center justify-center text-subtle hover:text-fg" aria-label="Agrandir la barre latérale">
+              <PanelLeftOpen size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>
         ) : (
-          <p className="text-center text-[10px] text-subtle/70">
-            by <a href="https://arayan.fr" target="_blank" rel="noreferrer" className="hover:text-accent-500">arayan.fr</a> © {new Date().getFullYear()}
+          <p className="px-1 font-mono text-[10px] text-subtle/70">
+            <a href="https://arayan.fr" target="_blank" rel="noreferrer" className="hover:text-fg">arayan.fr</a> · {new Date().getFullYear()}
           </p>
         )}
       </div>
@@ -309,9 +302,9 @@ export default function Sidebar() {
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 76 : 264 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-      className="relative hidden shrink-0 overflow-hidden border-r border-line bg-surface/60 backdrop-blur-xl lg:block"
+      animate={{ width: collapsed ? 64 : 240 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
+      className="relative hidden shrink-0 overflow-hidden border-r border-line bg-surface lg:block"
     >
       <SidebarContent collapsed={collapsed} />
     </motion.aside>
@@ -329,14 +322,14 @@ export function MobileSidebar() {
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-[240] bg-black/50 lg:hidden"
+            className="fixed inset-0 z-[240] bg-black/60 lg:hidden"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
           />
           <motion.aside
-            className="fixed inset-y-0 left-0 z-[241] w-[284px] max-w-[85vw] border-r border-line bg-surface shadow-float lg:hidden"
+            className="fixed inset-y-0 left-0 z-[241] w-[272px] max-w-[85vw] border-r border-line bg-surface lg:hidden"
             initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-            transition={{ type: 'spring', stiffness: 420, damping: 42 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={{ left: 0.4, right: 0 }}
             onDragEnd={(_, info) => { if (info.offset.x < -80 || info.velocity.x < -400) setOpen(false) }}
           >

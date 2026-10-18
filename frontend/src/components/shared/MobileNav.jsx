@@ -1,5 +1,4 @@
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { FolderOpen, Clock, Heart, Plus, Menu, Upload, Camera, FolderPlus } from 'lucide-react'
 import { cn } from '../../lib/cn.js'
 import { useUiStore } from '../../stores/ui.store.js'
@@ -30,8 +29,8 @@ export default function MobileNav() {
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/90 pb-safe backdrop-blur-xl md:hidden">
-        <div className="mx-auto flex h-16 max-w-md items-center justify-around px-2">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-safe md:hidden">
+        <div className="mx-auto flex h-14 max-w-md items-center justify-around px-2">
           {TABS.map((tab, i) => {
             if (tab.fab) {
               return (
@@ -39,33 +38,33 @@ export default function MobileNav() {
                   key="fab"
                   onClick={() => setCreateSheetOpen(true)}
                   aria-label="Créer"
-                  className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-600 text-white shadow-glow ring-4 ring-bg transition-transform active:scale-90"
+                  className="flex h-10 w-12 items-center justify-center rounded-sm bg-accent-600 text-white active:bg-accent-700"
                 >
-                  <Plus size={26} strokeWidth={2.4} />
+                  <Plus size={20} strokeWidth={2} />
                 </button>
               )
             }
             if (tab.menu) {
               return (
                 <button key="menu" onClick={() => setMobileNavOpen(true)} className="flex w-16 flex-col items-center gap-1 py-1 text-subtle">
-                  <Menu size={21} />
-                  <span className="text-[10px] font-medium">{tab.label}</span>
+                  <Menu size={19} strokeWidth={1.75} />
+                  <span className="text-[10px]">{tab.label}</span>
                 </button>
               )
             }
             const active = pathname.startsWith('/explorer') && (tab.view === null ? !view : view === tab.view)
             const Icon = tab.icon
             return (
-              <Link key={i} to={tab.to} className={cn('relative flex w-16 flex-col items-center gap-1 py-1', active ? 'text-accent-600 dark:text-accent-400' : 'text-subtle')}>
-                {active && <motion.span layoutId="mobile-tab" className="absolute -top-2 h-1 w-8 rounded-full bg-accent-500" />}
-                <Icon size={21} strokeWidth={active ? 2.3 : 1.8} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
+              <Link key={i} to={tab.to} className={cn('relative flex w-16 flex-col items-center gap-1 py-1', active ? 'text-fg' : 'text-subtle')}>
+                {active && <span className="absolute -top-2 h-[2px] w-8 bg-accent-500" />}
+                <Icon size={19} strokeWidth={1.75} />
+                <span className="text-[10px]">{tab.label}</span>
               </Link>
             )
           })}
         </div>
       </nav>
-      <ActionSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} title="Créer" subtitle="Ajouter du contenu à votre espace" items={items} />
+      <ActionSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} title="Ajouter" items={items} />
     </>
   )
 }

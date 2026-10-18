@@ -22,12 +22,12 @@ import { Kbd } from '../ui/Kbd.jsx'
 import { Segmented } from '../ui/Form.jsx'
 
 const NOTIF_ICONS = {
-  upload_done: { icon: CloudUpload, tone: 'text-emerald-500 bg-emerald-500/10' },
-  file_deleted: { icon: FileX, tone: 'text-red-500 bg-red-500/10' },
-  storage_warning: { icon: HardDrive, tone: 'text-amber-500 bg-amber-500/10' },
-  new_account_request: { icon: UserPlus, tone: 'text-accent-500 bg-accent-500/10' },
-  backup_success: { icon: Database, tone: 'text-emerald-500 bg-emerald-500/10' },
-  backup_failed: { icon: ShieldAlert, tone: 'text-red-500 bg-red-500/10' },
+  upload_done: { icon: CloudUpload, tone: 'text-subtle' },
+  file_deleted: { icon: FileX, tone: 'text-red-500' },
+  storage_warning: { icon: HardDrive, tone: 'text-amber-500' },
+  new_account_request: { icon: UserPlus, tone: 'text-accent-500' },
+  backup_success: { icon: Database, tone: 'text-subtle' },
+  backup_failed: { icon: ShieldAlert, tone: 'text-red-500' },
 }
 
 function NotificationsPanel() {
@@ -48,8 +48,8 @@ function NotificationsPanel() {
     <div className="flex max-h-[min(560px,80vh)] w-[min(380px,calc(100vw-16px))] flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-fg">Notifications</p>
-          <p className="text-xs text-subtle">{unreadCount ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : 'Tout est lu'}</p>
+          <p className="text-sm font-medium text-fg">Notifications</p>
+          <p className="font-mono text-[11px] text-subtle">{unreadCount ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : 'Tout est lu'}</p>
         </div>
         <Segmented
           size="sm"
@@ -59,16 +59,15 @@ function NotificationsPanel() {
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {list.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <BellOff size={26} className="text-subtle" strokeWidth={1.5} />
             <p className="text-sm text-muted">{filter === 'unread' ? 'Aucune notification non lue' : 'Aucune notification'}</p>
           </div>
         ) : (
           <AnimatePresence initial={false}>
             {list.slice(0, 50).map((n) => {
-              const meta = NOTIF_ICONS[n.type] || { icon: Bell, tone: 'text-muted bg-overlay' }
+              const meta = NOTIF_ICONS[n.type] || { icon: Bell, tone: 'text-subtle' }
               const Icon = meta.icon
               return (
                 <motion.div
@@ -77,21 +76,18 @@ function NotificationsPanel() {
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 40, height: 0 }}
-                  className={cn('group relative flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-overlay', !n.is_read && 'bg-accent-500/[0.06]')}
+                  className={cn('group relative flex cursor-pointer items-start gap-3 border-b border-line px-4 py-3 transition-colors hover:bg-overlay', !n.is_read && 'border-l-2 border-l-accent-500')}
                   onClick={() => open(n)}
                 >
-                  <div className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', meta.tone)}>
-                    <Icon size={15} />
-                  </div>
+                  <Icon size={15} strokeWidth={1.75} className={cn('mt-0.5 shrink-0', meta.tone)} />
                   <div className="min-w-0 flex-1">
-                    <p className={cn('text-[13px] leading-snug', n.is_read ? 'text-muted' : 'font-medium text-fg')}>{n.message}</p>
-                    <p className="mt-0.5 text-[11px] text-subtle">{formatRelative(n.created_at)}</p>
+                    <p className={cn('text-[13px] leading-snug', n.is_read ? 'text-muted' : 'text-fg')}>{n.message}</p>
+                    <p className="mt-1 font-mono text-[10.5px] text-subtle">{formatRelative(n.created_at)}</p>
                   </div>
-                  {!n.is_read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent-500 group-hover:hidden" />}
                   <button
                     onClick={(e) => { e.stopPropagation(); remove(n.id); api.delete(`/admin/notifications/${n.id}`).catch(() => {}) }}
                     aria-label="Supprimer la notification"
-                    className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-subtle hover:bg-red-500/10 hover:text-red-500 group-hover:flex"
+                    className="hidden h-6 w-6 shrink-0 items-center justify-center text-subtle hover:text-red-500 group-hover:flex"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -104,11 +100,11 @@ function NotificationsPanel() {
 
       {notifications.length > 0 && (
         <div className="flex items-center justify-between border-t border-line px-2 py-2">
-          <Button variant="ghost" size="sm" icon={CheckCheck} disabled={!unreadCount}
+          <Button variant="ghost" size="sm" disabled={!unreadCount}
             onClick={() => { markAllRead(); api.post('/admin/notifications/read-all').catch(() => {}) }}>
             Tout marquer comme lu
           </Button>
-          <Button variant="ghost" size="sm" icon={Trash2} className="text-red-500 hover:bg-red-500/10 hover:text-red-500"
+          <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-500/10 hover:text-red-500"
             onClick={() => { clearAll(); api.delete('/admin/notifications').catch(() => {}) }}>
             Vider
           </Button>
@@ -148,27 +144,22 @@ export default function Topbar() {
   ]
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-line bg-bg/75 px-3 backdrop-blur-xl sm:gap-3 sm:px-5">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-3 sm:gap-3 sm:px-5">
       <IconButton icon={Menu} label="Menu" className="lg:hidden" onClick={() => setMobileNavOpen(true)} tooltip={false} />
 
       {/* Recherche → palette de commandes */}
       <button
         onClick={() => setCommandOpen(true)}
-        className="group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-surface/80 px-3.5 text-left text-sm text-subtle shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] transition-all hover:border-line-strong hover:text-muted md:max-w-xl"
+        className="group flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-sm border border-line px-3 text-left text-[13px] text-subtle transition-colors hover:border-line-strong hover:text-muted md:max-w-md"
       >
-        <Search size={16} className="shrink-0 transition-colors group-hover:text-accent-500" />
-        <span className="flex-1 truncate">Rechercher des fichiers, dossiers, actions…</span>
+        <Search size={15} strokeWidth={1.75} className="shrink-0" />
+        <span className="flex-1 truncate">Rechercher</span>
         <span className="hidden items-center gap-1 sm:flex">
           <Kbd>{MOD}</Kbd><Kbd>K</Kbd>
         </span>
       </button>
 
       <div className="ml-auto flex items-center gap-1">
-        {can('files.upload') && (
-          <Button size="sm" variant="secondary" icon={Upload} onClick={() => pickFiles()} className="mr-1 hidden md:inline-flex">
-            Importer
-          </Button>
-        )}
 
         <IconButton
           icon={resolvedTheme === 'dark' ? Sun : Moon}
@@ -179,13 +170,13 @@ export default function Topbar() {
 
         <Popover
           trigger={
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-overlay hover:text-fg" aria-label="Notifications">
-              <Bell size={18} />
+            <button className="relative flex h-9 w-9 items-center justify-center text-muted transition-colors hover:text-fg data-[state=open]:text-fg" aria-label="Notifications">
+              <Bell size={16} strokeWidth={1.75} />
               <AnimatePresence>
                 {unreadCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                    className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-600 px-1 text-[9px] font-bold text-white ring-2 ring-bg"
+                    className="absolute right-0.5 top-1 flex h-[15px] min-w-[15px] items-center justify-center bg-accent-600 px-1 font-mono text-[9px] text-white"
                   >
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </motion.span>
@@ -200,19 +191,19 @@ export default function Topbar() {
         <DropdownMenu
           items={userItems}
           header={
-            <div className="mb-1.5 flex items-center gap-3 rounded-lg bg-overlay/60 p-2.5">
+            <div className="mb-1 flex items-center gap-3 border-b border-line px-3 pb-3 pt-2">
               <Avatar src={userAvatar(user)} name={user?.pseudo} size={38} />
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-fg">{user?.pseudo}</p>
+                <p className="truncate text-sm font-medium text-fg">{user?.pseudo}</p>
                 <p className="truncate text-xs text-muted">{user?.email}</p>
-                {user?.role_name && <p className="mt-0.5 truncate text-[11px] font-medium text-accent-600 dark:text-accent-400">{user.role_name}</p>}
+                {user?.role_name && <p className="label-mono mt-1 truncate">{user.role_name}</p>}
               </div>
             </div>
           }
           trigger={
-            <button className="ml-1 flex items-center gap-2 rounded-full p-0.5 pr-0.5 transition-all hover:ring-4 hover:ring-overlay sm:pr-3" aria-label="Menu utilisateur">
-              <Avatar src={userAvatar(user)} name={user?.pseudo} size={34} />
-              <span className="hidden max-w-[120px] truncate text-sm font-medium text-fg sm:block">{user?.pseudo}</span>
+            <button className="ml-1 flex items-center gap-2 p-0.5 text-muted transition-colors hover:text-fg sm:pr-1" aria-label="Menu utilisateur">
+              <Avatar src={userAvatar(user)} name={user?.pseudo} size={28} />
+              <span className="hidden max-w-[120px] truncate text-[13px] sm:block">{user?.pseudo}</span>
             </button>
           }
         />
