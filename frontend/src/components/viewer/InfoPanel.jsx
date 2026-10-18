@@ -161,12 +161,14 @@ export default function InfoPanel({ file, onClose, className }) {
               ? <Switch size="sm" checked={!!f.link_active} onChange={(v) => setLink([f], v)} />
               : <span className="text-xs text-muted">{f.link_active ? 'Actif' : 'Inactif'}</span>}
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate border border-line px-2 py-1.5 font-mono text-[11px] text-muted">{publicLink(f).replace(/^https?:\/\//, '')}</code>
+          <div className="mt-3 flex items-start gap-2">
+            <code className={cn('min-w-0 flex-1 select-all break-all border border-line px-2 py-1.5 font-mono text-[11px] leading-relaxed', f.link_active ? 'text-fg' : 'text-subtle line-through')}>{publicLink(f)}</code>
             <IconButton icon={Copy} label="Copier le lien" size="sm" variant="solid" onClick={() => copyFileLink(f)} />
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-subtle">
-            {f.link_access_count || 0} accès · réservé aux IP de la liste blanche
+            {f.link_active
+              ? <>{f.link_access_count || 0} accès · réservé aux IP de la liste blanche</>
+              : 'Lien désactivé : le média n\'est plus accessible publiquement'}
           </p>
         </div>
 
