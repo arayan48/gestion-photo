@@ -25,6 +25,28 @@ export function generateTokenPair(fastify, userId, email) {
   return { accessToken, refreshToken }
 }
 
+// Le cookie doit être envoyé à /refresh ET /logout (sinon la déconnexion ne peut pas
+// révoquer le refresh token) → chemin commun /api/auth
+const REFRESH_COOKIE_PATH = '/api/auth'
+const LEGACY_REFRESH_COOKIE_PATH = '/api/auth/refresh'
+
+export function setRefreshCookie(reply, token) {
+  // Supprime l'ancien cookie (anciennes versions) pour éviter deux cookies homonymes
+  reply.clearCookie('refresh_token', { path: LEGACY_REFRESH_COOKIE_PATH })
+  reply.setCookie('refresh_token', token, {
+    httpOnly: true,
+    secure: config.secureCookies,
+    sameSite: 'strict',
+    path: REFRESH_COOKIE_PATH,
+    maxAge: 7 * 24 * 60 * 60,
+  })
+}
+
+export function clearRefreshCookie(reply) {
+  reply.clearCookie('refresh_token', { path: LEGACY_REFRESH_COOKIE_PATH })
+  reply.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH })
+}
+
 export function hashToken(token) {
   return createHash('sha256').update(token).digest('hex')
 }

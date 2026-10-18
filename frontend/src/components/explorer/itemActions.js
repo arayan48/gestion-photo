@@ -105,7 +105,8 @@ export async function setLink(files, on) {
   }
   try {
     const { count, skipped } = await bulk(on ? 'link_on' : 'link_off', files)
-    toast.success(on ? `Lien public activé (${count})` : `Lien public désactivé (${count})`)
+    const what = count > 1 ? `${count} liens publics` : 'Lien public'
+    toast.success(`${what} ${on ? 'activé' : 'désactivé'}${count > 1 ? 's' : ''}`)
     if (skipped) toast.warn(`${skipped} fichier(s) ignoré(s) : permission insuffisante`)
   } catch (err) {
     for (const [id, data] of previous) if (data) queryClient.setQueryData(['file', id], data)

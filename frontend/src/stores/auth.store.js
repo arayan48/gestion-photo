@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import axios from 'axios'
-import api from '../utils/api.js'
+import api, { refreshAccessToken } from '../utils/api.js'
 import { getBrowserFingerprint } from '../lib/fingerprint.js'
 import { applyServerPreferences, flushPendingPreferences } from '../lib/prefsSync.js'
 
@@ -38,8 +37,7 @@ export const useAuthStore = create(
       initAuth: async () => {
         if (get().accessToken) return true
         try {
-          const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
-          set({ accessToken: data.accessToken })
+          await refreshAccessToken()
           const me = await get().fetchMe()
           applyServerPreferences(me?.preferences)
           return true

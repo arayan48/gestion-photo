@@ -40,11 +40,11 @@ const MediaViewer = lazy(() => import('../components/viewer/MediaViewer.jsx'))
 const PAGE_SIZE = 60
 
 const VIEWS = {
-  mine: { title: 'Mon espace', icon: HardDrive },
-  others: { title: 'Espace commun', icon: Globe, desc: 'Les fichiers partagés par tous les membres.' },
-  recent: { title: 'Récents', icon: Clock, desc: 'Vos 20 derniers fichiers ajoutés ou modifiés.' },
-  favorites: { title: 'Favoris', icon: Heart, desc: 'Vos fichiers marqués d’un cœur.' },
-  trash: { title: 'Corbeille', icon: Trash2, desc: 'Les fichiers sont supprimés définitivement après 48 h.' },
+  mine: { title: 'Mon espace', icon: HardDrive, filter: 'Filtrer ce dossier…' },
+  others: { title: 'Espace commun', icon: Globe, desc: 'Les fichiers partagés par tous les membres.', filter: 'Filtrer l’espace commun…' },
+  recent: { title: 'Récents', icon: Clock, desc: 'Vos 20 derniers fichiers ajoutés ou modifiés.', filter: 'Filtrer les récents…' },
+  favorites: { title: 'Favoris', icon: Heart, desc: 'Vos fichiers marqués d’un cœur.', filter: 'Filtrer les favoris…' },
+  trash: { title: 'Corbeille', icon: Trash2, desc: 'Les fichiers sont supprimés définitivement après 48 h.', filter: 'Filtrer la corbeille…' },
   search: { title: 'Recherche', icon: Search },
 }
 
@@ -653,6 +653,7 @@ export default function Explorer() {
           dateRange={dateRange}
           setDateRange={setDateRange}
           hideFilter={view === 'search'}
+          filterPlaceholder={meta.filter}
           showSort={view !== 'recent' && view !== 'trash'}
           isTouch={isTouch}
           touchSelect={touchSelect}

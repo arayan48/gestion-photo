@@ -3,7 +3,7 @@ import pool from '../../config/database.js'
 import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp, normalizeIp } from '../../utils/fingerprint.js'
-import { isUuid, parsePagination } from '../../utils/validation.js'
+import { isUuid, parsePagination, likePattern, optionalString } from '../../utils/validation.js'
 import { unban } from '../../services/ban.service.js'
 import { revokeAllUserTokens } from '../../services/auth.service.js'
 import { checkMediaStorageLimit, detectInfrastructure, initStorage } from '../../config/storage.js'
@@ -90,7 +90,7 @@ export default async function adminRoutes(fastify) {
 
     const { rows } = await pool.query(
       'INSERT INTO ip_whitelist (ip_address, label, added_by) VALUES ($1, $2, $3) ON CONFLICT (ip_address) DO NOTHING RETURNING *',
-      [ip, label || null, request.currentUser.id]
+      [ip, optionalString(label, 100), request.currentUser.id]
     )
     if (!rows.length) return reply.code(409).send({ error: 'Cette IP est déjà dans la liste blanche' })
 
@@ -109,7 +109,7 @@ export default async function adminRoutes(fastify) {
 
     const { rowCount } = await pool.query(
       'UPDATE ip_whitelist SET ip_address = $1, label = $2 WHERE id = $3',
-      [ip, label || null, id]
+      [ip, optionalString(label, 100), id]
     )
     if (!rowCount) return reply.code(404).send({ error: 'Entrée introuvable' })
     await log({ category: 'security', level: 'info', action: 'ip_whitelist_updated', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id, ip, label } })
@@ -160,7 +160,7 @@ export default async function adminRoutes(fastify) {
     if (category) { params.push(category); where += ` AND l.category = $${params.length}` }
     if (level) { params.push(level); where += ` AND l.level = $${params.length}` }
     if (userId && isUuid(userId)) { params.push(userId); where += ` AND l.user_id = $${params.length}` }
-    if (search) { params.push(`%${search}%`); where += ` AND (l.action ILIKE $${params.length} OR l.metadata::text ILIKE $${params.length})` }
+    if (search) { params.push(likePattern(search)); where += ` AND (l.action ILIKE $${params.length} OR l.metadata::text ILIKE $${params.length})` }
     if (from && !Number.isNaN(Date.parse(from))) { params.push(from); where += ` AND l.created_at >= $${params.length}::timestamp` }
     if (to && !Number.isNaN(Date.parse(to))) {
       params.push(to)

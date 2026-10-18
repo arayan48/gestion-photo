@@ -1,5 +1,6 @@
 import cron from 'node-cron'
-import { unlink } from 'fs/promises'
+import { unlink, readdir, stat, rm } from 'fs/promises'
+import { join } from 'path'
 import { totalmem, freemem, cpus, loadavg } from 'os'
 import pool from '../config/database.js'
 import { log } from './logger.js'
@@ -7,6 +8,9 @@ import { deleteMediaFiles } from '../services/storage.service.js'
 import { runConfiguredBackups } from '../services/backup.service.js'
 import { getConfigValues } from '../services/config.service.js'
 import { initStorage } from '../config/storage.js'
+import { config } from '../config/env.js'
+
+const TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 export function startCronJobs() {
   // Nettoyage corbeille : toutes les heures, supprimer les fichiers > 48h
@@ -60,11 +64,27 @@ export function startCronJobs() {
     }
   })
 
-  // Nettoyage refresh tokens expirés : tous les jours à 4h
+  // Nettoyage quotidien à 4h : jetons expirés et fichiers temporaires abandonnés
   cron.schedule('0 4 * * *', async () => {
     try {
       await pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = true')
-    } catch {}
+      await pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()')
+      await pool.query('DELETE FROM otp_codes WHERE expires_at < NOW()')
+    } catch (err) {
+      console.error('Erreur nettoyage jetons:', err)
+    }
+
+    // Envois interrompus (redémarrage pendant un upload, sauvegarde coupée…)
+    try {
+      const tempDir = join(config.storage.path, 'temp')
+      for (const name of await readdir(tempDir)) {
+        const path = join(tempDir, name)
+        const info = await stat(path).catch(() => null)
+        if (info && Date.now() - info.mtimeMs > TEMP_MAX_AGE_MS) await rm(path, { recursive: true, force: true })
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error('Erreur nettoyage temporaires:', err)
+    }
   })
 
   // Sauvegardes planifiées (Paramètres admin → Sauvegardes → Planification)

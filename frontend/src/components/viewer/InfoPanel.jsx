@@ -128,7 +128,8 @@ export default function InfoPanel({ file, onClose, className }) {
     staleTime: 10_000,
   })
   const f = { ...file, ...(details || {}) }
-  const own = f.owner_id === me?.id || me?.is_super_admin
+  // Dans la corbeille, la fiche est en lecture seule (le serveur refuse les modifications)
+  const own = (f.owner_id === me?.id || me?.is_super_admin) && !f.is_deleted
   const video = isVideo(f)
 
   return (
@@ -177,9 +178,9 @@ export default function InfoPanel({ file, onClose, className }) {
           <div>
             <Row icon={video ? Film : ImageIcon} label="Type" value={`${fileExt(f)} · ${f.mime_type}`} />
             <Row icon={HardDrive} label="Taille" value={formatSize(f.size)} />
-            <Row icon={ImageIcon} label="Dimensions" value={f.width ? `${f.width} × ${f.height} px${f.width && f.height ? ` · ${((f.width * f.height) / 1e6).toFixed(1)} Mpx` : ''}` : null} />
+            <Row icon={ImageIcon} label="Dimensions" value={f.width ? `${f.width} × ${f.height} px${f.width * f.height >= 1e5 ? ` · ${((f.width * f.height) / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mpx` : ''}` : null} />
             <Row icon={Clock} label="Durée" value={f.duration ? formatDuration(f.duration) : null} />
-            <Row icon={Gauge} label="Images / seconde" value={f.fps ? `${Number(f.fps).toFixed(1)} i/s` : null} />
+            <Row icon={Gauge} label="Images / seconde" value={f.fps ? `${Number(f.fps).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} i/s` : null} />
             <Row icon={Film} label="Codec" value={f.codec} />
             <Row icon={Gauge} label="Qualité d'envoi" value={QUALITY_LABELS[f.quality_preset] || f.quality_preset} />
             <Row icon={Calendar} label="Ajouté le" value={formatDateTime(f.created_at)} />
