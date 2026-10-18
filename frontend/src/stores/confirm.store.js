@@ -1,48 +1,48 @@
 import { create } from 'zustand'
 
-// Map pour gérer plusieurs confirms en parallèle sans race condition
-const _resolvers = new Map()
-let _nextId = 0
+// Une seule boîte de dialogue à la fois ; une nouvelle demande répond « non » à la précédente
+let resolver = null
+const settle = (value) => {
+  const r = resolver
+  resolver = null
+  r?.(value)
+}
 
-export const useConfirmStore = create((set, get) => ({
+export const useConfirmStore = create((set) => ({
   open: false,
-  title: 'Confirmer',
+  kind: 'confirm', // 'confirm' | 'prompt'
+  title: '',
   message: '',
   confirmLabel: 'Confirmer',
   danger: false,
-  _id: null,
+  // prompt
+  defaultValue: '',
+  placeholder: '',
+  selectBaseName: false,
 
-  show(message, opts = {}) {
-    // Si un confirm est déjà ouvert, le fermer proprement (réponse "non")
-    const current = get()
-    if (current._id !== null && _resolvers.has(current._id)) {
-      _resolvers.get(current._id)(false)
-      _resolvers.delete(current._id)
-    }
-
-    const id = ++_nextId
+  show(opts) {
+    settle(opts.kind === 'prompt' ? null : false)
     set({
       open: true,
-      message,
+      kind: opts.kind || 'confirm',
       title: opts.title ?? 'Confirmer',
+      message: opts.message ?? '',
       confirmLabel: opts.confirmLabel ?? 'Confirmer',
-      danger: opts.danger ?? false,
-      _id: id,
+      danger: !!opts.danger,
+      defaultValue: opts.defaultValue ?? '',
+      placeholder: opts.placeholder ?? '',
+      selectBaseName: !!opts.selectBaseName,
     })
-
-    return new Promise((resolve) => {
-      _resolvers.set(id, resolve)
-    })
+    return new Promise((resolve) => { resolver = resolve })
   },
 
   close(result) {
-    const id = get()._id
-    set({ open: false, _id: null })
-    if (id !== null && _resolvers.has(id)) {
-      _resolvers.get(id)(result)
-      _resolvers.delete(id)
-    }
+    set({ open: false })
+    settle(result)
   },
 }))
 
-export const confirm = (message, opts) => useConfirmStore.getState().show(message, opts)
+export const confirm = (message, opts = {}) => useConfirmStore.getState().show({ ...opts, message, kind: 'confirm' })
+
+// Remplace window.prompt() : renvoie la valeur saisie ou null
+export const prompt = (title, opts = {}) => useConfirmStore.getState().show({ confirmLabel: 'Valider', ...opts, title, kind: 'prompt' })

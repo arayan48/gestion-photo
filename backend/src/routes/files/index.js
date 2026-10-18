@@ -223,7 +223,9 @@ export default async function fileRoutes(fastify) {
   // ─── Liste des fichiers ────────────────────────────────────────────────────
   fastify.get('/', { preHandler: [authenticate] }, async (request, reply) => {
     const user = request.currentUser
-    const { folderId, search, tag, from, to, sortBy = 'created_at', sortDir = 'desc' } = request.query
+    const { folderId, search, tag, from, to, type, sortBy = 'created_at', sortDir = 'desc' } = request.query
+    // global=true : recherche dans tous les dossiers (barre de recherche, palette de commandes)
+    const global = request.query.global === 'true'
     // Toute valeur autre que "others" est traitée comme "mine" : jamais de liste globale par défaut
     const view = request.query.view === 'others' ? 'others' : 'mine'
     const { page, limit, offset } = parsePagination(request.query, { defaultLimit: 50, maxLimit: 200 })
@@ -242,8 +244,13 @@ export default async function fileRoutes(fastify) {
       if (!isUuid(folderId)) return reply.code(400).send({ error: 'Dossier invalide' })
       params.push(folderId)
       where += ` AND f.folder_id = $${params.length}`
-    } else if (view === 'mine') {
+    } else if (view === 'mine' && !global) {
       where += ` AND f.folder_id IS NULL`
+    }
+
+    if (type === 'image' || type === 'video') {
+      params.push(`${type}/%`)
+      where += ` AND f.mime_type LIKE $${params.length}`
     }
 
     if (search) {
@@ -285,7 +292,10 @@ export default async function fileRoutes(fastify) {
       [...params, limit, offset, user.id]
     )
 
-    return reply.send({ files: rows, page, limit })
+    const { rows: [{ count }] } = await pool.query(`SELECT COUNT(*) FROM files f ${where}`, params)
+    const total = parseInt(count)
+
+    return reply.send({ files: rows, page, limit, total, hasMore: offset + rows.length < total })
   })
 
   // ─── Fichiers récents ─────────────────────────────────────────────────────
@@ -536,20 +546,39 @@ export default async function fileRoutes(fastify) {
   // ─── Dossiers ─────────────────────────────────────────────────────────────
   fastify.get('/folders', { preHandler: [authenticate] }, async (request, reply) => {
     const { parentId } = request.query
-    let where = 'WHERE owner_id = $1'
+    let where = 'WHERE fo.owner_id = $1'
     const params = [request.currentUser.id]
 
     if (parentId) {
       if (!isUuid(parentId)) return reply.code(400).send({ error: 'Dossier invalide' })
       params.push(parentId)
-      where += ` AND parent_id = $${params.length}`
+      where += ` AND fo.parent_id = $${params.length}`
     } else {
-      where += ' AND parent_id IS NULL'
+      where += ' AND fo.parent_id IS NULL'
     }
 
     const { rows } = await pool.query(
-      `SELECT * FROM folders ${where} ORDER BY name`,
+      `SELECT fo.*,
+              (SELECT COUNT(*) FROM files fi WHERE fi.folder_id = fo.id AND fi.is_deleted = false)::int AS file_count,
+              (SELECT COUNT(*) FROM folders sub WHERE sub.parent_id = fo.id)::int AS folder_count,
+              (SELECT COALESCE(SUM(fi.size), 0) FROM files fi WHERE fi.folder_id = fo.id AND fi.is_deleted = false) AS total_size,
+              (SELECT COALESCE(json_agg(c.thumbnail_path), '[]') FROM (
+                 SELECT fi.thumbnail_path FROM files fi
+                 WHERE fi.folder_id = fo.id AND fi.is_deleted = false AND fi.thumbnail_path IS NOT NULL
+                 ORDER BY fi.created_at DESC LIMIT 3
+               ) c) AS covers
+       FROM folders fo ${where}
+       ORDER BY fo.name`,
       params
+    )
+    return reply.send(rows)
+  })
+
+  // Arborescence complète des dossiers de l'utilisateur (sélecteur « Déplacer vers »)
+  fastify.get('/folders/tree', { preHandler: [authenticate] }, async (request, reply) => {
+    const { rows } = await pool.query(
+      'SELECT id, name, parent_id FROM folders WHERE owner_id = $1 ORDER BY name',
+      [request.currentUser.id]
     )
     return reply.send(rows)
   })
@@ -577,17 +606,45 @@ export default async function fileRoutes(fastify) {
     preHandler: [authenticate, requirePermission('files.rename_move')],
   }, async (request, reply) => {
     const { id } = request.params
-    const { name } = request.body || {}
-    if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom requis' })
+    const { name, parentId } = request.body || {}
+    const userId = request.currentUser.id
     if (!isUuid(id)) return reply.code(404).send({ error: 'Dossier introuvable' })
+    if (name === undefined && parentId === undefined) return reply.code(400).send({ error: 'Aucun champ à modifier' })
 
+    const updates = []
+    const params = []
+    if (name !== undefined) {
+      if (!isNonEmptyString(name, 255)) return reply.code(400).send({ error: 'Nom requis' })
+      params.push(sanitizeFilename(name.trim()))
+      updates.push(`name = $${params.length}`)
+    }
+    if (parentId !== undefined) {
+      const target = parentId || null
+      if (target === id) return reply.code(400).send({ error: 'Un dossier ne peut pas être déplacé dans lui-même' })
+      if (!(await isOwnFolder(target, userId))) return reply.code(400).send({ error: 'Dossier de destination invalide' })
+      if (target) {
+        // Interdire de déplacer un dossier dans l'un de ses descendants (boucle)
+        const { rows: loop } = await pool.query(
+          `WITH RECURSIVE sub AS (
+             SELECT id FROM folders WHERE id = $1
+             UNION SELECT f.id FROM folders f JOIN sub s ON f.parent_id = s.id
+           ) SELECT 1 FROM sub WHERE id = $2`,
+          [id, target]
+        )
+        if (loop.length) return reply.code(400).send({ error: 'Impossible de déplacer un dossier dans l\'un de ses sous-dossiers' })
+      }
+      params.push(target)
+      updates.push(`parent_id = $${params.length}`)
+    }
+
+    params.push(id, userId)
     const { rows } = await pool.query(
-      'UPDATE folders SET name = $1 WHERE id = $2 AND owner_id = $3 RETURNING *',
-      [sanitizeFilename(name.trim()), id, request.currentUser.id]
+      `UPDATE folders SET ${updates.join(', ')} WHERE id = $${params.length - 1} AND owner_id = $${params.length} RETURNING *`,
+      params
     )
     if (!rows.length) return reply.code(404).send({ error: 'Dossier introuvable' })
 
-    await log({ category: 'files', level: 'info', action: 'folder_renamed', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { folderId: id, name: rows[0].name } })
+    await log({ category: 'files', level: 'info', action: parentId !== undefined ? 'folder_moved' : 'folder_renamed', userId, ipAddress: extractIp(request), metadata: { folderId: id, name: rows[0].name, parentId } })
     return reply.send(rows[0])
   })
 
@@ -744,6 +801,120 @@ export default async function fileRoutes(fastify) {
     reply.raw.on('close', cleanupZip)
 
     return reply.send(createReadStream(zipPath))
+  })
+
+  // ─── Actions groupées ─────────────────────────────────────────────────────
+  // Une seule requête pour N fichiers (évite de saturer le rate-limit Nginx)
+  const BULK_ACTIONS = ['move', 'trash', 'restore', 'delete_permanent', 'favorite', 'unfavorite', 'link_on', 'link_off']
+  fastify.post('/bulk', { preHandler: [authenticate] }, async (request, reply) => {
+    const { action, fileIds, folderId } = request.body || {}
+    const user = request.currentUser
+    const ip = extractIp(request)
+    if (!BULK_ACTIONS.includes(action)) return reply.code(400).send({ error: 'Action invalide' })
+    if (!Array.isArray(fileIds) || !fileIds.length) return reply.code(400).send({ error: 'Liste de fichiers requise' })
+    const ids = [...new Set(fileIds.filter(isUuid))].slice(0, 1000)
+    if (!ids.length) return reply.code(400).send({ error: 'Liste de fichiers invalide' })
+
+    const inTrash = action === 'restore' || action === 'delete_permanent'
+    const { rows: files } = await pool.query(
+      'SELECT * FROM files WHERE id = ANY($1) AND is_deleted = $2',
+      [ids, inTrash]
+    )
+
+    // Filtrer selon les droits, fichier par fichier (même règles que les routes unitaires)
+    const allowed = []
+    const can = {
+      own: user.is_super_admin || (await userHasPermission(user, 'files.delete_own')),
+      others: await userHasPermission(user, 'files.delete_others'),
+      view: await userHasPermission(user, 'files.view_others'),
+      move: await userHasPermission(user, 'files.rename_move'),
+      link: await userHasPermission(user, 'files.toggle_link'),
+    }
+    for (const f of files) {
+      const isOwner = f.owner_id === user.id
+      let ok = false
+      if (action === 'trash') ok = isOwner ? can.own : can.others
+      else if (action === 'favorite' || action === 'unfavorite') ok = isOwner || can.view
+      else if (action === 'move') ok = can.move && canEditFile(user, f)
+      else if (action === 'link_on' || action === 'link_off') ok = can.link && canEditFile(user, f)
+      else if (action === 'restore') ok = isOwner
+      else if (action === 'delete_permanent') ok = canEditFile(user, f)
+      if (ok) allowed.push(f)
+    }
+    if (!allowed.length) return reply.code(403).send({ error: 'Aucun fichier modifiable dans la sélection' })
+    const allowedIds = allowed.map((f) => f.id)
+
+    switch (action) {
+      case 'move': {
+        const target = folderId || null
+        // Tous les fichiers doivent appartenir au propriétaire du dossier cible
+        const owners = new Set(allowed.map((f) => f.owner_id))
+        for (const ownerId of owners) {
+          if (!(await isOwnFolder(target, ownerId))) return reply.code(400).send({ error: 'Dossier de destination invalide' })
+        }
+        await pool.query('UPDATE files SET folder_id = $1, updated_at = NOW() WHERE id = ANY($2)', [target, allowedIds])
+        break
+      }
+      case 'trash':
+        await pool.query('UPDATE files SET is_deleted = true, deleted_at = NOW() WHERE id = ANY($1)', [allowedIds])
+        for (const f of allowed.filter((x) => x.owner_id !== user.id)) {
+          await notify({ userId: f.owner_id, type: 'file_deleted', message: `Votre fichier "${f.original_name}" a été supprimé par un administrateur` })
+        }
+        break
+      case 'restore':
+        await pool.query('UPDATE files SET is_deleted = false, deleted_at = NULL, updated_at = NOW() WHERE id = ANY($1)', [allowedIds])
+        break
+      case 'delete_permanent': {
+        await pool.query('DELETE FROM files WHERE id = ANY($1)', [allowedIds])
+        const byOwner = new Map()
+        for (const f of allowed) byOwner.set(f.owner_id, (byOwner.get(f.owner_id) || 0) + Number(f.size))
+        for (const [ownerId, size] of byOwner) {
+          await pool.query('UPDATE users SET storage_used = GREATEST(0, storage_used - $1) WHERE id = $2', [size, ownerId])
+        }
+        for (const f of allowed) await deleteMediaFiles(f)
+        break
+      }
+      case 'favorite':
+        await pool.query(
+          `INSERT INTO favorites (user_id, file_id) SELECT $1, unnest($2::uuid[]) ON CONFLICT DO NOTHING`,
+          [user.id, allowedIds]
+        )
+        break
+      case 'unfavorite':
+        await pool.query('DELETE FROM favorites WHERE user_id = $1 AND file_id = ANY($2)', [user.id, allowedIds])
+        break
+      case 'link_on':
+      case 'link_off':
+        await pool.query('UPDATE files SET link_active = $1, updated_at = NOW() WHERE id = ANY($2)', [action === 'link_on', allowedIds])
+        break
+    }
+
+    await log({
+      category: 'files', level: action === 'delete_permanent' ? 'warning' : 'info', action: `bulk_${action}`,
+      userId: user.id, ipAddress: ip, metadata: { count: allowedIds.length, fileIds: allowedIds.slice(0, 50), folderId },
+    })
+    return reply.send({ count: allowedIds.length, skipped: ids.length - allowedIds.length })
+  })
+
+  // ─── Statistiques de l'utilisateur (page Stockage) ────────────────────────
+  fastify.get('/stats', { preHandler: [authenticate] }, async (request, reply) => {
+    const userId = request.currentUser.id
+    const [byType, extra] = await Promise.all([
+      pool.query(
+        `SELECT CASE WHEN mime_type LIKE 'image/%' THEN 'image' WHEN mime_type LIKE 'video/%' THEN 'video' ELSE 'other' END AS type,
+                COUNT(*)::int AS count, COALESCE(SUM(size), 0) AS size
+         FROM files WHERE owner_id = $1 AND is_deleted = false GROUP BY 1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT (SELECT COUNT(*) FROM favorites WHERE user_id = $1)::int AS favorites,
+                (SELECT COUNT(*) FROM folders WHERE owner_id = $1)::int AS folders,
+                (SELECT COUNT(*) FROM files WHERE owner_id = $1 AND is_deleted = true)::int AS trash_count,
+                (SELECT COALESCE(SUM(size), 0) FROM files WHERE owner_id = $1 AND is_deleted = true) AS trash_size`,
+        [userId]
+      ),
+    ])
+    return reply.send({ byType: byType.rows, ...extra.rows[0] })
   })
 
   // ─── Tags ──────────────────────────────────────────────────────────────────

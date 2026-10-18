@@ -338,6 +338,34 @@ export default async function userRoutes(fastify) {
     return reply.send({ message: 'Profil mis à jour.' })
   })
 
+  // ─── Préférences d'interface (synchronisées entre appareils) ─────────────
+  // Fusion superficielle : le client n'envoie que les clés modifiées.
+  // Les sous-objets (ex. notifications) sont fusionnés eux aussi.
+  fastify.patch('/me/preferences', { preHandler: [authenticate] }, async (request, reply) => {
+    const body = request.body
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return reply.code(400).send({ error: 'Préférences invalides' })
+    }
+    const json = JSON.stringify(body)
+    if (json.length > 8192) return reply.code(413).send({ error: 'Préférences trop volumineuses' })
+
+    const { rows: [current] } = await pool.query('SELECT preferences FROM users WHERE id = $1', [request.currentUser.id])
+    const merged = { ...(current?.preferences || {}) }
+    for (const [key, value] of Object.entries(body)) {
+      if (!/^[a-zA-Z0-9_]{1,64}$/.test(key)) continue
+      const isPlainObject = value && typeof value === 'object' && !Array.isArray(value)
+      merged[key] = isPlainObject && merged[key] && typeof merged[key] === 'object'
+        ? { ...merged[key], ...value }
+        : value
+    }
+
+    const { rows: [updated] } = await pool.query(
+      'UPDATE users SET preferences = $1::jsonb WHERE id = $2 RETURNING preferences',
+      [JSON.stringify(merged), request.currentUser.id]
+    )
+    return reply.send(updated.preferences)
+  })
+
   // ─── Upload avatar ────────────────────────────────────────────────────────
   fastify.post('/me/avatar', { preHandler: [authenticate] }, async (request, reply) => {
     const data = await request.file({ limits: { fileSize: MAX_AVATAR_SIZE } })

@@ -1,52 +1,67 @@
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, HelpCircle, Pencil } from 'lucide-react'
 import { useConfirmStore } from '../../stores/confirm.store.js'
-import { AlertTriangle, X } from 'lucide-react'
+import { Dialog } from '../ui/Dialog.jsx'
+import { Button } from '../ui/Button.jsx'
 
+// Rend confirm() et prompt() (stores/confirm.store.js)
 export default function ConfirmDialog() {
-  const { open, title, message, confirmLabel, danger, close } = useConfirmStore()
+  const { open, kind, title, message, confirmLabel, danger, defaultValue, placeholder, selectBaseName, close } = useConfirmStore()
+  const [value, setValue] = useState('')
+  const inputRef = useRef(null)
+  const isPrompt = kind === 'prompt'
 
-  if (!open) return null
+  useEffect(() => { if (open) setValue(defaultValue || '') }, [open, defaultValue])
+
+  const submit = () => {
+    if (isPrompt) {
+      const v = value.trim()
+      if (v) close(v)
+    } else close(true)
+  }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60" onClick={() => close(false)}>
-      <div
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-gray-800"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6">
-          {/* Icône + titre */}
-          <div className="flex items-start gap-4 mb-4">
-            <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
-              danger ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'
-            }`}>
-              <AlertTriangle size={20} className={danger ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-slate-900 dark:text-gray-100">{title}</h3>
-              <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">{message}</p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 justify-end">
-            <button
-              onClick={() => close(false)}
-              className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={() => close(true)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors ${
-                danger
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-violet-600 hover:bg-violet-700'
-              }`}
-            >
-              {confirmLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && close(isPrompt ? null : false)}
+      title={title}
+      description={!isPrompt ? message : message || undefined}
+      icon={isPrompt ? Pencil : danger ? AlertTriangle : HelpCircle}
+      iconTone={danger ? 'danger' : 'accent'}
+      size="sm"
+      bodyClassName={isPrompt ? '' : 'py-0'}
+      onOpenAutoFocus={(e) => {
+        if (!isPrompt) return
+        e.preventDefault()
+        // Sélectionne le nom sans l'extension (comme l'explorateur Windows / Finder)
+        requestAnimationFrame(() => {
+          const el = inputRef.current
+          if (!el) return
+          el.focus()
+          const dot = selectBaseName ? el.value.lastIndexOf('.') : -1
+          el.setSelectionRange(0, dot > 0 ? dot : el.value.length)
+        })
+      }}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => close(isPrompt ? null : false)}>Annuler</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={submit} disabled={isPrompt && !value.trim()} autoFocus={!isPrompt}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      {isPrompt && (
+        <input
+          ref={inputRef}
+          className="input"
+          value={value}
+          placeholder={placeholder}
+          maxLength={255}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+        />
+      )}
+    </Dialog>
   )
 }

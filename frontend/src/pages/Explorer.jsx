@@ -1,732 +1,781 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useDropzone } from 'react-dropzone'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
-  DndContext, DragOverlay,
-  PointerSensor, TouchSensor,
-  useSensor, useSensors,
-  pointerWithin, rectIntersection, closestCenter,
-} from '@dnd-kit/core'
+  HardDrive, Globe, Clock, Heart, Trash2, Search, Upload, FolderPlus, CloudUpload, Info,
+  FolderOpen, SearchX, Sparkles, ArrowDown, ArrowUp,
+} from 'lucide-react'
 import api from '../utils/api.js'
-import { useAuthStore } from '../stores/auth.store.js'
-import FileGrid, { GridSkeleton } from '../components/explorer/FileGrid.jsx'
-import FileList, { ListSkeleton } from '../components/explorer/FileList.jsx'
-import UploadPanel from '../components/upload/UploadPanel.jsx'
-import FileViewer from '../components/viewer/FileViewer.jsx'
-import ContextMenu from '../components/explorer/ContextMenu.jsx'
-import Breadcrumb from '../components/explorer/Breadcrumb.jsx'
-import { Grid3X3, List, Upload, Search, Download, X, Calendar, FolderPlus, Trash2, FileImage, FileVideo, File } from 'lucide-react'
-import { toast } from '../stores/toast.store.js'
-import { confirm } from '../stores/confirm.store.js'
-import { usePreferencesStore } from '../stores/preferences.store.js'
+import { cn } from '../lib/cn.js'
+import { dateGroupLabel, pluralize } from '../lib/format.js'
+import { startUpload, pickFiles, createFolder, copyFileLink } from '../lib/actions.js'
+import { useAuthStore, usePermission } from '../stores/auth.store.js'
+import { usePreferencesStore, GRID_SIZES } from '../stores/preferences.store.js'
+import { useUiStore } from '../stores/ui.store.js'
+import { useDebounce } from '../hooks/useDebounce.js'
+import { useHotkeys } from '../hooks/useHotkeys.js'
+import { useIsTouch } from '../hooks/useMediaQuery.js'
+import { useDndBridge } from '../components/shared/DndProvider.jsx'
+import { FileCard, FolderCard, ItemRow, LIST_COLUMNS } from '../components/explorer/Items.jsx'
+import Breadcrumbs from '../components/explorer/Breadcrumbs.jsx'
+import SelectionBar from '../components/explorer/SelectionBar.jsx'
+import { Toolbar } from '../components/explorer/Toolbar.jsx'
+import { useLasso } from '../components/explorer/useLasso.js'
+import {
+  fileMenu, folderMenu, selectionMenu, backgroundMenu, moveItems, trashFiles, deleteForever,
+  deleteFolders, renameFile, renameFolder, setFavorite, openMoveDialog, emptyTrash,
+} from '../components/explorer/itemActions.js'
+import { ContextMenu } from '../components/ui/Menu.jsx'
+import { Button } from '../components/ui/Button.jsx'
+import { EmptyState } from '../components/ui/EmptyState.jsx'
+import { Skeleton } from '../components/ui/Skeleton.jsx'
+import { Spinner } from '../components/ui/Spinner.jsx'
+import { Checkbox } from '../components/ui/Form.jsx'
 
-// Icône selon le MIME type (utilisée dans l'overlay)
-function FileTypeIcon({ mime, size = 20 }) {
-  if (mime?.startsWith('image/')) return <FileImage size={size} className="text-blue-400" />
-  if (mime?.startsWith('video/')) return <FileVideo size={size} className="text-purple-400" />
-  return <File size={size} className="text-slate-400" />
+// Visionneuse chargée à la première ouverture (zoom / pincement)
+const MediaViewer = lazy(() => import('../components/viewer/MediaViewer.jsx'))
+
+const PAGE_SIZE = 60
+
+const VIEWS = {
+  mine: { title: 'Mon espace', icon: HardDrive },
+  others: { title: 'Espace commun', icon: Globe, desc: 'Les fichiers partagés par tous les membres.' },
+  recent: { title: 'Récents', icon: Clock, desc: 'Vos 20 derniers fichiers ajoutés ou modifiés.' },
+  favorites: { title: 'Favoris', icon: Heart, desc: 'Vos fichiers marqués d’un cœur.' },
+  trash: { title: 'Corbeille', icon: Trash2, desc: 'Les fichiers sont supprimés définitivement après 48 h.' },
+  search: { title: 'Recherche', icon: Search },
 }
 
-// Collision : priorité au curseur dans la zone, sinon intersection des rectangles,
-// puis closest center en dernier recours (évite les drops perdus sur mobile)
-function customCollision(args) {
-  const pointer = pointerWithin(args)
-  if (pointer.length > 0) return pointer
-  const rect = rectIntersection(args)
-  if (rect.length > 0) return rect
-  return closestCenter(args)
-}
-
-// Modal de suppression de dossier avec option corbeille
-function FolderDeleteModal({ folderName, stats, onConfirm, onCancel }) {
-  const [moveToTrash, setMoveToTrash] = useState(true)
-  const hasContent = stats.fileCount > 0 || stats.folderCount > 0
-
-  const contentDesc = [
-    stats.fileCount  > 0 && `${stats.fileCount} fichier${stats.fileCount  > 1 ? 's' : ''}`,
-    stats.folderCount > 0 && `${stats.folderCount} sous-dossier${stats.folderCount > 1 ? 's' : ''}`,
-  ].filter(Boolean).join(' et ')
-
+function GridSkeleton({ size }) {
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-5 w-96 mx-4 border border-slate-200 dark:border-gray-700"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-1">Supprimer le dossier</h3>
-        <p className="text-sm text-slate-500 dark:text-gray-400 mb-4">
-          Supprimer <span className="font-medium text-slate-800 dark:text-gray-200">"{folderName}"</span> ?
-        </p>
-
-        {hasContent && (
-          <div className="mb-4 space-y-2">
-            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-              Ce dossier contient {contentDesc}.
-            </p>
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors">
-              <input
-                type="checkbox"
-                checked={moveToTrash}
-                onChange={(e) => setMoveToTrash(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded accent-violet-600"
-              />
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-gray-300">
-                  Déplacer les fichiers vers la corbeille
-                </p>
-                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
-                  {moveToTrash
-                    ? 'Les fichiers seront récupérables pendant 48h depuis la corbeille.'
-                    : 'Les fichiers seront remontés vers le dossier parent.'}
-                </p>
-              </div>
-            </label>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-sm rounded-lg text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => onConfirm(moveToTrash)}
-            className="px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
-          >
-            Supprimer
-          </button>
+    <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(${size}px, calc(50% - 8px)), 1fr))` }}>
+      {Array.from({ length: 18 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <Skeleton className="aspect-square rounded-2xl" style={{ animationDelay: `${i * 40}ms` }} />
+          <Skeleton className="h-3 w-3/4" />
         </div>
-      </div>
+      ))}
     </div>
   )
 }
 
-// Modal de renommage — remplace window.prompt() bloquant
-function RenameModal({ initial, onConfirm, onCancel }) {
-  const [value, setValue] = useState(initial)
+function ListSkeleton() {
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-5 w-80 mx-4 border border-slate-200 dark:border-gray-700"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-3">Renommer</h3>
-        <input
-          className="input w-full text-sm"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && value.trim()) onConfirm(value.trim())
-            if (e.key === 'Escape') onCancel()
-          }}
-          autoFocus
-          onFocus={(e) => e.target.select()}
-        />
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-sm rounded-lg text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => value.trim() && onConfirm(value.trim())}
-            disabled={!value.trim()}
-            className="btn-primary text-sm py-1.5 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Renommer
-          </button>
+    <div className="space-y-1">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-2 py-2">
+          <Skeleton className="h-10 w-10 rounded-lg" />
+          <Skeleton className="h-3.5 flex-1" />
+          <Skeleton className="hidden h-3 w-24 md:block" />
+          <Skeleton className="hidden h-3 w-16 sm:block" />
         </div>
-      </div>
+      ))}
+    </div>
+  )
+}
+
+function SectionTitle({ children, right, onSelectAll, allSelected, someSelected }) {
+  return (
+    <div className="group/sec mb-3 mt-1 flex items-center gap-2.5">
+      <h3 className="text-[13px] font-semibold text-fg">{children}</h3>
+      {right && <span className="text-xs text-subtle">{right}</span>}
+      {onSelectAll && (
+        <span className={cn('transition-opacity', allSelected || someSelected ? 'opacity-100' : 'opacity-0 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100')} title="Sélectionner le groupe">
+          <Checkbox round checked={allSelected} indeterminate={someSelected && !allSelected} onChange={onSelectAll} />
+        </span>
+      )}
     </div>
   )
 }
 
 export default function Explorer() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { folderId } = useParams()
   const navigate = useNavigate()
-  const view = searchParams.get('view') || 'mine'
+  const location = useLocation()
+  const viewParam = searchParams.get('view')
+  const view = VIEWS[viewParam] ? viewParam : 'mine'
+  const q = searchParams.get('q') || ''
+  const openFileId = searchParams.get('file')
+  const isTrash = view === 'trash'
+  const paged = view === 'mine' || view === 'others' || view === 'search'
 
-  const { viewMode, setViewMode } = usePreferencesStore()
-  const [showUpload, setShowUpload] = useState(false)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [search, setSearch] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [showDateFilter, setShowDateFilter] = useState(false)
-  const [contextMenu, setContextMenu] = useState(null)
-  const [selectedFiles, setSelectedFiles] = useState([])
-  const [newFolderMode, setNewFolderMode] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
-  // activeDrag : { fileId, count, file (objet complet pour le thumbnail) }
-  const [activeDrag, setActiveDrag] = useState(null)
-  // renameModal : { file, action ('rename' | 'rename-folder'), initialValue }
-  const [renameModal, setRenameModal] = useState(null)
-  // folderDeleteModal : { file, stats: { fileCount, folderCount } }
-  const [folderDeleteModal, setFolderDeleteModal] = useState(null)
-  const queryClient = useQueryClient()
+  const { viewMode, gridSize, setGridSize, groupByDate, sortBy, sortDir, setSort, showNames, clickToOpen, setViewMode } = usePreferencesStore()
+  const user = useAuthStore((s) => s.user)
+  const can = usePermission()
+  const isTouch = useIsTouch()
+  const bridge = useDndBridge()
+  const setCurrentFolder = useUiStore((s) => s.setCurrentFolder)
 
-  useEffect(() => {
-    setSelectedFiles([])
-    setContextMenu(null)
-    setNewFolderMode(false)
-    setNewFolderName('')
-  }, [view, folderId])
+  // ── Filtres ────────────────────────────────────────────────────────────────
+  const [filter, setFilter] = useState('')
+  const debouncedFilter = useDebounce(filter.trim(), 250)
+  const [type, setType] = useState('all')
+  const [dateRange, setDateRange] = useState({ from: '', to: '' })
+  const hasFilters = !!debouncedFilter || type !== 'all' || !!dateRange.from || !!dateRange.to
+  const clearFilters = () => { setFilter(''); setType('all'); setDateRange({ from: '', to: '' }) }
 
-  // PointerSensor (souris) + TouchSensor (mobile)
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } }),
-  )
+  useEffect(() => { clearFilters() }, [view, folderId])
 
-  const queryKey = useMemo(
-    () => ['files', view, folderId, search, dateFrom, dateTo],
-    [view, folderId, search, dateFrom, dateTo]
-  )
-
-  // Breadcrumb remonté pour partager la chaîne et calculer parentFolderId
-  const { data: breadcrumbChain = [] } = useQuery({
-    queryKey: ['breadcrumb', folderId],
-    queryFn: async () => {
-      if (!folderId) return []
-      const { data } = await api.get(`/files/folders/${folderId}/breadcrumb`).catch(() => ({ data: [] }))
-      return data
-    },
-    enabled: !!folderId,
-  })
-
-  const parentFolderId = folderId
-    ? (breadcrumbChain.length >= 2 ? breadcrumbChain[breadcrumbChain.length - 2].id : null)
-    : undefined
-
-  const handleNavigateUp = useCallback(() => {
-    if (parentFolderId === null) navigate('/explorer')
-    else if (parentFolderId) navigate(`/explorer/${parentFolderId}`)
-  }, [parentFolderId, navigate])
-
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: async () => {
-      if (view === 'recent')    { const { data } = await api.get('/files/recent');    return { files: data } }
-      if (view === 'favorites') { const { data } = await api.get('/files/favorites'); return { files: data } }
-      if (view === 'trash')     { const { data } = await api.get('/files/trash');     return { files: data } }
-      const params = { view, folderId, search }
-      if (dateFrom) params.from = dateFrom
-      if (dateTo)   params.to   = dateTo
+  // ── Données ────────────────────────────────────────────────────────────────
+  const filesQuery = useInfiniteQuery({
+    queryKey: ['files', view, folderId ?? null, view === 'search' ? q : debouncedFilter, type, dateRange.from, dateRange.to, sortBy, sortDir],
+    queryFn: async ({ pageParam }) => {
+      const params = { view: view === 'others' ? 'others' : 'mine', page: pageParam, limit: PAGE_SIZE, sortBy, sortDir }
+      if (view === 'mine' && folderId) params.folderId = folderId
+      if (view === 'search') { params.global = 'true'; params.search = q }
+      else if (debouncedFilter) params.search = debouncedFilter
+      if (type !== 'all') params.type = type
+      if (dateRange.from) params.from = dateRange.from
+      if (dateRange.to) params.to = dateRange.to
       const { data } = await api.get('/files', { params })
       return data
     },
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.hasMore ? last.page + 1 : undefined),
+    enabled: paged && (view !== 'search' || q.length > 0),
   })
 
-  const { data: folders } = useQuery({
-    queryKey: ['folders', folderId],
-    queryFn: async () => {
-      const { data } = await api.get('/files/folders', { params: { parentId: folderId } })
-      return data
-    },
+  const listQuery = useQuery({
+    queryKey: ['files', view],
+    queryFn: async () => (await api.get(`/files/${view}`)).data,
+    enabled: !paged,
+  })
+
+  const foldersQuery = useQuery({
+    queryKey: ['folders', folderId ?? null],
+    queryFn: () => api.get('/files/folders', { params: { parentId: folderId } }).then((r) => r.data),
     enabled: view === 'mine',
   })
 
-  // Au début du drag : enrichir activeDrag avec les infos du fichier pour l'overlay
-  const handleDragStart = useCallback((event) => {
-    const { data: evtData } = event.active
-    if (evtData.current?.type !== 'file') return
+  const { data: chain = [] } = useQuery({
+    queryKey: ['breadcrumb', folderId],
+    queryFn: () => api.get(`/files/folders/${folderId}/breadcrumb`).then((r) => r.data).catch(() => []),
+    enabled: !!folderId && view === 'mine',
+  })
+  const currentFolder = folderId ? chain[chain.length - 1] : null
 
-    const fileId = evtData.current.fileId
-    const allFiles = data?.files || []
-    const fileObj = allFiles.find((f) => f.id === fileId)
+  // Destination des envois / nouveaux dossiers
+  useEffect(() => {
+    setCurrentFolder(view === 'mine' && folderId
+      ? { id: folderId, name: currentFolder?.name || 'Dossier' }
+      : { id: null, name: 'Mon espace' })
+  }, [view, folderId, currentFolder?.name])
+  useEffect(() => () => setCurrentFolder({ id: null, name: 'Mon espace' }), [])
 
-    // Si le fichier draggé fait partie de la sélection → multi-drag
-    const isMulti = selectedFiles.includes(fileId) && selectedFiles.length > 1
-    setActiveDrag({
-      fileId,
-      count: isMulti ? selectedFiles.length : 1,
-      file: fileObj,
+  const files = useMemo(() => {
+    let list
+    if (paged) list = filesQuery.data?.pages.flatMap((p) => p.files) || []
+    else {
+      list = listQuery.data || []
+      const needle = debouncedFilter.toLowerCase()
+      if (needle) list = list.filter((f) => f.original_name.toLowerCase().includes(needle))
+      if (type !== 'all') list = list.filter((f) => f.mime_type?.startsWith(`${type}/`))
+      if (dateRange.from) list = list.filter((f) => f.created_at.slice(0, 10) >= dateRange.from)
+      if (dateRange.to) list = list.filter((f) => f.created_at.slice(0, 10) <= dateRange.to)
+      if (view === 'favorites') {
+        const dir = sortDir === 'asc' ? 1 : -1
+        list = [...list].sort((a, b) => {
+          if (sortBy === 'original_name') return dir * a.original_name.localeCompare(b.original_name, 'fr')
+          if (sortBy === 'size') return dir * (Number(a.size) - Number(b.size))
+          return dir * (new Date(a.created_at) - new Date(b.created_at))
+        })
+      }
+    }
+    return list.map((f) => ({ ...f, kind: 'file', key: `f:${f.id}` }))
+  }, [paged, filesQuery.data, listQuery.data, debouncedFilter, type, dateRange, view, sortBy, sortDir])
+
+  const folders = useMemo(() => {
+    if (view !== 'mine' || type !== 'all' || dateRange.from || dateRange.to) return []
+    let list = foldersQuery.data || []
+    if (debouncedFilter) list = list.filter((f) => f.name.toLowerCase().includes(debouncedFilter.toLowerCase()))
+    if (sortBy === 'original_name' && sortDir === 'desc') list = [...list].reverse()
+    return list.map((f) => ({ ...f, kind: 'folder', key: `d:${f.id}` }))
+  }, [foldersQuery.data, view, type, dateRange, debouncedFilter, sortBy, sortDir])
+
+  const items = useMemo(() => [...folders, ...files], [folders, files])
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const total = paged ? (filesQuery.data?.pages[0]?.total ?? files.length) + folders.length : items.length
+  const isLoading = paged ? filesQuery.isLoading && (view !== 'search' || !!q) : listQuery.isLoading
+  const loadingFolders = view === 'mine' && foldersQuery.isLoading
+
+  // ── Sélection ──────────────────────────────────────────────────────────────
+  const [selected, setSelected] = useState(() => new Set())
+  const [focusKey, setFocusKey] = useState(null)
+  const [touchSelect, setTouchSelect] = useState(false)
+  const anchorRef = useRef(null)
+  const lassoBase = useRef(new Set())
+  const selectionMode = selected.size > 0 || touchSelect
+
+  useEffect(() => { setSelected(new Set()); setFocusKey(null); setTouchSelect(false); anchorRef.current = null }, [view, folderId, q])
+  // Retirer de la sélection ce qui a disparu (supprimé, déplacé…)
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size) return prev
+      const keys = new Set(items.map((i) => i.key))
+      const next = new Set([...prev].filter((k) => keys.has(k)))
+      return next.size === prev.size ? prev : next
     })
-  }, [data, selectedFiles])
+  }, [items])
 
-  // Fin du drag : déplacer un ou plusieurs fichiers
-  const handleDragEnd = useCallback(async (event) => {
-    setActiveDrag(null)
-    const { active, over } = event
-    if (!over || !active) return
+  const selectedItems = useMemo(() => items.filter((i) => selected.has(i.key)), [items, selected])
+  const clearSelection = useCallback(() => { setSelected(new Set()); setTouchSelect(false) }, [])
+  const selectAll = useCallback(() => setSelected(new Set(itemsRef.current.map((i) => i.key))), [])
 
-    const dragData = active.data.current
-    const dropData = over.data.current
+  const rangeSelect = (toKey, additive) => {
+    const keys = itemsRef.current.map((i) => i.key)
+    const a = keys.indexOf(anchorRef.current ?? toKey)
+    const b = keys.indexOf(toKey)
+    const [s, e] = a < b ? [a, b] : [b, a]
+    const range = keys.slice(s, e + 1)
+    setSelected((prev) => new Set(additive ? [...prev, ...range] : range))
+  }
 
-    if (dragData?.type === 'file' && dropData?.type === 'folder') {
-      const targetFolderId  = dropData.folderId          // null = racine
-      const currentFolderId = folderId ?? null
+  // ── Visionneuse (état dans l'URL : le bouton retour la ferme) ─────────────
+  const [viewerInfo, setViewerInfo] = useState(false)
+  const openViewer = useCallback((id, { info = false } = {}) => {
+    setViewerInfo(info)
+    const sp = new URLSearchParams(window.location.search)
+    sp.set('file', id)
+    navigate({ search: sp.toString() }, { state: { viewer: true } })
+  }, [navigate])
+  const closeViewer = useCallback(() => {
+    if (location.state?.viewer) navigate(-1)
+    else {
+      const sp = new URLSearchParams(window.location.search)
+      sp.delete('file')
+      setSearchParams(sp, { replace: true })
+    }
+  }, [location.state, navigate, setSearchParams])
+  const navigateViewer = useCallback((id) => {
+    const sp = new URLSearchParams(window.location.search)
+    sp.set('file', id)
+    setSearchParams(sp, { replace: true, state: location.state })
+  }, [location.state, setSearchParams])
 
-      if (targetFolderId === currentFolderId) return      // déjà dans ce dossier
+  const inList = !!openFileId && files.some((f) => f.id === openFileId)
+  const { data: singleFile } = useQuery({
+    queryKey: ['file', openFileId],
+    queryFn: () => api.get(`/files/${openFileId}`).then((r) => r.data),
+    enabled: !!openFileId && !inList && !isLoading,
+  })
+  const viewerFiles = inList ? files : singleFile ? [{ ...singleFile, kind: 'file', key: `f:${singleFile.id}` }] : []
 
-      // Multi-drag : si le fichier draggé est dans la sélection, déplacer tout
-      const isMulti  = selectedFiles.includes(dragData.fileId) && selectedFiles.length > 1
-      const fileIds  = isMulti ? selectedFiles : [dragData.fileId]
+  const openItem = useCallback((item) => {
+    if (item.kind === 'folder') navigate(`/explorer/${item.id}`)
+    else openViewer(item.id)
+  }, [navigate, openViewer])
 
-      try {
-        await Promise.all(fileIds.map((id) => api.patch(`/files/${id}`, { folderId: targetFolderId })))
-        toast.success(fileIds.length > 1 ? `${fileIds.length} fichiers déplacés` : 'Fichier déplacé')
-        // Vider la sélection seulement si tout a réussi
-        if (isMulti) setSelectedFiles([])
-        // Invalider toutes les vues fichiers (source + destination peuvent être n'importe quel dossier/vue)
-        queryClient.invalidateQueries({ queryKey: ['files'] })
-        queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-        queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
-      } catch {
-        toast.error('Erreur lors du déplacement')
+  // ── Interactions (références stables pour les cartes mémoïsées) ──────────
+  const pointerType = useRef('mouse')
+  const lastContext = useRef(0)
+  const lastDragEnd = useRef(0)
+  const live = useRef({})
+  live.current = { selected, clickToOpen, openItem, selectionMode }
+
+  const handlers = useMemo(() => ({
+    showOwner: view !== 'mine',
+    userId: user?.id,
+    bind: (item) => ({
+      onPointerDown: (e) => {
+        pointerType.current = e.pointerType
+        // Tactile : l'appui long ne doit ouvrir que le menu de l'élément, pas aussi celui du fond
+        if (e.pointerType !== 'mouse') e.stopPropagation()
+      },
+      onClick: (e) => {
+        if (Date.now() - lastContext.current < 600 || Date.now() - lastDragEnd.current < 250) return
+        const { clickToOpen: cto, openItem: open, selectionMode: selMode } = live.current
+        if (pointerType.current === 'touch') {
+          if (selMode) toggle(item)
+          else open(item)
+          return
+        }
+        if (e.shiftKey) { rangeSelect(item.key, e.ctrlKey || e.metaKey); setFocusKey(item.key); return }
+        if (e.ctrlKey || e.metaKey) { toggle(item); return }
+        if (cto) { open(item); return }
+        setSelected(new Set([item.key]))
+        anchorRef.current = item.key
+        setFocusKey(item.key)
+      },
+      onDoubleClick: () => {
+        if (pointerType.current === 'touch' || live.current.clickToOpen) return
+        live.current.openItem(item)
+      },
+    }),
+    toggle: (item) => toggle(item),
+    onContext: (item) => {
+      lastContext.current = Date.now()
+      setFocusKey(item.key)
+      // Clic droit sur un élément hors sélection : il devient la sélection (comme Windows / Finder)
+      if (pointerType.current !== 'touch' && !live.current.selected.has(item.key)) {
+        setSelected(new Set([item.key]))
+        anchorRef.current = item.key
+      }
+    },
+  }), [view, user?.id])
+
+  function toggle(item) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(item.key) ? next.delete(item.key) : next.add(item.key)
+      return next
+    })
+    anchorRef.current = item.key
+    setFocusKey(item.key)
+  }
+
+  const menuCtx = {
+    can,
+    userId: user?.id,
+    isSuperAdmin: user?.is_super_admin,
+    isTrash,
+    view,
+    open: (f) => openViewer(f.id),
+    info: (f) => openViewer(f.id, { info: true }),
+    openFolder: (f) => navigate(`/explorer/${f.id}`),
+    select: (it) => { setSelected((prev) => new Set(prev).add(it.key)); if (isTouch) setTouchSelect(true) },
+    clearSelection,
+    selectAll,
+    viewMode, setViewMode, sortBy, sortDir, setSort,
+    itemCount: items.length,
+  }
+  const menuRef = useRef(null)
+  menuRef.current = (item) => {
+    if (selected.has(item.key) && selected.size > 1) return selectionMenu(selectedItems, menuCtx)
+    return item.kind === 'folder' ? folderMenu(item, menuCtx) : fileMenu(item, menuCtx)
+  }
+  const getMenu = useCallback((item) => menuRef.current(item), [])
+
+  // ── Glisser-déposer interne (vers dossiers, fil d'Ariane, barre latérale) ─
+  const [draggingKeys, setDraggingKeys] = useState(null)
+  const dragGroup = useRef([])
+  useEffect(() => bridge?.register({
+    onDragStart: (e) => {
+      const key = e.active.data.current?.key
+      const item = itemsRef.current.find((i) => i.key === key)
+      if (!item) return
+      const sel = live.current.selected
+      const group = sel.has(key) ? itemsRef.current.filter((i) => sel.has(i.key)) : [item]
+      dragGroup.current = group
+      setDraggingKeys(new Set(group.map((g) => g.key)))
+      bridge.setPreview({ item, count: group.length })
+    },
+    onDragEnd: async (e) => {
+      lastDragEnd.current = Date.now()
+      setDraggingKeys(null)
+      const over = e.over?.data.current
+      if (over?.type !== 'folder') return
+      const group = dragGroup.current.filter((g) => !(g.kind === 'folder' && g.id === over.folderId))
+      if (!group.length) return
+      const moved = await moveItems(group, over.folderId)
+      if (moved) setSelected(new Set())
+    },
+  }), [bridge])
+
+  // ── Défilement, lasso, pincement ───────────────────────────────────────────
+  const scrollRef = useRef(null)
+  const lasso = useLasso(scrollRef, {
+    enabled: !isTouch,
+    onStart: (additive) => { lassoBase.current = additive ? new Set(live.current.selected) : new Set() },
+    onSelect: useCallback((keys) => setSelected(new Set([...lassoBase.current, ...keys])), []),
+    onClear: useCallback(() => { setSelected(new Set()); setFocusKey(null) }, []),
+  })
+
+  // Pincer sur le pavé tactile (ou Ctrl + molette) : taille des vignettes
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    let acc = 0
+    const onWheel = (e) => {
+      if (!e.ctrlKey || usePreferencesStore.getState().viewMode !== 'grid') return
+      e.preventDefault()
+      acc += e.deltaY
+      if (Math.abs(acc) > 60) {
+        const cur = usePreferencesStore.getState().gridSize
+        setGridSize(cur + (acc < 0 ? 1 : -1))
+        acc = 0
       }
     }
-  }, [queryClient, folderId, parentFolderId, selectedFiles])
-
-  const handleContextMenu = useCallback((e, file) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, file })
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const handleFileAction = useCallback(async (action, file) => {
-    setContextMenu(null)
-    switch (action) {
+  // Défilement infini
+  const sentinelRef = useRef(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !paged) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && filesQuery.hasNextPage && !filesQuery.isFetchingNextPage) filesQuery.fetchNextPage()
+    }, { root: scrollRef.current, rootMargin: '600px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [paged, filesQuery.hasNextPage, filesQuery.isFetchingNextPage, items.length])
 
-      // ── Dossiers ────────────────────────────────────────────────────────────
-      case 'rename-folder': {
-        setRenameModal({ file, action: 'rename-folder', initialValue: file.name })
-        break
-      }
-      case 'delete-folder': {
-        try {
-          const { data: stats } = await api.get(`/files/folders/${file.id}/stats`)
-          setFolderDeleteModal({ file, stats })
-        } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-        break
-      }
-
-      // ── Fichiers ─────────────────────────────────────────────────────────────
-      case 'view':
-        setSelectedFile(file)
-        break
-      case 'delete': {
-        const ok = await confirm(`Supprimer "${file.original_name}" ?`, { danger: true, confirmLabel: 'Supprimer', title: 'Supprimer le fichier' })
-        if (ok) {
-          try {
-            await api.delete(`/files/${file.id}`)
-            queryClient.invalidateQueries({ queryKey })
-            toast.success(`"${file.original_name}" déplacé dans la corbeille`)
-          } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors de la suppression') }
-        }
-        break
-      }
-      case 'toggle-link':
-        try {
-          await api.post(`/files/${file.id}/toggle-link`)
-          queryClient.invalidateQueries({ queryKey })
-        } catch { toast.error('Erreur lors de la modification du lien') }
-        break
-      case 'favorite':
-        try {
-          await api.post(`/files/${file.id}/favorite`)
-          queryClient.invalidateQueries({ queryKey })
-        } catch { toast.error('Erreur') }
-        break
-      case 'unfavorite':
-        try {
-          await api.delete(`/files/${file.id}/favorite`)
-          queryClient.invalidateQueries({ queryKey })
-        } catch { toast.error('Erreur') }
-        break
-      case 'restore':
-        try {
-          await api.post(`/files/${file.id}/restore`)
-          queryClient.invalidateQueries({ queryKey: ['files'] })
-          toast.success('Fichier restauré')
-        } catch { toast.error('Erreur lors de la restauration') }
-        break
-      case 'delete-permanent': {
-        const ok = await confirm(
-          `Supprimer définitivement "${file.original_name}" ? Cette action est irréversible.`,
-          { danger: true, confirmLabel: 'Supprimer définitivement', title: 'Suppression permanente' }
-        )
-        if (ok) {
-          try {
-            await api.delete(`/files/${file.id}/permanent`)
-            queryClient.invalidateQueries({ queryKey })
-            toast.success('Fichier supprimé définitivement')
-          } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-        }
-        break
-      }
-      case 'rename': {
-        setRenameModal({ file, action: 'rename', initialValue: file.original_name })
-        break
-      }
-      case 'info':
-        setSelectedFile(file)
-        break
-      case 'download': {
-        try {
-          const res = await api.get(`/files/${file.id}/download`, { responseType: 'blob' })
-          const url = URL.createObjectURL(new Blob([res.data], { type: file.mime_type }))
-          const a = document.createElement('a')
-          a.href = url
-          a.download = file.original_name
-          a.click()
-          setTimeout(() => URL.revokeObjectURL(url), 1000)
-        } catch { toast.error('Erreur lors du téléchargement') }
-        break
-      }
-      case 'copy-link':
-        navigator.clipboard
-          .writeText(`${window.location.origin}/media/${file.link_token}`)
-          .then(() => toast.success('Lien copié dans le presse-papiers'))
-          .catch(() => toast.error('Impossible de copier le lien'))
-        break
-      default:
-        console.warn('[Explorer] Action inconnue:', action)
-    }
-  }, [queryClient, queryKey, folderId, parentFolderId])
-
-  const handleRenameSubmit = useCallback(async (newName) => {
-    const { file, action } = renameModal
-    setRenameModal(null)
-    if (action === 'rename-folder') {
-      if (newName === file.name) return
-      try {
-        await api.patch(`/files/folders/${file.id}`, { name: newName })
-        queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-        queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
-        queryClient.invalidateQueries({ queryKey: ['breadcrumb', folderId] })
-        toast.success('Dossier renommé')
-      } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
+  // ── Clavier ────────────────────────────────────────────────────────────────
+  const filterRef = useRef(null)
+  const moveFocus = (dir, extend) => {
+    const list = itemsRef.current
+    if (!list.length) return
+    const keys = list.map((i) => i.key)
+    const current = focusKey && keys.includes(focusKey) ? focusKey : null
+    let next
+    if (!current) next = keys[0]
+    else if (viewMode === 'list' || dir === 'left' || dir === 'right') {
+      const step = dir === 'left' || dir === 'up' ? -1 : 1
+      next = keys[Math.max(0, Math.min(keys.length - 1, keys.indexOf(current) + step))]
     } else {
-      if (newName === file.original_name) return
-      try {
-        await api.patch(`/files/${file.id}`, { name: newName })
-        queryClient.invalidateQueries({ queryKey })
-        toast.success('Fichier renommé')
-      } catch (err) { toast.error(err.response?.data?.error || 'Erreur lors du renommage') }
+      // Grille : élément visuellement au-dessus / en dessous (fonctionne avec les groupes par date)
+      const root = scrollRef.current
+      const curEl = root.querySelector(`[data-key="${CSS.escape(current)}"]`)
+      const cr = curEl.getBoundingClientRect()
+      const cx = cr.left + cr.width / 2
+      let best = null
+      let bestScore = Infinity
+      for (const node of root.querySelectorAll('[data-key]')) {
+        if (node === curEl) continue
+        const r = node.getBoundingClientRect()
+        const below = r.top >= cr.bottom - 4
+        const above = r.bottom <= cr.top + 4
+        if ((dir === 'down' && !below) || (dir === 'up' && !above)) continue
+        const dy = dir === 'down' ? r.top - cr.bottom : cr.top - r.bottom
+        const score = dy * 4 + Math.abs(r.left + r.width / 2 - cx)
+        if (score < bestScore) { bestScore = score; best = node.dataset.key }
+      }
+      next = best || current
     }
-  }, [renameModal, queryClient, queryKey, folderId, parentFolderId])
-
-  const handleFolderDeleteConfirm = useCallback(async (moveToTrash) => {
-    const { file } = folderDeleteModal
-    setFolderDeleteModal(null)
-    try {
-      await api.delete(`/files/folders/${file.id}?moveToTrash=${moveToTrash}`)
-      queryClient.invalidateQueries({ queryKey: ['files'] })
-      queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-      queryClient.invalidateQueries({ queryKey: ['folders', parentFolderId ?? null] })
-      toast.success(`Dossier "${file.name}" supprimé`)
-    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-  }, [folderDeleteModal, queryClient, folderId, parentFolderId])
-
-  const handleZipDownload = async () => {
-    if (selectedFiles.length === 0) return
-    try {
-      const response = await api.post('/files/zip', { fileIds: selectedFiles }, { responseType: 'blob' })
-      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'archive.zip'
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.success('Archive ZIP téléchargée')
-    } catch { toast.error('Erreur lors de la création du ZIP') }
+    setFocusKey(next)
+    if (extend) rangeSelect(next, false)
+    else { setSelected(new Set([next])); anchorRef.current = next }
+    scrollRef.current?.querySelector(`[data-key="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }
 
-  const toggleSelectFile = useCallback((id) => {
-    setSelectedFiles((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+  const targets = () => {
+    if (selectedItems.length) return selectedItems
+    const f = items.find((i) => i.key === focusKey)
+    return f ? [f] : []
+  }
+
+  useHotkeys({
+    'mod+a': () => selectAll(),
+    'mod+c': () => {
+      const t = targets()
+      if (t.length !== 1 || t[0].kind !== 'file' || window.getSelection()?.toString()) return false
+      copyFileLink(t[0])
+    },
+    escape: () => (selected.size || touchSelect ? clearSelection() : false),
+    arrowright: (e) => moveFocus('right', e.shiftKey),
+    arrowleft: (e) => moveFocus('left', e.shiftKey),
+    arrowdown: (e) => moveFocus('down', e.shiftKey),
+    arrowup: (e) => moveFocus('up', e.shiftKey),
+    enter: () => { const t = targets(); if (t.length === 1) openItem(t[0]); else return false },
+    space: () => { const t = targets().find((i) => i.kind === 'file'); if (t) openViewer(t.id); else return false },
+    f2: () => {
+      const t = targets()
+      if (t.length !== 1 || isTrash) return
+      t[0].kind === 'folder' ? renameFolder(t[0]) : renameFile(t[0])
+    },
+    delete: () => {
+      const t = targets()
+      if (!t.length) return false
+      const fs = t.filter((i) => i.kind === 'file')
+      const ds = t.filter((i) => i.kind === 'folder')
+      if (isTrash) return deleteForever(fs)
+      if (fs.length) trashFiles(fs)
+      if (ds.length) deleteFolders(ds)
+    },
+    backspace: (e) => {
+      // Cmd+Retour arrière (macOS) ou Retour arrière : même action que Suppr
+      const t = targets()
+      if (!t.length) return false
+      if (isTrash) return deleteForever(t.filter((i) => i.kind === 'file'))
+      const fs = t.filter((i) => i.kind === 'file')
+      if (fs.length) trashFiles(fs)
+      const ds = t.filter((i) => i.kind === 'folder')
+      if (ds.length) deleteFolders(ds)
+      e.preventDefault()
+    },
+    m: () => { const t = targets(); if (t.length && view === 'mine' && can('files.rename_move')) openMoveDialog(t) },
+    f: () => { const fs = targets().filter((i) => i.kind === 'file'); if (fs.length && !isTrash) setFavorite(fs, !fs.every((x) => x.is_favorite)) },
+    i: () => { const t = targets().find((i) => i.kind === 'file'); if (t) openViewer(t.id, { info: true }) },
+    v: () => setViewMode(viewMode === 'grid' ? 'list' : 'grid'),
+    '/': () => filterRef.current?.focus(),
+  })
+
+  // ── Dépôt de fichiers depuis l'ordinateur ──────────────────────────────────
+  const canUploadHere = can('files.upload') && !isTrash
+  const uploadTarget = view === 'mine' && folderId ? { id: folderId, name: currentFolder?.name || 'Dossier' } : { id: null, name: 'Mon espace' }
+  const { getRootProps, isDragActive } = useDropzone({
+    noClick: true,
+    noKeyboard: true,
+    disabled: !canUploadHere,
+    onDrop: (accepted, rejected) => startUpload([...accepted, ...rejected.map((r) => r.file)], uploadTarget),
+  })
+
+  // ── Rendu ──────────────────────────────────────────────────────────────────
+  const meta = VIEWS[view]
+  const gridMin = GRID_SIZES[gridSize] || GRID_SIZES[2]
+  const grouped = viewMode === 'grid' && groupByDate && sortBy === 'created_at' && !isTrash && view !== 'recent'
+
+  const fileGroups = useMemo(() => {
+    if (!grouped) return [{ label: null, items: files }]
+    const groups = []
+    for (const f of files) {
+      const label = dateGroupLabel(f.created_at)
+      const last = groups[groups.length - 1]
+      if (last?.label === label) last.items.push(f)
+      else groups.push({ label, items: [f] })
+    }
+    return groups
+  }, [files, grouped])
+
+  const isDraggable = (item) =>
+    !isTouch && !isTrash && can('files.rename_move') && (item.kind === 'folder' || item.owner_id === user?.id || user?.is_super_admin)
+
+  const cardProps = (item) => ({
+    item,
+    selected: selected.has(item.key),
+    focused: focusKey === item.key,
+    selectionMode,
+    dimmed: draggingKeys?.has(item.key),
+    handlers,
+    getMenu,
+    isTrash,
+    draggable: isDraggable(item),
+  })
+
+  const gridStyle = (min) => ({ gridTemplateColumns: `repeat(auto-fill, minmax(min(${min}px, calc(50% - 8px)), 1fr))` })
+
+  const empty = !isLoading && !loadingFolders && items.length === 0
+  const countLabel = items.length
+    ? [folders.length && pluralize(folders.length, 'dossier'), (paged ? total - folders.length : files.length) > 0 && pluralize(paged ? total - folders.length : files.length, 'fichier')].filter(Boolean).join(' · ')
+    : null
+
+  const emptyState = () => {
+    if (view === 'search' && !q) return <EmptyState icon={Search} title="Que cherchez-vous ?" description="Tapez un nom de fichier dans la barre de recherche (Ctrl K)." />
+    if (hasFilters || view === 'search') {
+      return (
+        <EmptyState icon={SearchX} title="Aucun résultat" description={view === 'search' ? `Aucun fichier ne correspond à « ${q} ».` : 'Aucun élément ne correspond à vos filtres.'}
+          action={hasFilters && <Button variant="secondary" onClick={clearFilters}>Effacer les filtres</Button>} />
+      )
+    }
+    if (view === 'trash') return <EmptyState icon={Trash2} title="La corbeille est vide" description="Les fichiers supprimés y restent 48 h avant d'être effacés définitivement." />
+    if (view === 'favorites') return <EmptyState icon={Heart} title="Aucun favori" description="Appuyez sur F ou sur le cœur d'un fichier pour le retrouver ici." />
+    if (view === 'recent') return <EmptyState icon={Clock} title="Rien de récent" description="Vos derniers fichiers ajoutés apparaîtront ici." />
+    if (view === 'others') return <EmptyState icon={Globe} title="Aucun fichier partagé" description="Les fichiers des autres membres apparaîtront ici." />
+    return (
+      <EmptyState
+        icon={folderId ? FolderOpen : Sparkles}
+        title={folderId ? 'Ce dossier est vide' : 'Votre espace est prêt'}
+        description={can('files.upload') ? 'Glissez-déposez vos photos et vidéos n’importe où sur cette page, ou utilisez le bouton Importer.' : 'Aucun fichier pour le moment.'}
+        action={
+          <>
+            {can('files.upload') && <Button icon={Upload} onClick={() => pickFiles()}>Importer des fichiers</Button>}
+            {can('files.create_folder') && <Button variant="secondary" icon={FolderPlus} onClick={() => createFolder()}>Nouveau dossier</Button>}
+          </>
+        }
+      />
     )
-  }, [])
-
-  const clearSelection = () => setSelectedFiles([])
-
-  const handleBulkDelete = async () => {
-    const ok = await confirm(`Supprimer ${selectedFiles.length} fichier(s) ?`, { danger: true, confirmLabel: 'Supprimer', title: 'Suppression multiple' })
-    if (!ok) return
-    await Promise.all(selectedFiles.map((id) => api.delete(`/files/${id}`).catch(() => {})))
-    toast.success(`${selectedFiles.length} fichier(s) déplacé(s) dans la corbeille`)
-    clearSelection()
-    queryClient.invalidateQueries({ queryKey })
-    queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
   }
 
-  const handleEmptyTrash = async () => {
-    const ok = await confirm('Vider la corbeille ? Cette action est irréversible.', { danger: true, confirmLabel: 'Vider', title: 'Vider la corbeille' })
-    if (!ok) return
-    try {
-      const { data } = await api.delete('/files/trash')
-      toast.success(data.message)
-      queryClient.invalidateQueries({ queryKey })
-    } catch { toast.error('Erreur lors de la suppression') }
+  const renderListHeader = () => {
+    const sortBtn = (by, label, className) => (
+      <button
+        onClick={() => setSort(by, sortBy === by && sortDir === 'desc' ? 'asc' : 'desc')}
+        className={cn('flex items-center gap-1 text-left hover:text-fg', sortBy === by && 'text-fg', className)}
+      >
+        {label}
+        {sortBy === by && (sortDir === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
+      </button>
+    )
+    return (
+      <div className={cn('sticky top-0 z-10 mb-1 grid items-center gap-3 border-b border-line bg-bg/90 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-subtle backdrop-blur', LIST_COLUMNS)}>
+        <span className="flex justify-center">
+          <Checkbox checked={items.length > 0 && selected.size === items.length} indeterminate={selected.size > 0 && selected.size < items.length} onChange={(v) => (v ? selectAll() : clearSelection())} />
+        </span>
+        {sortBtn('original_name', 'Nom')}
+        <span className="hidden xl:block">Propriétaire</span>
+        {sortBtn('created_at', isTrash ? 'Suppression' : 'Ajouté', 'hidden md:flex')}
+        {sortBtn('size', 'Taille', 'hidden justify-end sm:flex')}
+        <span className="hidden xl:block">Type</span>
+        <span />
+      </div>
+    )
   }
 
-  const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) return
-    try {
-      await api.post('/files/folders', { name: newFolderName.trim(), parentId: folderId || null })
-      toast.success(`Dossier "${newFolderName}" créé`)
-      setNewFolderName('')
-      setNewFolderMode(false)
-      queryClient.invalidateQueries({ queryKey: ['folders', folderId] })
-    } catch (err) { toast.error(err.response?.data?.error || 'Erreur') }
-  }
-
-  const clearDateFilter = () => { setDateFrom(''); setDateTo(''); setShowDateFilter(false) }
-
-  const viewLabels = { mine: 'Mon espace', others: 'Espace commun', recent: 'Récents', favorites: 'Favoris', trash: 'Corbeille' }
-  const hasDateFilter = dateFrom || dateTo
+  const breadcrumbMenu = currentFolder
+    ? () => folderMenu({ ...currentFolder, kind: 'folder' }, menuCtx).filter((i) => i && i.label !== 'Ouvrir' && i.label !== 'Sélectionner')
+    : view === 'mine' ? () => backgroundMenu(menuCtx).filter((i) => i && i.type !== 'sub') : undefined
 
   return (
-    <DndContext
-      sensors={dndSensors}
-      collisionDetection={customCollision}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex flex-col h-full" onClick={() => setContextMenu(null)}>
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-gray-100 shrink-0">{viewLabels[view] || 'Explorateur'}</h2>
-            <Breadcrumb chain={breadcrumbChain} folderId={folderId} />
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-3 py-1.5">
-              <Search size={14} className="text-slate-400 dark:text-gray-500" />
-              <input
-                placeholder="Rechercher..."
-                className="bg-transparent text-sm text-slate-700 dark:text-gray-300 placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none w-36"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+    <div {...getRootProps({ className: 'relative flex h-full flex-col outline-none' })}>
+      {/* En-tête */}
+      <div className="shrink-0 space-y-4 px-4 pb-3 pt-5 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            {view === 'mine' ? (
+              <Breadcrumbs
+                chain={chain}
+                currentMenu={breadcrumbMenu}
+                folderMenuFor={(c) => () => folderMenu({ ...c, kind: 'folder' }, menuCtx)}
               />
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowDateFilter((v) => !v) }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors border ${
-                  hasDateFilter
-                    ? 'bg-violet-600 text-white border-violet-600'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 dark:hover:bg-gray-700'
-                }`}
-              >
-                <Calendar size={14} />
-                Date
-                {hasDateFilter && <span className="w-1.5 h-1.5 rounded-full bg-white/80" />}
-              </button>
-              {showDateFilter && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl shadow-xl z-40 p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-                  <p className="text-xs font-semibold text-slate-600 dark:text-gray-400">Filtrer par date</p>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-gray-500 mb-1">Depuis</label>
-                    <input type="date" className="input w-full text-sm" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-gray-500 mb-1">Jusqu'au</label>
-                    <input type="date" className="input w-full text-sm" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                  </div>
-                  {hasDateFilter && (
-                    <button onClick={clearDateFilter} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-500 transition-colors">
-                      <X size={12} /> Effacer le filtre
-                    </button>
-                  )}
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-500 ring-1 ring-accent-500/20">
+                  <meta.icon size={19} />
                 </div>
-              )}
-            </div>
-
-            <div className="flex bg-white border border-slate-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg overflow-hidden">
-              <button onClick={() => setViewMode('grid')} className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-violet-600 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100'}`}><Grid3X3 size={16} /></button>
-              <button onClick={() => setViewMode('list')} className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-violet-600 text-white' : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100'}`}><List size={16} /></button>
-            </div>
-
-            {view === 'mine' && (
-              <>
-                {newFolderMode ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="input text-sm py-1.5 w-40"
-                      placeholder="Nom du dossier"
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleCreateFolder()
-                        if (e.key === 'Escape') { setNewFolderMode(false); setNewFolderName('') }
-                      }}
-                      autoFocus
-                    />
-                    <button onClick={handleCreateFolder} className="btn-primary text-sm py-1.5">Créer</button>
-                    <button onClick={() => { setNewFolderMode(false); setNewFolderName('') }} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"><X size={15} /></button>
-                  </div>
-                ) : (
-                  <button onClick={() => setNewFolderMode(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
-                    <FolderPlus size={14} /> Dossier
-                  </button>
-                )}
-                <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-2 text-sm py-1.5">
-                  <Upload size={15} /> Uploader
-                </button>
-              </>
+                <div className="min-w-0">
+                  <h1 className="truncate text-lg font-semibold tracking-tight text-fg sm:text-xl">
+                    {view === 'search' ? (q ? `Résultats pour « ${q} »` : 'Recherche') : meta.title}
+                  </h1>
+                  {meta.desc && <p className="truncate text-xs text-muted">{meta.desc}</p>}
+                </div>
+              </div>
             )}
-            {view === 'trash' && (
-              <button onClick={handleEmptyTrash} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
-                <Trash2 size={14} /> Vider la corbeille
-              </button>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {view === 'mine' && can('files.create_folder') && (
+              <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => createFolder()} className="hidden sm:inline-flex">Nouveau dossier</Button>
+            )}
+            {view === 'mine' && can('files.upload') && (
+              <Button size="sm" icon={Upload} onClick={() => pickFiles()} className="hidden sm:inline-flex">Importer</Button>
+            )}
+            {isTrash && items.length > 0 && (
+              <Button size="sm" variant="danger-soft" icon={Trash2} onClick={() => emptyTrash(items.length)}>Vider la corbeille</Button>
             )}
           </div>
         </div>
 
-        {/* Barre sélection multiple */}
-        {selectedFiles.length > 0 && (
-          <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl dark:bg-violet-900/20 dark:border-violet-800">
-            <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
-              {selectedFiles.length} fichier(s) sélectionné(s)
-            </span>
-            <button onClick={handleZipDownload} className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-              <Download size={12} /> Télécharger en ZIP
-            </button>
-            <button onClick={handleBulkDelete} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-              <Trash2 size={12} /> Supprimer ({selectedFiles.length})
-            </button>
-            <button onClick={clearSelection} className="ml-auto text-xs text-slate-500 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-300">
-              Désélectionner
-            </button>
+        <Toolbar
+          ref={filterRef}
+          filter={filter}
+          setFilter={setFilter}
+          type={type}
+          setType={setType}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          hideFilter={view === 'search'}
+          showSort={view !== 'recent' && view !== 'trash'}
+          isTouch={isTouch}
+          touchSelect={touchSelect}
+          setTouchSelect={(v) => { setTouchSelect(v); if (!v) setSelected(new Set()) }}
+          countLabel={countLabel}
+        />
+
+        {isTrash && items.length > 0 && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+            <Info size={15} className="shrink-0" />
+            Les éléments de la corbeille sont supprimés définitivement 48 h après leur suppression.
           </div>
-        )}
-
-        {/* Contenu */}
-        {isLoading ? (
-          <div className="flex-1 overflow-auto">
-            {viewMode === 'grid' ? <GridSkeleton /> : <ListSkeleton />}
-          </div>
-        ) : (
-          <div className="flex-1 overflow-auto">
-            {viewMode === 'grid' ? (
-              <FileGrid
-                files={data?.files || []}
-                folders={view === 'mine' ? (folders || []) : []}
-                onFileClick={(f) => setSelectedFile(f)}
-                onContextMenu={handleContextMenu}
-                isTrash={view === 'trash'}
-                selectedFiles={selectedFiles}
-                onToggleSelect={toggleSelectFile}
-                onAction={handleFileAction}
-                parentFolderId={view === 'mine' ? parentFolderId : undefined}
-                onNavigateUp={handleNavigateUp}
-                draggingIds={activeDrag?.count > 1 ? selectedFiles : activeDrag ? [activeDrag.fileId] : []}
-              />
-            ) : (
-              <FileList
-                files={data?.files || []}
-                folders={view === 'mine' ? (folders || []) : []}
-                onFileClick={(f) => setSelectedFile(f)}
-                onContextMenu={handleContextMenu}
-                isTrash={view === 'trash'}
-                selectedFiles={selectedFiles}
-                onToggleSelect={toggleSelectFile}
-                parentFolderId={view === 'mine' ? parentFolderId : undefined}
-                onNavigateUp={handleNavigateUp}
-                draggingIds={activeDrag?.count > 1 ? selectedFiles : activeDrag ? [activeDrag.fileId] : []}
-              />
-            )}
-
-            {/* Overlay de drag — thumbnail réel + badge si multi-fichiers */}
-            <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
-              {activeDrag && (
-                activeDrag.count > 1 ? (
-                  // Multi-drag : effet de pile + badge
-                  <div className="relative select-none" style={{ width: 144 }}>
-                    <div className="absolute inset-0 translate-x-2 translate-y-2 bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700 opacity-50 rotate-2" />
-                    <div className="absolute inset-0 translate-x-1 translate-y-1 bg-white dark:bg-gray-800 rounded-xl border border-slate-200 dark:border-gray-700 opacity-75 rotate-1" />
-                    <div className="relative bg-white dark:bg-gray-900 rounded-xl border-2 border-violet-500 shadow-2xl overflow-hidden">
-                      <div className="h-20 bg-slate-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                        {activeDrag.file?.thumbnail_path
-                          ? <img src={activeDrag.file.thumbnail_path} alt="" className="w-full h-full object-cover opacity-70" />
-                          : <FileTypeIcon mime={activeDrag.file?.mime_type} size={24} />
-                        }
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs text-slate-600 dark:text-gray-400 font-medium">{activeDrag.count} fichiers</p>
-                      </div>
-                    </div>
-                    <div className="absolute -top-2 -right-2 bg-violet-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold shadow-lg z-10">
-                      {activeDrag.count}
-                    </div>
-                  </div>
-                ) : (
-                  // Fichier unique : thumbnail réel
-                  <div className="select-none bg-white dark:bg-gray-900 rounded-xl border-2 border-violet-500 shadow-2xl overflow-hidden opacity-95" style={{ width: 144 }}>
-                    <div className="h-20 bg-slate-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                      {activeDrag.file?.thumbnail_path
-                        ? <img src={activeDrag.file.thumbnail_path} alt="" className="w-full h-full object-cover" />
-                        : <FileTypeIcon mime={activeDrag.file?.mime_type} size={24} />
-                      }
-                    </div>
-                    <div className="p-2">
-                      <p className="text-xs text-slate-700 dark:text-gray-300 truncate font-medium">
-                        {activeDrag.file?.original_name || 'Fichier'}
-                      </p>
-                    </div>
-                  </div>
-                )
-              )}
-            </DragOverlay>
-          </div>
-        )}
-
-        {showUpload && (
-          <UploadPanel
-            folderId={folderId}
-            onClose={() => setShowUpload(false)}
-            onDone={() => {
-              queryClient.invalidateQueries({ queryKey })
-              setShowUpload(false)
-              useAuthStore.getState().fetchMe().catch(() => {}) // rafraîchir l'espace utilisé
-            }}
-          />
-        )}
-
-        {selectedFile && (
-          <FileViewer file={selectedFile} onClose={() => setSelectedFile(null)} onAction={handleFileAction} />
-        )}
-
-        {contextMenu && (
-          <ContextMenu
-            x={contextMenu.x} y={contextMenu.y}
-            file={contextMenu.file}
-            isTrash={view === 'trash'}
-            onAction={handleFileAction}
-            onClose={() => setContextMenu(null)}
-          />
-        )}
-
-        {renameModal && (
-          <RenameModal
-            initial={renameModal.initialValue}
-            onConfirm={handleRenameSubmit}
-            onCancel={() => setRenameModal(null)}
-          />
-        )}
-
-        {folderDeleteModal && (
-          <FolderDeleteModal
-            folderName={folderDeleteModal.file.name}
-            stats={folderDeleteModal.stats}
-            onConfirm={handleFolderDeleteConfirm}
-            onCancel={() => setFolderDeleteModal(null)}
-          />
         )}
       </div>
-    </DndContext>
+
+      {/* Contenu défilant : clic droit sur le fond = menu de l'espace, glisser = lasso */}
+      <ContextMenu items={() => (selected.size > 1 ? selectionMenu(selectedItems, menuCtx) : backgroundMenu(menuCtx))}>
+        <div
+          ref={scrollRef}
+          onPointerDown={lasso.onPointerDown}
+          className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:px-8"
+        >
+          {isLoading || loadingFolders ? (
+            viewMode === 'grid' ? <GridSkeleton size={gridMin} /> : <ListSkeleton />
+          ) : empty ? (
+            emptyState()
+          ) : viewMode === 'grid' ? (
+            <div className="space-y-7">
+              {folders.length > 0 && (
+                <section>
+                  <SectionTitle right={pluralize(folders.length, 'dossier')}>Dossiers</SectionTitle>
+                  <div className="grid gap-3 sm:gap-4" style={gridStyle(Math.max(gridMin, 180) * 1.1)}>
+                    {folders.map((f) => <FolderCard key={f.key} {...cardProps(f)} />)}
+                  </div>
+                </section>
+              )}
+              {fileGroups.map((g, gi) => {
+                if (!g.items.length) return null
+                const groupKeys = g.items.map((i) => i.key)
+                const all = groupKeys.every((k) => selected.has(k))
+                const some = groupKeys.some((k) => selected.has(k))
+                return (
+                  <section key={g.label || gi}>
+                    {(g.label || folders.length > 0) && (
+                      <SectionTitle
+                        right={pluralize(g.items.length, 'élément')}
+                        allSelected={all}
+                        someSelected={some}
+                        onSelectAll={() => setSelected((prev) => {
+                          const next = new Set(prev)
+                          all ? groupKeys.forEach((k) => next.delete(k)) : groupKeys.forEach((k) => next.add(k))
+                          return next
+                        })}
+                      >
+                        {g.label || 'Fichiers'}
+                      </SectionTitle>
+                    )}
+                    <div className="grid gap-3 sm:gap-4" style={gridStyle(gridMin)}>
+                      {g.items.map((f) => <FileCard key={f.key} {...cardProps(f)} showNames={showNames} />)}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          ) : (
+            <div>
+              {renderListHeader()}
+              <div className="space-y-px">
+                {items.map((it) => <ItemRow key={it.key} {...cardProps(it)} />)}
+              </div>
+            </div>
+          )}
+
+          {paged && <div ref={sentinelRef} className="h-px" />}
+          {filesQuery.isFetchingNextPage && <div className="flex justify-center py-6"><Spinner /></div>}
+
+          {lasso.rect && (
+            <div
+              className="pointer-events-none absolute z-20 rounded-md border border-accent-500 bg-accent-500/15"
+              style={{ left: lasso.rect.left, top: lasso.rect.top, width: lasso.rect.width, height: lasso.rect.height }}
+            />
+          )}
+        </div>
+      </ContextMenu>
+
+      <SelectionBar items={selectedItems} total={items.length} onClear={clearSelection} onSelectAll={selectAll} ctx={menuCtx} />
+
+      {/* Voile de dépôt de fichiers */}
+      <AnimatePresence>
+        {isDragActive && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="pointer-events-none absolute inset-2 z-[70] flex items-center justify-center rounded-3xl border-2 border-dashed border-accent-500 bg-accent-500/10 backdrop-blur-sm"
+          >
+            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} className="flex flex-col items-center gap-3 text-center">
+              <div className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl bg-accent-600 text-white shadow-glow">
+                <CloudUpload size={36} />
+              </div>
+              <p className="text-lg font-semibold text-fg">Déposez pour importer</p>
+              <p className="text-sm text-muted">dans « {uploadTarget.name} »</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {openFileId && viewerFiles.length > 0 && (
+        <Suspense fallback={<div className="fixed inset-0 z-[200] flex items-center justify-center bg-black"><Spinner /></div>}>
+        <MediaViewer
+          files={viewerFiles}
+          fileId={openFileId}
+          isTrash={isTrash}
+          initialInfo={viewerInfo}
+          onNavigate={navigateViewer}
+          onClose={closeViewer}
+          onNeedMore={() => filesQuery.hasNextPage && !filesQuery.isFetchingNextPage && filesQuery.fetchNextPage()}
+        />
+        </Suspense>
+      )}
+    </div>
   )
 }
