@@ -6,7 +6,7 @@ import { extractIp, normalizeIp } from '../../utils/fingerprint.js'
 import { isUuid, parsePagination } from '../../utils/validation.js'
 import { unban } from '../../services/ban.service.js'
 import { revokeAllUserTokens } from '../../services/auth.service.js'
-import { checkMediaStorageLimit } from '../../config/storage.js'
+import { checkMediaStorageLimit, detectInfrastructure, initStorage } from '../../config/storage.js'
 import { getConfigForAdmin, setConfigValues, INTERNAL_KEYS, MASKED_VALUE } from '../../services/config.service.js'
 
 const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
@@ -14,6 +14,7 @@ const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
 const READONLY_CONFIG_KEYS = new Set([
   'storage.total_bytes', 'storage.safe_bytes', 'storage.media_limit',
   'storage.backup_limit', 'storage.zip_limit', 'storage.log_limit',
+  'storage.free_bytes', 'storage.auto_safe_bytes', 'storage.detected_at',
 ])
 
 function parseIp(value) {
@@ -272,6 +273,22 @@ export default async function adminRoutes(fastify) {
     // Ne jamais journaliser les valeurs (clés API, mots de passe…)
     await log({ category: 'system', level: 'info', action: 'config_updated', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { keys: entries.map(([key]) => key) } })
     return reply.send({ message: 'Configuration mise à jour.' })
+  })
+
+  // ─── Infrastructure détectée ──────────────────────────────────────────────
+  fastify.get('/infra', {
+    preHandler: [authenticate, requirePermission('system.manage_storage')],
+  }, async (_, reply) => {
+    return reply.send(await detectInfrastructure())
+  })
+
+  // Relance la détection et recalcule les limites enregistrées
+  fastify.post('/infra/redetect', {
+    preHandler: [authenticate, requirePermission('system.manage_storage')],
+  }, async (request, reply) => {
+    const result = await initStorage()
+    await log({ category: 'system', level: 'info', action: 'storage_redetected', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { total_bytes: result.size, free_bytes: result.free, media_limit: result.mediaLimit } })
+    return reply.send(await detectInfrastructure())
   })
 
   // ─── Sauvegardes ─────────────────────────────────────────────────────────
