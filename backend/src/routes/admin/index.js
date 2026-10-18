@@ -14,7 +14,7 @@ const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
 const READONLY_CONFIG_KEYS = new Set([
   'storage.total_bytes', 'storage.safe_bytes', 'storage.media_limit',
   'storage.backup_limit', 'storage.zip_limit', 'storage.log_limit',
-  'storage.free_bytes', 'storage.auto_safe_bytes', 'storage.detected_at',
+  'storage.free_bytes', 'storage.auto_safe_bytes',
 ])
 
 function parseIp(value) {
