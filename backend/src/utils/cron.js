@@ -6,6 +6,7 @@ import { log } from './logger.js'
 import { deleteMediaFiles } from '../services/storage.service.js'
 import { runConfiguredBackups } from '../services/backup.service.js'
 import { getConfigValues } from '../services/config.service.js'
+import { initStorage } from '../config/storage.js'
 
 export function startCronJobs() {
   // Nettoyage corbeille : toutes les heures, supprimer les fichiers > 48h
@@ -85,6 +86,8 @@ export function startCronJobs() {
 
   // Métriques système : toutes les heures
   cron.schedule('0 * * * *', async () => {
+    // Re-détection du disque (redimensionnement de volume, autre service qui le remplit…)
+    await initStorage().catch((err) => console.error('Erreur re-détection stockage:', err))
     try {
       const totalMem = totalmem()
       const freeMem = freemem()
