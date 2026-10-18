@@ -6,7 +6,8 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "migrate": "node src/models/migrate.js",
-    "seed": "node src/models/seed.js"
+    "seed": "node src/models/seed.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",
