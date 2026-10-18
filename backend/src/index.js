@@ -31,9 +31,35 @@ import {
   getAppUrl,
 } from './services/config.service.js'
 
+// ── Attente de la base ───────────────────────────────────────────────────────
+// Au premier démarrage, PostgreSQL redémarre après son initialisation : réessayer
+// plutôt que quitter au premier refus (le conteneur serait marqué « unhealthy »).
+async function waitForDatabase({ attempts = 30, delayMs = 2000 } = {}) {
+  for (let i = 1; ; i++) {
+    try {
+      await pool.query('SELECT 1')
+      return
+    } catch (err) {
+      // Identifiants / base invalides : inutile de réessayer
+      if (err.code === '28P01' || err.code === '28000' || err.code === '3D000') {
+        console.error(
+          '❌ PostgreSQL refuse la connexion (identifiants ou base invalides).\n' +
+          '   → DB_PASSWORD / DB_USER / DB_NAME doivent être identiques pour les services postgres et backend.\n' +
+          '   → Le volume postgres_data garde le mot de passe de sa création : changer DB_PASSWORD\n' +
+          '     ensuite ne le modifie pas (ALTER USER dans le conteneur, ou supprimer le volume si vide).'
+        )
+        throw err
+      }
+      if (i >= attempts) throw err
+      console.log(`⏳ Base de données indisponible (${err.code || err.message}), nouvelle tentative ${i}/${attempts}…`)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+}
+
 // ── Initialisation (avant les plugins : le secret JWT vient de la base) ───────
 try {
-  await pool.query('SELECT 1')
+  await waitForDatabase()
   console.log('✅ Base de données connectée')
 
   // Appliquer les migrations manquantes (idempotent)
