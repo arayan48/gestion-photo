@@ -608,7 +608,9 @@ function ToolBadge({ name, tool }) {
 }
 
 function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb }) {
-  const { disk, allocation, host, cpu, memory, tools, warnings } = infra
+  const { disk, allocation, host, cpu, memory, gpu, tools, warnings } = infra
+  const diskInfo = [disk.device?.kind, disk.fsType, disk.device?.model].filter(Boolean).join(' · ')
+  const hasGpu = gpu.nvidia || gpu.renderNodes.length > 0
   const pct = (b) => (disk.size > 0 ? (b / disk.size) * 100 : 0)
   const diskSegments = [
     { color: 'bg-accent-500', label: 'Médias Obscura', bytes: disk.obscura.media },
@@ -631,7 +633,10 @@ function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb })
       {/* Occupation réelle du disque */}
       <div className="rounded-xl border border-line p-4 space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-          <span className="flex items-center gap-1.5 font-medium text-fg"><HardDrive size={14} /> Disque <code className="font-mono text-xs text-subtle">{disk.path}</code></span>
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-medium text-fg">
+            <HardDrive size={14} /> Disque <code className="font-mono text-xs text-subtle">{disk.path}</code>
+            {diskInfo && <span className="text-xs font-normal text-muted">— {diskInfo}</span>}
+          </span>
           <span className="text-xs text-muted">{fmtGb(disk.free)} libres sur {fmtGb(disk.size)}</span>
         </div>
         <div className="flex h-3 overflow-hidden rounded-full bg-overlay">
@@ -651,7 +656,7 @@ function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb })
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <InfraStat icon={Server} label="Système" value={host.os}
-          sub={`${host.container ? `Conteneur ${host.container} · ` : ''}${host.arch} · en ligne depuis ${fmtUptime(host.uptime)}`} />
+          sub={`${host.hostname} · ${host.arch} · en ligne depuis ${fmtUptime(host.uptime)}${host.container ? ` · ${host.container}${host.image ? ` (${host.image})` : ''}` : ''}`} />
         <InfraStat icon={Cpu} label="Processeur"
           value={cpu.limit ? `${cpu.limit} cœur(s) alloué(s) / ${cpu.cores}` : `${cpu.cores} cœur(s)`}
           sub={`${cpu.model} · charge ${cpu.load[0]}`} />
@@ -668,6 +673,12 @@ function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb })
         <ToolBadge name="FFmpeg" tool={tools.ffmpeg} />
         <ToolBadge name="FFprobe" tool={tools.ffprobe} />
         <ToolBadge name="Rclone" tool={tools.rclone} />
+        <span
+          className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg"
+          title={gpu.hwaccels.length ? `Accélérations FFmpeg compilées : ${gpu.hwaccels.join(', ')}` : undefined}
+        >
+          {hasGpu ? `GPU ${gpu.nvidia ? 'NVIDIA' : 'VAAPI'} accessible` : 'Pas de GPU — encodage CPU'}
+        </span>
         <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">Node {host.node}</span>
         {host.postgres && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">PostgreSQL {host.postgres}</span>}
       </div>
