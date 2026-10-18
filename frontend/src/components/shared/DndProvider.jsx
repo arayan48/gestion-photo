@@ -67,20 +67,20 @@ function DragPreview({ item, count }) {
     <div className="pointer-events-none relative w-44 -translate-x-4 -translate-y-4 select-none">
       {count > 1 && (
         <>
-          <div className="absolute inset-0 translate-x-2.5 translate-y-2.5 rotate-[4deg] rounded-2xl border border-line bg-elevated opacity-60 shadow-float" />
-          <div className="absolute inset-0 translate-x-1 translate-y-1 rotate-[2deg] rounded-2xl border border-line bg-elevated opacity-80" />
+          <div className="absolute inset-0 translate-x-2 translate-y-2 border border-line-strong bg-elevated" />
+          <div className="absolute inset-0 translate-x-1 translate-y-1 border border-line-strong bg-elevated" />
         </>
       )}
-      <div className="relative flex items-center gap-2.5 rounded-2xl border border-accent-500/60 bg-elevated/95 p-2 shadow-glow backdrop-blur-xl">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-overlay">
-          {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <Icon size={18} className={isFolder ? 'text-amber-400' : 'text-accent-400'} />}
+      <div className="relative flex items-center gap-2.5 border border-accent-500 bg-elevated p-1.5 shadow-float">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden bg-overlay">
+          {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <Icon size={16} strokeWidth={1.5} className="text-subtle" />}
         </div>
-        <p className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
+        <p className="min-w-0 flex-1 truncate text-xs text-fg">
           {count > 1 ? `${count} éléments` : isFolder ? item.name : item?.original_name}
         </p>
       </div>
       {count > 1 && (
-        <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-600 px-1.5 text-[11px] font-bold text-white shadow-glow">
+        <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center bg-accent-600 px-1 font-mono text-[11px] text-white">
           {count}
         </span>
       )}

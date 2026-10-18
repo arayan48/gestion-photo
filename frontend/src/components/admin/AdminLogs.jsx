@@ -37,7 +37,7 @@ function LogDialog({ log, onClose }) {
             ['Utilisateur', log.user_pseudo ? `${log.user_pseudo}${log.user_email ? ` (${log.user_email})` : ''}` : '—'],
             ['Adresse IP', <span key="ip" className="font-mono">{log.ip_address || '—'}</span>],
           ].map(([k, v]) => (
-            <div key={k} className="rounded-xl bg-overlay/60 p-3">
+            <div key={k} className="border-b border-line pb-2">
               <p className="text-[11px] text-subtle">{k}</p>
               <div className="mt-1 break-words text-sm text-fg">{v}</div>
             </div>
@@ -46,10 +46,10 @@ function LogDialog({ log, onClose }) {
         {meta && (
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-subtle">Métadonnées</p>
-              <Button size="xs" variant="ghost" icon={Copy} onClick={() => copyText(JSON.stringify(meta, null, 2), 'JSON copié')}>Copier</Button>
+              <p className="label-mono">Métadonnées</p>
+              <Button size="xs" variant="ghost" onClick={() => copyText(JSON.stringify(meta, null, 2), 'JSON copié')}>Copier</Button>
             </div>
-            <pre className="max-h-72 overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-emerald-400">{JSON.stringify(meta, null, 2)}</pre>
+            <pre className="max-h-72 overflow-auto border border-line bg-[#0b0a09] p-4 font-mono text-xs leading-relaxed text-[#d8d2c8]">{JSON.stringify(meta, null, 2)}</pre>
           </div>
         )}
       </div>
@@ -101,12 +101,12 @@ export default function AdminLogs() {
         ]} />
         <input type="date" className="input h-10 w-auto py-2" value={filters.from} onChange={(e) => set('from', e.target.value)} title="Depuis" />
         <input type="date" className="input h-10 w-auto py-2" value={filters.to} onChange={(e) => set('to', e.target.value)} title="Jusqu'au" />
-        {active && <Button size="sm" variant="ghost" icon={X} onClick={() => setFilters(EMPTY)}>Réinitialiser</Button>}
+        {active && <Button size="sm" variant="ghost" onClick={() => setFilters(EMPTY)}>Réinitialiser</Button>}
         <span className="ml-auto text-xs text-subtle">{total.toLocaleString('fr-FR')} événement(s)</span>
       </div>
 
       {query.isLoading ? (
-        <div className="space-y-1.5">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
+        <div className="space-y-1.5">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 " />)}</div>
       ) : !logs.length ? (
         <EmptyState icon={Activity} title="Aucun événement" description={active ? 'Aucun log ne correspond aux filtres.' : undefined} compact />
       ) : (

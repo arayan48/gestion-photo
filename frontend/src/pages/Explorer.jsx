@@ -50,11 +50,11 @@ const VIEWS = {
 
 function GridSkeleton({ size }) {
   return (
-    <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(${size}px, calc(50% - 8px)), 1fr))` }}>
+    <div className="grid gap-x-1.5 gap-y-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(${size}px, calc(33% - 4px)), 1fr))` }}>
       {Array.from({ length: 18 }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="aspect-square rounded-2xl" style={{ animationDelay: `${i * 40}ms` }} />
-          <Skeleton className="h-3 w-3/4" />
+        <div key={i} className="space-y-1.5">
+          <Skeleton className="aspect-square" style={{ animationDelay: `${i * 40}ms` }} />
+          <Skeleton className="h-2.5 w-2/3" />
         </div>
       ))}
     </div>
@@ -66,7 +66,7 @@ function ListSkeleton() {
     <div className="space-y-1">
       {Array.from({ length: 10 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-2 py-2">
-          <Skeleton className="h-10 w-10 rounded-lg" />
+          <Skeleton className="h-9 w-9" />
           <Skeleton className="h-3.5 flex-1" />
           <Skeleton className="hidden h-3 w-24 md:block" />
           <Skeleton className="hidden h-3 w-16 sm:block" />
@@ -78,9 +78,9 @@ function ListSkeleton() {
 
 function SectionTitle({ children, right, onSelectAll, allSelected, someSelected }) {
   return (
-    <div className="group/sec mb-3 mt-1 flex items-center gap-2.5">
-      <h3 className="text-[13px] font-semibold text-fg">{children}</h3>
-      {right && <span className="text-xs text-subtle">{right}</span>}
+    <div className="group/sec mb-3 flex items-baseline gap-3 border-b border-line pb-2">
+      <h3 className="text-sm text-fg">{children}</h3>
+      {right && <span className="font-mono text-[11px] text-subtle">{right}</span>}
       {onSelectAll && (
         <span className={cn('transition-opacity', allSelected || someSelected ? 'opacity-100' : 'opacity-0 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100')} title="Sélectionner le groupe">
           <Checkbox round checked={allSelected} indeterminate={someSelected && !allSelected} onChange={onSelectAll} />
@@ -547,7 +547,7 @@ export default function Explorer() {
     draggable: isDraggable(item),
   })
 
-  const gridStyle = (min) => ({ gridTemplateColumns: `repeat(auto-fill, minmax(min(${min}px, calc(50% - 8px)), 1fr))` })
+  const gridStyle = (min) => ({ gridTemplateColumns: `repeat(auto-fill, minmax(min(${min}px, calc(33% - 4px)), 1fr))` })
 
   const empty = !isLoading && !loadingFolders && items.length === 0
   const countLabel = items.length
@@ -555,26 +555,26 @@ export default function Explorer() {
     : null
 
   const emptyState = () => {
-    if (view === 'search' && !q) return <EmptyState icon={Search} title="Que cherchez-vous ?" description="Tapez un nom de fichier dans la barre de recherche (Ctrl K)." />
+    if (view === 'search' && !q) return <EmptyState title="Que cherchez-vous ?" description="Tapez un nom de fichier dans la recherche (Ctrl K)." />
     if (hasFilters || view === 'search') {
       return (
-        <EmptyState icon={SearchX} title="Aucun résultat" description={view === 'search' ? `Aucun fichier ne correspond à « ${q} ».` : 'Aucun élément ne correspond à vos filtres.'}
+        <EmptyState label="0 résultat" title="Rien ne correspond" description={view === 'search' ? `Aucun fichier ne contient « ${q} ».` : 'Aucun élément ne correspond à ces filtres.'}
           action={hasFilters && <Button variant="secondary" onClick={clearFilters}>Effacer les filtres</Button>} />
       )
     }
-    if (view === 'trash') return <EmptyState icon={Trash2} title="La corbeille est vide" description="Les fichiers supprimés y restent 48 h avant d'être effacés définitivement." />
-    if (view === 'favorites') return <EmptyState icon={Heart} title="Aucun favori" description="Appuyez sur F ou sur le cœur d'un fichier pour le retrouver ici." />
-    if (view === 'recent') return <EmptyState icon={Clock} title="Rien de récent" description="Vos derniers fichiers ajoutés apparaîtront ici." />
-    if (view === 'others') return <EmptyState icon={Globe} title="Aucun fichier partagé" description="Les fichiers des autres membres apparaîtront ici." />
+    if (view === 'trash') return <EmptyState label="Corbeille" title="La corbeille est vide" description="Les fichiers supprimés y restent 48 h, puis sont effacés." />
+    if (view === 'favorites') return <EmptyState label="Favoris" title="Aucun favori" description="Appuyez sur F sur un fichier pour le garder ici." />
+    if (view === 'recent') return <EmptyState label="Récents" title="Rien de récent" description="Vos derniers fichiers apparaîtront ici." />
+    if (view === 'others') return <EmptyState label="Commun" title="Aucun fichier partagé" description="Les fichiers des autres membres apparaîtront ici." />
     return (
       <EmptyState
-        icon={folderId ? FolderOpen : Sparkles}
-        title={folderId ? 'Ce dossier est vide' : 'Votre espace est prêt'}
-        description={can('files.upload') ? 'Glissez-déposez vos photos et vidéos n’importe où sur cette page, ou utilisez le bouton Importer.' : 'Aucun fichier pour le moment.'}
+        label={folderId ? 'Dossier vide' : 'Aucun fichier'}
+        title={folderId ? 'Ce dossier est vide' : 'Commencez par importer'}
+        description={can('files.upload') ? 'Déposez des photos ou des vidéos n’importe où sur cette page.' : 'Aucun fichier pour le moment.'}
         action={
           <>
-            {can('files.upload') && <Button icon={Upload} onClick={() => pickFiles()}>Importer des fichiers</Button>}
-            {can('files.create_folder') && <Button variant="secondary" icon={FolderPlus} onClick={() => createFolder()}>Nouveau dossier</Button>}
+            {can('files.upload') && <Button onClick={() => pickFiles()}>Importer des fichiers</Button>}
+            {can('files.create_folder') && <Button variant="secondary" onClick={() => createFolder()}>Nouveau dossier</Button>}
           </>
         }
       />
@@ -592,7 +592,7 @@ export default function Explorer() {
       </button>
     )
     return (
-      <div className={cn('sticky top-0 z-10 mb-1 grid items-center gap-3 border-b border-line bg-bg/90 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-subtle backdrop-blur', LIST_COLUMNS)}>
+      <div className={cn('label-mono sticky top-0 z-10 grid items-center gap-3 border-b border-line-strong bg-bg px-2 py-2', LIST_COLUMNS)}>
         <span className="flex justify-center">
           <Checkbox checked={items.length > 0 && selected.size === items.length} indeterminate={selected.size > 0 && selected.size < items.length} onChange={(v) => (v ? selectAll() : clearSelection())} />
         </span>
@@ -613,7 +613,7 @@ export default function Explorer() {
   return (
     <div {...getRootProps({ className: 'relative flex h-full flex-col outline-none' })}>
       {/* En-tête */}
-      <div className="shrink-0 space-y-4 px-4 pb-3 pt-5 sm:px-6 lg:px-8">
+      <div className="shrink-0 space-y-4 border-b border-line px-4 pb-3 pt-5 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             {view === 'mine' ? (
@@ -623,28 +623,23 @@ export default function Explorer() {
                 folderMenuFor={(c) => () => folderMenu({ ...c, kind: 'folder' }, menuCtx)}
               />
             ) : (
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-500/10 text-accent-500 ring-1 ring-accent-500/20">
-                  <meta.icon size={19} />
-                </div>
-                <div className="min-w-0">
-                  <h1 className="truncate text-lg font-semibold tracking-tight text-fg sm:text-xl">
-                    {view === 'search' ? (q ? `Résultats pour « ${q} »` : 'Recherche') : meta.title}
-                  </h1>
-                  {meta.desc && <p className="truncate text-xs text-muted">{meta.desc}</p>}
-                </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-medium tracking-[-0.01em] text-fg">
+                  {view === 'search' ? (q ? `« ${q} »` : 'Recherche') : meta.title}
+                </h1>
+                {meta.desc && <p className="mt-0.5 truncate text-[13px] text-muted">{meta.desc}</p>}
               </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {view === 'mine' && can('files.create_folder') && (
-              <Button variant="secondary" size="sm" icon={FolderPlus} onClick={() => createFolder()} className="hidden sm:inline-flex">Nouveau dossier</Button>
+              <Button variant="secondary" size="sm" onClick={() => createFolder()} className="hidden sm:inline-flex">Nouveau dossier</Button>
             )}
             {view === 'mine' && can('files.upload') && (
-              <Button size="sm" icon={Upload} onClick={() => pickFiles()} className="hidden sm:inline-flex">Importer</Button>
+              <Button size="sm" onClick={() => pickFiles()} className="hidden sm:inline-flex">Importer</Button>
             )}
             {isTrash && items.length > 0 && (
-              <Button size="sm" variant="danger-soft" icon={Trash2} onClick={() => emptyTrash(items.length)}>Vider la corbeille</Button>
+              <Button size="sm" variant="danger-soft" onClick={() => emptyTrash(items.length)}>Vider la corbeille</Button>
             )}
           </div>
         </div>
@@ -665,12 +660,6 @@ export default function Explorer() {
           countLabel={countLabel}
         />
 
-        {isTrash && items.length > 0 && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-400">
-            <Info size={15} className="shrink-0" />
-            Les éléments de la corbeille sont supprimés définitivement 48 h après leur suppression.
-          </div>
-        )}
       </div>
 
       {/* Contenu défilant : clic droit sur le fond = menu de l'espace, glisser = lasso */}
@@ -678,18 +667,18 @@ export default function Explorer() {
         <div
           ref={scrollRef}
           onPointerDown={lasso.onPointerDown}
-          className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:px-8"
+          className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-5 sm:px-6 lg:px-8"
         >
           {isLoading || loadingFolders ? (
             viewMode === 'grid' ? <GridSkeleton size={gridMin} /> : <ListSkeleton />
           ) : empty ? (
             emptyState()
           ) : viewMode === 'grid' ? (
-            <div className="space-y-7">
+            <div className="space-y-8">
               {folders.length > 0 && (
                 <section>
                   <SectionTitle right={pluralize(folders.length, 'dossier')}>Dossiers</SectionTitle>
-                  <div className="grid gap-3 sm:gap-4" style={gridStyle(Math.max(gridMin, 180) * 1.1)}>
+                  <div className="grid gap-2" style={gridStyle(Math.max(gridMin, 180) * 1.1)}>
                     {folders.map((f) => <FolderCard key={f.key} {...cardProps(f)} />)}
                   </div>
                 </section>
@@ -715,7 +704,7 @@ export default function Explorer() {
                         {g.label || 'Fichiers'}
                       </SectionTitle>
                     )}
-                    <div className="grid gap-3 sm:gap-4" style={gridStyle(gridMin)}>
+                    <div className={cn('grid', showNames ? 'gap-x-1.5 gap-y-4' : 'gap-1')} style={gridStyle(gridMin)}>
                       {g.items.map((f) => <FileCard key={f.key} {...cardProps(f)} showNames={showNames} />)}
                     </div>
                   </section>
@@ -725,7 +714,7 @@ export default function Explorer() {
           ) : (
             <div>
               {renderListHeader()}
-              <div className="space-y-px">
+              <div>
                 {items.map((it) => <ItemRow key={it.key} {...cardProps(it)} />)}
               </div>
             </div>
@@ -736,7 +725,7 @@ export default function Explorer() {
 
           {lasso.rect && (
             <div
-              className="pointer-events-none absolute z-20 rounded-md border border-accent-500 bg-accent-500/15"
+              className="pointer-events-none absolute z-20 border border-accent-500 bg-accent-500/10"
               style={{ left: lasso.rect.left, top: lasso.rect.top, width: lasso.rect.width, height: lasso.rect.height }}
             />
           )}
@@ -750,15 +739,14 @@ export default function Explorer() {
         {isDragActive && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="pointer-events-none absolute inset-2 z-[70] flex items-center justify-center rounded-3xl border-2 border-dashed border-accent-500 bg-accent-500/10 backdrop-blur-sm"
+            className="pointer-events-none absolute inset-0 z-[70] flex items-center justify-center bg-bg/90"
           >
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl bg-accent-600 text-white shadow-glow">
-                <CloudUpload size={36} />
-              </div>
-              <p className="text-lg font-semibold text-fg">Déposez pour importer</p>
-              <p className="text-sm text-muted">dans « {uploadTarget.name} »</p>
-            </motion.div>
+            <div className="absolute inset-4 border border-dashed border-accent-500" />
+            <div className="text-center">
+              <p className="label-mono !text-accent-500">Déposer</p>
+              <p className="mt-2 text-2xl font-medium text-fg">Importer dans « {uploadTarget.name} »</p>
+              <p className="mt-1 text-sm text-muted">Images et vidéos uniquement</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

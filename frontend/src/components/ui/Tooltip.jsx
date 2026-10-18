@@ -16,10 +16,10 @@ export function Tooltip({ children, content, shortcut, side = 'bottom', align = 
           align={align}
           sideOffset={6}
           collisionPadding={8}
-          className="z-[400] flex items-center gap-2 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-float data-[state=delayed-open]:animate-fade-in dark:bg-zinc-800 dark:ring-1 dark:ring-white/10"
+          className="z-[400] flex items-center gap-2 rounded-sm bg-fg px-2 py-1 text-xs text-bg data-[state=delayed-open]:animate-fade-in"
         >
           {content}
-          {shortcut && <Kbd className="border-white/15 bg-white/10 text-white/80">{shortcut}</Kbd>}
+          {shortcut && <Kbd className="border-bg/30 text-bg/70">{shortcut}</Kbd>}
         </RTooltip.Content>
       </RTooltip.Portal>
     </RTooltip.Root>

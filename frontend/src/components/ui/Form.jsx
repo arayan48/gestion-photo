@@ -9,7 +9,7 @@ export function Field({ label, hint, error, children, className, htmlFor, option
       {(label || right) && (
         <div className="flex items-center justify-between gap-2">
           {label && (
-            <label htmlFor={htmlFor} className="flex items-center gap-1.5 text-[13px] font-medium text-fg">
+            <label htmlFor={htmlFor} className="flex items-center gap-1.5 text-[13px] text-muted">
               {label}
               {optional && <span className="text-xs font-normal text-subtle">(optionnel)</span>}
             </label>
@@ -58,7 +58,7 @@ export const PasswordInput = forwardRef(function PasswordInput({ className, ...p
         onClick={() => setShow((v) => !v)}
         tabIndex={-1}
         aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-overlay hover:text-fg"
+        className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-subtle transition-colors hover:text-fg"
       >
         {show ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
@@ -68,9 +68,9 @@ export const PasswordInput = forwardRef(function PasswordInput({ className, ...p
 
 export function Switch({ checked, onChange, disabled, label, description, className, size = 'md' }) {
   const id = useId()
-  const track = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11'
-  const knob = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
-  const shift = size === 'sm' ? 16 : 20
+  const track = size === 'sm' ? 'h-4 w-7' : 'h-5 w-9'
+  const knob = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+  const shift = size === 'sm' ? 12 : 16
   const control = (
     <button
       id={id}
@@ -80,16 +80,16 @@ export function Switch({ checked, onChange, disabled, label, description, classN
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked) }}
       className={cn(
-        'relative inline-flex shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 disabled:opacity-50',
+        'relative inline-flex shrink-0 items-center rounded-sm border p-px transition-colors duration-150 disabled:opacity-50',
         track,
-        checked ? 'bg-accent-600' : 'bg-line-strong'
+        checked ? 'border-accent-600 bg-accent-600' : 'border-line-strong bg-transparent'
       )}
     >
       <motion.span
         initial={false}
         animate={{ x: checked ? shift : 0 }}
         transition={{ type: 'spring', stiffness: 700, damping: 35 }}
-        className={cn('block rounded-full bg-white shadow-sm', knob)}
+        className={cn('block rounded-[1px]', checked ? 'bg-white' : 'bg-subtle', knob)}
       />
     </button>
   )
@@ -97,7 +97,7 @@ export function Switch({ checked, onChange, disabled, label, description, classN
   return (
     <label htmlFor={id} className={cn('flex cursor-pointer items-center justify-between gap-4', disabled && 'cursor-not-allowed', className)}>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-fg">{label}</span>
+        <span className="block text-sm text-fg">{label}</span>
         {description && <span className="mt-0.5 block text-xs text-muted">{description}</span>}
       </span>
       {control}
@@ -114,16 +114,15 @@ export function Checkbox({ checked, indeterminate, onChange, className, label, d
       onClick={(e) => { e.stopPropagation(); if (!disabled) onChange?.(!checked) }}
       onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); onChange?.(!checked) } }}
       className={cn(
-        'inline-flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center border-[1.5px] transition-all duration-150',
-        round ? 'rounded-full' : 'rounded-[5px]',
+        'inline-flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-[2px] border transition-colors duration-100',
         checked || indeterminate
-          ? 'border-accent-600 bg-accent-600 text-white shadow-[0_2px_8px_-2px_rgb(var(--accent-600)/0.6)]'
-          : 'border-line-strong bg-surface hover:border-accent-400',
+          ? 'border-accent-600 bg-accent-600 text-white'
+          : 'border-line-strong bg-transparent hover:border-fg/50',
         disabled && 'cursor-not-allowed opacity-50',
         className
       )}
     >
-      {indeterminate ? <Minus size={12} strokeWidth={3} /> : checked ? <Check size={12} strokeWidth={3} /> : null}
+      {indeterminate ? <Minus size={11} strokeWidth={3} /> : checked ? <Check size={11} strokeWidth={3} /> : null}
     </span>
   )
   if (!label) return box
@@ -140,7 +139,7 @@ export function Segmented({ value, onChange, options, size = 'md', className, la
   const fallbackId = useId()
   const lid = layoutId || fallbackId
   return (
-    <div className={cn('inline-flex items-center gap-0.5 rounded-xl border border-line bg-overlay/60 p-0.5', className)}>
+    <div className={cn('inline-flex items-center rounded-sm border border-line', className)}>
       {options.map((opt) => {
         const active = value === opt.value
         const Icon = opt.icon
@@ -152,16 +151,16 @@ export function Segmented({ value, onChange, options, size = 'md', className, la
             aria-pressed={active}
             title={opt.title || (typeof opt.label === 'string' ? opt.label : undefined)}
             className={cn(
-              'relative inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors',
-              size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-[13px]',
-              active ? 'text-fg' : 'text-muted hover:text-fg'
+              'relative inline-flex items-center justify-center gap-1.5 border-l border-line font-normal transition-colors first:border-l-0',
+              size === 'sm' ? 'h-[30px] px-2.5 text-xs' : 'h-[34px] px-3 text-[13px]',
+              active ? 'text-fg' : 'text-subtle hover:text-fg'
             )}
           >
             {active && (
               <motion.span
                 layoutId={lid}
                 transition={{ type: 'spring', stiffness: 500, damping: 38 }}
-                className="absolute inset-0 rounded-[10px] bg-surface shadow-soft ring-1 ring-line"
+                className="absolute inset-0 bg-overlay"
               />
             )}
             <span className="relative z-10 inline-flex items-center gap-1.5">
@@ -218,9 +217,9 @@ export function OtpInput({ value, onChange, length = 6, autoFocus, disabled }) {
           }}
           onFocus={(e) => e.target.select()}
           className={cn(
-            'h-14 w-11 rounded-xl border bg-surface text-center font-mono text-2xl font-semibold text-fg transition-all sm:w-12',
-            'focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/15',
-            d ? 'border-accent-500/50' : 'border-line'
+            'h-14 w-11 rounded-sm border bg-transparent text-center font-mono text-2xl text-fg transition-colors sm:w-12',
+            'focus:border-fg focus:outline-none',
+            d ? 'border-line-strong' : 'border-line'
           )}
         />
       ))}
@@ -248,11 +247,11 @@ export function PasswordStrength({ password }) {
     <div className="space-y-1.5 pt-1">
       <div className="flex gap-1">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className={cn('h-1 flex-1 rounded-full transition-colors duration-300', i < score ? colors[score] : 'bg-line')} />
+          <div key={i} className={cn('h-[3px] flex-1 transition-colors duration-300', i < score ? colors[score] : 'bg-line')} />
         ))}
       </div>
-      <p className="text-[11px] text-subtle">
-        Robustesse : <span className="font-medium text-muted">{labels[score]}</span>
+      <p className="font-mono text-[11px] text-subtle">
+        Robustesse : <span className="text-muted">{labels[score]}</span>
         {password.length < 8 && ' — 8 caractères minimum'}
       </p>
     </div>

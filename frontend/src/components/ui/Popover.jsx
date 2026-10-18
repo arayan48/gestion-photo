@@ -11,7 +11,7 @@ export function Popover({ trigger, children, align = 'end', side = 'bottom', cla
           side={side}
           sideOffset={8}
           collisionPadding={8}
-          className={cn('z-[300] rounded-2xl border border-line bg-elevated/95 shadow-float outline-none backdrop-blur-xl data-[state=open]:animate-fade-in', className)}
+          className={cn('z-[300] rounded-sm border border-line-strong bg-elevated shadow-float outline-none data-[state=open]:animate-fade-in', className)}
         >
           {children}
         </RPopover.Content>

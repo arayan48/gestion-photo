@@ -186,7 +186,7 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
     <RDialog.Root open onOpenChange={(o) => !o && onClose()}>
       <RDialog.Portal>
         <RDialog.Content
-          className="fixed inset-0 z-[200] flex bg-black text-white outline-none"
+          className="fixed inset-0 z-[200] flex bg-[#070606] text-white outline-none"
           tabIndex={-1}
           // Pas de focus sur le premier bouton (évite l'infobulle « Fermer » à l'ouverture)
           onOpenAutoFocus={(e) => { e.preventDefault(); e.currentTarget?.focus?.() }}
@@ -195,14 +195,6 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
           aria-describedby={undefined}
         >
           <RDialog.Title className="sr-only">{file.original_name}</RDialog.Title>
-
-          {/* Fond : miniature très floutée (ambiance) */}
-          {file.thumbnail_path && (
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-              <img src={file.thumbnail_path} alt="" className="h-full w-full scale-125 object-cover opacity-30 blur-3xl" />
-              <div className="absolute inset-0 bg-black/60" />
-            </div>
-          )}
 
           <div className="relative flex min-w-0 flex-1 flex-col" onWheel={onWheel}>
             {/* Barre supérieure */}
@@ -213,8 +205,8 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
             >
               <IconButton icon={X} label="Fermer" shortcut="Échap" variant="glass" onClick={onClose} />
               <div className="min-w-0 flex-1 px-1">
-                <p className="truncate text-sm font-semibold">{file.original_name}</p>
-                <p className="truncate text-[11px] text-white/60">
+                <p className="truncate text-[13px]">{file.original_name}</p>
+                <p className="truncate font-mono text-[10.5px] text-white/50">
                   {index + 1} / {files.length} · {formatSize(file.size)}{file.width ? ` · ${file.width}×${file.height}` : ''}
                 </p>
               </div>
@@ -222,11 +214,11 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                 {!video && isDesktop && (
                   <>
                     <IconButton icon={ZoomOut} label="Zoom arrière" shortcut="−" variant="glass" onClick={() => zoomApi.current?.zoomOut(0.4)} disabled={zoom <= 1} />
-                    <button onClick={() => zoomApi.current?.resetTransform()} className="hidden h-9 min-w-[52px] rounded-xl bg-black/40 px-2 text-xs font-semibold tabular-nums text-white/90 backdrop-blur-md hover:bg-black/60 md:block">
+                    <button onClick={() => zoomApi.current?.resetTransform()} className="hidden h-9 min-w-[52px] px-2 font-mono text-[11px] text-white/70 hover:text-white md:block">
                       {Math.round(zoom * 100)} %
                     </button>
                     <IconButton icon={ZoomIn} label="Zoom avant" shortcut="+" variant="glass" onClick={() => zoomApi.current?.zoomIn(0.4)} />
-                    <div className="mx-1 h-6 w-px bg-white/15" />
+                    <div className="mx-1 h-5 w-px bg-white/15" />
                   </>
                 )}
                 <IconButton icon={playing ? Pause : Play} label={playing ? 'Arrêter le diaporama' : 'Diaporama'} shortcut="S" variant="glass" onClick={() => setPlaying((v) => !v)} className="hidden sm:inline-flex" />
@@ -237,7 +229,7 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                     shortcut="F"
                     variant="glass"
                     onClick={() => setFavorite([file], !file.is_favorite)}
-                    iconClassName={file.is_favorite ? 'fill-pink-500 text-pink-500' : ''}
+                    iconClassName={file.is_favorite ? 'fill-current' : ''}
                   />
                 )}
                 <IconButton icon={Download} label="Télécharger" shortcut="D" variant="glass" onClick={() => downloadFile(file)} />
@@ -249,10 +241,10 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                     { type: 'separator' },
                     ...fileMenu(file, menuCtx).filter((i) => i && !['Ouvrir', 'Informations', 'Télécharger', 'Sélectionner', 'Copier le lien public', 'Partager…'].includes(i.label)),
                   ]}
-                  trigger={<button className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/40 text-white/90 backdrop-blur-md hover:bg-black/60" aria-label="Plus d'actions"><MoreHorizontal size={17} /></button>}
+                  trigger={<button className="flex h-9 w-9 items-center justify-center rounded-sm text-white/75 hover:bg-white/10 hover:text-white" aria-label="Plus d'actions"><MoreHorizontal size={16} /></button>}
                 />
                 {!isTrash && (
-                  <IconButton icon={Trash2} label="Mettre à la corbeille" shortcut="Suppr" variant="glass" onClick={() => trashFiles([file])} className="hidden hover:!bg-red-600 sm:inline-flex" />
+                  <IconButton icon={Trash2} label="Mettre à la corbeille" shortcut="Suppr" variant="glass" onClick={() => trashFiles([file])} className="hidden hover:!bg-red-600 hover:!text-white sm:inline-flex" />
                 )}
               </div>
             </motion.div>
@@ -291,20 +283,20 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                 <motion.button
                   animate={{ opacity: showChrome ? 1 : 0 }}
                   onClick={() => go(-1)}
-                  className="absolute left-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/70 sm:flex"
+                  className="absolute left-0 top-1/2 z-10 hidden h-24 w-12 -translate-y-1/2 items-center justify-center text-white/50 transition-colors hover:text-white sm:flex"
                   aria-label="Précédent"
                 >
-                  <ChevronLeft size={24} />
+                  <ChevronLeft size={28} strokeWidth={1.25} />
                 </motion.button>
               )}
               {index < files.length - 1 && (
                 <motion.button
                   animate={{ opacity: showChrome ? 1 : 0 }}
                   onClick={() => go(1)}
-                  className="absolute right-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/70 sm:flex"
+                  className="absolute right-0 top-1/2 z-10 hidden h-24 w-12 -translate-y-1/2 items-center justify-center text-white/50 transition-colors hover:text-white sm:flex"
                   aria-label="Suivant"
                 >
-                  <ChevronRight size={24} />
+                  <ChevronRight size={28} strokeWidth={1.25} />
                 </motion.button>
               )}
             </div>
@@ -323,8 +315,8 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                       data-film={f.id}
                       onClick={() => onNavigate(f.id)}
                       className={cn(
-                        'relative h-12 w-12 shrink-0 overflow-hidden rounded-lg transition-all duration-200',
-                        f.id === file.id ? 'scale-110 ring-2 ring-white' : 'opacity-50 hover:opacity-90'
+                        'relative h-11 w-11 shrink-0 overflow-hidden transition-opacity duration-150',
+                        f.id === file.id ? 'outline outline-2 -outline-offset-2 outline-white' : 'opacity-40 hover:opacity-80'
                       )}
                     >
                       {f.thumbnail_path ? <img src={f.thumbnail_path} alt="" className="h-full w-full object-cover" loading="lazy" /> : <span className="flex h-full w-full items-center justify-center bg-white/10 text-[9px]">{isVideo(f) ? 'VID' : 'IMG'}</span>}
@@ -350,7 +342,7 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                 animate={{ width: 360, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-                className="relative z-30 h-full shrink-0 overflow-hidden border-l border-white/10"
+                className="relative z-30 h-full shrink-0 overflow-hidden border-l border-[#272522]"
               >
                 <div className="dark h-full w-[360px]"><InfoPanel file={file} onClose={() => setShowInfo(false)} /></div>
               </motion.div>
@@ -365,7 +357,7 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.5 }}
                 onDragEnd={(_, info) => { if (info.offset.y > 100) setShowInfo(false) }}
-                className="dark absolute inset-x-0 bottom-0 z-40 h-[65dvh] overflow-hidden rounded-t-3xl border-t border-white/10 shadow-float"
+                className="dark absolute inset-x-0 bottom-0 z-40 h-[65dvh] overflow-hidden rounded-t-lg border-t border-[#3c3934]"
               >
                 <InfoPanel file={file} onClose={() => setShowInfo(false)} className="pb-safe" />
               </motion.div>

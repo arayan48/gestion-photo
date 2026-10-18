@@ -43,11 +43,11 @@ const DISCORD_ERRORS = {
 
 function Section({ title, description, children, className }) {
   return (
-    <section className={cn('card p-5 sm:p-6', className)}>
+    <section className={cn('border-t border-line-strong pt-4', className)}>
       {title && (
-        <div className="mb-5">
-          <h2 className="text-[15px] font-semibold text-fg">{title}</h2>
-          {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+        <div className="mb-5 grid gap-1 sm:grid-cols-[200px_1fr] sm:gap-6">
+          <h2 className="text-sm text-fg">{title}</h2>
+          {description && <p className="text-[13px] leading-relaxed text-muted">{description}</p>}
         </div>
       )}
       {children}
@@ -89,27 +89,27 @@ function ProfileTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section>
         <div className="flex flex-col items-center gap-5 sm:flex-row">
           <div className="group relative">
-            <Avatar src={userAvatar(user)} name={user?.pseudo} size={88} className="ring-4 ring-overlay" />
+            <Avatar src={userAvatar(user)} name={user?.pseudo} size={80} />
             <label className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
               <Camera size={22} />
               <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" className="hidden" onChange={uploadAvatar} />
             </label>
           </div>
           <div className="text-center sm:text-left">
-            <p className="text-lg font-semibold text-fg">{user?.pseudo}</p>
+            <p className="text-lg font-medium text-fg">{user?.pseudo}</p>
             <p className="text-sm text-muted">{user?.email}</p>
             <div className="mt-2 flex flex-wrap justify-center gap-1.5 sm:justify-start">
               {user?.role_name && <Badge color={user.is_super_admin ? 'amber' : 'accent'}>{user.role_name}</Badge>}
-              {user?.totp_enabled && <Badge color="green" icon={ShieldCheck}>2FA</Badge>}
+              {user?.totp_enabled && <Badge color="green">2FA</Badge>}
               {user?.created_at && <Badge>Membre depuis {formatDate(user.created_at, 'MMMM yyyy')}</Badge>}
             </div>
           </div>
           <label className="sm:ml-auto">
-            <span className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-fg hover:bg-overlay"><Camera size={14} /> Changer la photo</span>
+            <span className="inline-flex h-8 cursor-pointer items-center rounded-sm border border-line-strong px-3 text-[13px] text-fg hover:bg-overlay">Changer la photo</span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" className="hidden" onChange={uploadAvatar} />
           </label>
         </div>
@@ -122,7 +122,7 @@ function ProfileTab() {
             <Field label="Nom" optional><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
           </div>
           <Field label="Email" hint="L'adresse email ne peut pas être modifiée."><Input value={user?.email || ''} readOnly disabled /></Field>
-          <div className="flex justify-end"><Button type="submit" icon={Save} loading={saving} disabled={!dirty}>Enregistrer</Button></div>
+          <div className="flex justify-end"><Button type="submit" loading={saving} disabled={!dirty}>Enregistrer</Button></div>
         </form>
       </Section>
     </div>
@@ -133,13 +133,13 @@ function ProfileTab() {
 function ThemePreview({ mode }) {
   const dark = mode === 'dark'
   return (
-    <div className={cn('flex h-20 overflow-hidden rounded-lg border', dark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-zinc-100')}>
-      <div className={cn('w-1/4 space-y-1 p-1.5', dark ? 'bg-zinc-900' : 'bg-white')}>
-        <div className="h-1.5 rounded bg-accent-500" />
-        {[0, 1, 2].map((i) => <div key={i} className={cn('h-1 rounded', dark ? 'bg-zinc-700' : 'bg-zinc-200')} />)}
+    <div className={cn('flex h-20 overflow-hidden border', dark ? 'border-[#272522] bg-[#0b0a09]' : 'border-[#dcd6cd] bg-[#f1eee8]')}>
+      <div className={cn('w-1/4 space-y-1 border-r p-1.5', dark ? 'border-[#272522] bg-[#11100f]' : 'border-[#dcd6cd] bg-[#f9f7f3]')}>
+        <div className="h-1 w-3/4 bg-accent-500" />
+        {[0, 1, 2].map((i) => <div key={i} className={cn('h-1', dark ? 'bg-[#3c3934]' : 'bg-[#c4bdb2]')} />)}
       </div>
-      <div className="grid flex-1 grid-cols-3 gap-1 p-1.5">
-        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className={cn('rounded', dark ? 'bg-zinc-800' : 'bg-zinc-300')} />)}
+      <div className="grid flex-1 grid-cols-3 gap-px p-1.5">
+        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className={dark ? 'bg-[#1f1d1b]' : 'bg-[#dcd6cd]'} />)}
       </div>
     </div>
   )
@@ -154,27 +154,25 @@ function AppearanceTab() {
     { value: 'system', label: 'Système', icon: Monitor },
   ]
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section title="Thème" description="« Système » suit automatiquement le réglage de votre appareil. Synchronisé sur tous vos appareils.">
         <div className="grid grid-cols-3 gap-3">
           {options.map(({ value, label, icon: Icon }) => (
-            <button key={value} onClick={() => setTheme(value)} className={cn('rounded-2xl border-2 p-2.5 text-left transition-all', theme === value ? 'border-accent-500 ring-4 ring-accent-500/10' : 'border-line hover:border-line-strong')}>
+            <button key={value} onClick={() => setTheme(value)} className={cn('border p-2 text-left transition-colors', theme === value ? 'border-accent-500' : 'border-line hover:border-line-strong')}>
               {value === 'system' ? (
-                <div className="grid grid-cols-2 overflow-hidden rounded-lg"><ThemePreview mode="light" /><ThemePreview mode="dark" /></div>
+                <div className="grid grid-cols-2 overflow-hidden"><ThemePreview mode="light" /><ThemePreview mode="dark" /></div>
               ) : <ThemePreview mode={value} />}
-              <p className="mt-2.5 flex items-center gap-1.5 text-[13px] font-medium text-fg"><Icon size={14} /> {label}{theme === value && <Check size={14} className="ml-auto text-accent-500" />}</p>
+              <p className="mt-2 flex items-center gap-1.5 text-[13px] text-fg">{label}{theme === value && <Check size={13} className="ml-auto text-accent-500" />}</p>
             </button>
           ))}
         </div>
       </Section>
       <Section title="Couleur d'accent" description="Utilisée pour les boutons, la sélection et les éléments actifs.">
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {ACCENTS.map((a) => (
-            <button key={a.value} onClick={() => setAccent(a.value)} className="group flex flex-col items-center gap-1.5" aria-label={a.label}>
-              <span className={cn('flex h-11 w-11 items-center justify-center rounded-full ring-offset-2 ring-offset-surface transition-all', accent === a.value ? 'ring-2' : 'group-hover:scale-110')} style={{ background: a.hex, '--tw-ring-color': a.hex }}>
-                {accent === a.value && <Check size={18} className="text-white" strokeWidth={3} />}
-              </span>
-              <span className={cn('text-[11px]', accent === a.value ? 'font-medium text-fg' : 'text-subtle')}>{a.label}</span>
+            <button key={a.value} onClick={() => setAccent(a.value)} className={cn('flex items-center gap-2.5 border py-1.5 pl-1.5 pr-3 transition-colors', accent === a.value ? 'border-fg/60' : 'border-line hover:border-line-strong')} aria-label={a.label}>
+              <span className="h-6 w-6" style={{ background: a.hex }} />
+              <span className={cn('text-[13px]', accent === a.value ? 'text-fg' : 'text-muted')}>{a.label}</span>
             </button>
           ))}
         </div>
@@ -191,7 +189,7 @@ function ExplorerTab() {
   const p = usePreferencesStore()
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen)
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section title="Souris et clavier" description="Adaptez le comportement à votre façon de travailler.">
         <Row><Switch checked={p.clickToOpen} onChange={(v) => p.set({ clickToOpen: v })} label="Ouvrir d'un simple clic" description="Désactivé : un clic sélectionne et un double-clic ouvre (comme Windows / macOS). Sur écran tactile, un appui ouvre toujours." /></Row>
         <Row>
@@ -200,7 +198,7 @@ function ExplorerTab() {
               <p className="text-sm font-medium text-fg">Raccourcis clavier</p>
               <p className="mt-0.5 text-xs text-muted">Navigation aux flèches, Suppr, F2, Ctrl+A, lasso, pincement du pavé tactile…</p>
             </div>
-            <Button variant="secondary" size="sm" icon={Keyboard} onClick={() => setShortcutsOpen(true)}>Voir</Button>
+            <Button variant="secondary" size="sm" onClick={() => setShortcutsOpen(true)}>Voir</Button>
           </div>
         </Row>
       </Section>
@@ -225,7 +223,7 @@ function ExplorerTab() {
           <div className="grid gap-2 sm:grid-cols-3">
             {QUALITY_PRESETS.map((q) => (
               <button key={q.value} onClick={() => p.setDefaultQuality(q.value)} className={cn('rounded-xl border p-3 text-left transition-all', p.defaultQuality === q.value ? 'border-accent-500 bg-accent-500/10' : 'border-line hover:border-line-strong')}>
-                <p className="text-sm font-semibold text-fg">{q.label}</p>
+                <p className="text-sm font-medium text-fg">{q.label}</p>
                 <p className="text-[11px] text-subtle">{q.desc}</p>
               </button>
             ))}
@@ -266,7 +264,7 @@ function SecurityTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section title="Mot de passe" description="Toutes vos sessions restent actives après le changement.">
         <form onSubmit={savePassword} className="space-y-4">
           <Field label="Mot de passe actuel"><PasswordInput value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} autoComplete="current-password" required /></Field>
@@ -285,10 +283,8 @@ function SecurityTab() {
 
       <Section title="Double authentification (TOTP)" description="Un code à 6 chiffres de votre application (Google Authenticator, Authy, 1Password…) est demandé à chaque connexion.">
         {user?.totp_enabled ? (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-sm text-emerald-700 dark:text-emerald-400">
-              <ShieldCheck size={18} /> Activée — votre compte est protégé.
-            </div>
+          <div className="space-y-10">
+            <p className="border-l-2 border-emerald-600 pl-3 text-sm text-fg">Activée. Un code est demandé à chaque connexion.</p>
             <div className="space-y-3">
               <p className="text-[13px] text-muted">Pour désactiver, saisissez un code de votre application :</p>
               <OtpInput value={code} onChange={setCode} />
@@ -297,7 +293,7 @@ function SecurityTab() {
           </div>
         ) : qr ? (
           <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-            <img src={qr} alt="QR code TOTP" className="h-44 w-44 rounded-2xl border border-line bg-white p-2" />
+            <img src={qr} alt="QR code TOTP" className="h-44 w-44 border border-line bg-white p-2" />
             <div className="flex-1 space-y-4">
               <ol className="list-inside list-decimal space-y-1 text-[13px] text-muted">
                 <li>Scannez le QR code avec votre application.</li>
@@ -311,7 +307,7 @@ function SecurityTab() {
             </div>
           </div>
         ) : (
-          <Button icon={ShieldCheck} onClick={totp.setup}>Activer la double authentification</Button>
+          <Button variant="secondary" onClick={totp.setup}>Activer la double authentification</Button>
         )}
       </Section>
     </div>
@@ -329,21 +325,21 @@ function LinkedTab() {
   }
   return (
     <Section title="Discord" description="Liez votre compte pour vous connecter en un clic avec Discord.">
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-[#5865F2]/30 bg-[#5865F2]/[0.06] p-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#5865F2] text-white"><DiscordIcon size={22} /></span>
+      <div className="flex flex-wrap items-center gap-4 border border-line p-4">
+        <DiscordIcon size={20} className="text-[#5865F2]" />
         {user?.discord_id ? (
           <>
             {user.discord_avatar && <img src={user.discord_avatar} alt="" className="h-10 w-10 rounded-full" />}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-fg">{user.discord_pseudo}</p>
+              <p className="text-sm font-medium text-fg">{user.discord_pseudo}</p>
               <p className="text-xs text-muted">Compte lié</p>
             </div>
-            <Button variant="secondary" size="sm" icon={Unlink} onClick={unlink}>Délier</Button>
+            <Button variant="secondary" size="sm" onClick={unlink}>Délier</Button>
           </>
         ) : (
           <>
             <p className="min-w-0 flex-1 text-sm text-muted">Aucun compte Discord lié.</p>
-            <Button size="sm" className="bg-[#5865F2] hover:bg-[#4752C4]" icon={Link2} onClick={link}>Lier Discord</Button>
+            <Button size="sm" variant="secondary" onClick={link}>Lier Discord</Button>
           </>
         )}
       </div>
@@ -375,7 +371,7 @@ function NotificationsTab() {
     <Row key={n.key}><Switch checked={prefs[n.key] !== false} onChange={(v) => toggle(n.key, v)} label={n.label} description={n.desc} /></Row>
   ))
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section title="Cloche de notifications" description="Choisissez ce qui apparaît dans la cloche et en temps réel. Appliqué immédiatement.">{list(NOTIFS)}</Section>
       {user?.is_super_admin && <Section title="Administration">{list(ADMIN_NOTIFS)}</Section>}
     </div>
@@ -394,33 +390,33 @@ function StorageTab() {
   const vid = by('video')
   // Palette catégorielle validée pour les graphiques (cf. AdminOverview)
   const seg = [
-    { label: 'Photos', icon: Images, size: Number(img.size), count: img.count, color: '#7c3aed' },
+    { label: 'Photos', icon: Images, size: Number(img.size), count: img.count, color: '#c2410c' },
     { label: 'Vidéos', icon: Film, size: Number(vid.size), count: vid.count, color: '#0891b2' },
-    { label: 'Corbeille', icon: Trash2, size: Number(data?.trash_size || 0), count: data?.trash_count || 0, color: '#d97706' },
+    { label: 'Corbeille', icon: Trash2, size: Number(data?.trash_size || 0), count: data?.trash_count || 0, color: '#a16207' },
   ]
   return (
-    <div className="space-y-5">
+    <div className="space-y-10">
       <Section>
-        <p className="text-sm text-muted">Espace utilisé</p>
-        <p className="mt-1 text-3xl font-semibold tracking-tight text-fg">{formatSize(used)} <span className="text-lg font-normal text-subtle">sur {formatSize(quota)}</span></p>
-        <div className="mt-5 flex h-3 gap-[2px] overflow-hidden rounded-full bg-overlay">
+        <p className="label-mono">Espace utilisé</p>
+        <p className="mt-2 font-mono text-3xl tracking-[-0.03em] text-fg">{formatSize(used)} <span className="text-base text-subtle">/ {formatSize(quota)}</span></p>
+        <div className="mt-5 flex h-2 gap-[2px] overflow-hidden bg-overlay">
           {seg.map((s) => s.size > 0 && <motion.div key={s.label} initial={{ width: 0 }} animate={{ width: `${(s.size / quota) * 100}%` }} className="h-full first:rounded-l-full" style={{ background: s.color }} title={`${s.label} : ${formatSize(s.size)}`} />)}
         </div>
         <p className={cn('mt-2 text-xs', pct >= 90 ? 'text-red-500' : 'text-subtle')}>{pct} % utilisé · {formatSize(Math.max(0, quota - used))} disponibles</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           {seg.map(({ label, icon: Icon, size, count, color }) => (
-            <div key={label} className="rounded-xl border border-line p-3.5">
-              <div className="flex items-center gap-2 text-[13px] text-muted"><span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} /><Icon size={14} /> {label}</div>
-              <p className="mt-2 text-lg font-semibold text-fg">{formatSize(size)}</p>
-              <p className="text-xs text-subtle">{count} fichier(s)</p>
+            <div key={label} className="border-t border-line pt-3">
+              <div className="flex items-center gap-2 text-[13px] text-muted"><span className="h-2.5 w-2.5" style={{ background: color }} /> {label}</div>
+              <p className="mt-2 font-mono text-lg text-fg">{formatSize(size)}</p>
+              <p className="font-mono text-[11px] text-subtle">{count} fichier(s)</p>
             </div>
           ))}
         </div>
         {pct >= 90 && <Progress value={pct} className="mt-5" />}
       </Section>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="card flex items-center gap-3 p-4"><Heart size={18} className="text-pink-500" /><span className="text-sm text-fg">{data?.favorites ?? '—'} favori(s)</span></div>
-        <div className="card flex items-center gap-3 p-4"><Folder size={18} className="text-amber-500" /><span className="text-sm text-fg">{data?.folders ?? '—'} dossier(s)</span></div>
+        <div className="flex items-baseline justify-between border-t border-line pt-3"><span className="text-sm text-muted">Favoris</span><span className="font-mono text-fg">{data?.favorites ?? '—'}</span></div>
+        <div className="flex items-baseline justify-between border-t border-line pt-3"><span className="text-sm text-muted">Dossiers</span><span className="font-mono text-fg">{data?.folders ?? '—'}</span></div>
       </div>
     </div>
   )
@@ -446,8 +442,7 @@ export default function Settings() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Paramètres</h1>
-        <p className="mt-1 text-sm text-muted">Votre compte, l'apparence et le comportement d'Obscura.</p>
+        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Paramètres</h1>
       </div>
       <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
         {isDesktop ? <div className="sticky top-6 self-start"><SideTabs value={tab} onChange={setTab} tabs={TABS} /></div> : <Tabs value={tab} onChange={setTab} tabs={TABS} className="mb-5" />}

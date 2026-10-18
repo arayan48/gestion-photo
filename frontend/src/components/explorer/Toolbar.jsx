@@ -33,17 +33,17 @@ export const Toolbar = forwardRef(function Toolbar({
     <div className="flex flex-wrap items-center gap-2">
       {!hideFilter && (
         <div className="relative order-last w-full sm:order-none sm:w-64">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+          <Search size={14} strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" />
           <input
             ref={filterRef}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') { setFilter(''); e.currentTarget.blur() } }}
             placeholder="Filtrer ce dossier…"
-            className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-9 text-[13px] text-fg outline-none transition-all placeholder:text-subtle hover:border-line-strong focus:border-accent-500 focus:ring-4 focus:ring-accent-500/15"
+            className="h-[34px] w-full rounded-sm border border-line bg-transparent pl-8 pr-8 text-[13px] text-fg outline-none transition-colors placeholder:text-subtle hover:border-line-strong focus:border-fg/60"
           />
           {filter ? (
-            <button onClick={() => setFilter('')} className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-subtle hover:bg-overlay hover:text-fg" aria-label="Effacer">
+            <button onClick={() => setFilter('')} className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-subtle hover:text-fg" aria-label="Effacer">
               <X size={14} />
             </button>
           ) : (
@@ -58,22 +58,22 @@ export const Toolbar = forwardRef(function Toolbar({
         onChange={setType}
         layoutId="type-filter"
         options={[
-          { value: 'all', label: 'Tout', icon: Layers, hideLabelOnMobile: true },
-          { value: 'image', label: 'Photos', icon: Images, hideLabelOnMobile: true },
-          { value: 'video', label: 'Vidéos', icon: Film, hideLabelOnMobile: true },
+          { value: 'all', label: 'Tout' },
+          { value: 'image', label: 'Photos' },
+          { value: 'video', label: 'Vidéos' },
         ]}
       />
 
       <Popover
         align="start"
         trigger={
-          <Button size="sm" variant={hasDate ? 'primary' : 'outline'} icon={CalendarRange} className="h-8">
-            <span className="hidden sm:inline">{hasDate ? 'Période' : 'Date'}</span>
+          <Button size="sm" variant={hasDate ? 'primary' : 'outline'} className="h-[34px]">
+            {hasDate ? 'Période' : 'Date'}
           </Button>
         }
         className="w-72 p-4"
       >
-        <p className="mb-3 text-sm font-semibold text-fg">Filtrer par date d'ajout</p>
+        <p className="label-mono mb-3">Date d'ajout</p>
         <div className="space-y-3">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Depuis le</span>
@@ -88,13 +88,13 @@ export const Toolbar = forwardRef(function Toolbar({
               { l: '7 jours', d: 7 }, { l: '30 jours', d: 30 }, { l: '1 an', d: 365 },
             ].map(({ l, d }) => (
               <button key={l} onClick={() => setDateRange({ from: new Date(Date.now() - d * 864e5).toISOString().slice(0, 10), to: '' })}
-                className="rounded-full bg-overlay px-2.5 py-1 text-xs text-muted hover:bg-accent-500/10 hover:text-accent-600">
+                className="rounded-sm border border-line px-2 py-1 font-mono text-[11px] text-muted hover:border-fg/40 hover:text-fg">
                 {l}
               </button>
             ))}
             {hasDate && (
-              <button onClick={() => setDateRange({ from: '', to: '' })} className="ml-auto flex items-center gap-1 rounded-full px-2 py-1 text-xs text-red-500 hover:bg-red-500/10">
-                <X size={12} /> Effacer
+              <button onClick={() => setDateRange({ from: '', to: '' })} className="ml-auto px-1 py-1 text-xs text-subtle underline underline-offset-4 hover:text-fg">
+                Effacer
               </button>
             )}
           </div>
@@ -109,18 +109,19 @@ export const Toolbar = forwardRef(function Toolbar({
             ...SORTS.map((s) => ({ label: s.label, icon: s.icon, checked: s === currentSort, onSelect: () => setSort(s.by, s.dir) })),
           ]}
           trigger={
-            <Button size="sm" variant="outline" icon={ArrowDownWideNarrow} className="h-8">
+            <Button size="sm" variant="outline" className="h-[34px]">
+              <ArrowDownWideNarrow size={14} strokeWidth={1.75} className="md:hidden" />
               <span className="hidden md:inline">{currentSort.label}</span>
             </Button>
           }
         />
       )}
 
-      {countLabel && <span className="hidden text-xs text-subtle lg:inline">{countLabel}</span>}
+      {countLabel && <span className="hidden font-mono text-[11px] text-subtle lg:inline">{countLabel}</span>}
 
       <div className="ml-auto flex items-center gap-1.5">
         {isTouch && (
-          <Button size="sm" variant={touchSelect ? 'primary' : 'outline'} icon={CheckSquare} className="h-8" onClick={() => setTouchSelect(!touchSelect)}>
+          <Button size="sm" variant={touchSelect ? 'primary' : 'outline'} className="h-[34px]" onClick={() => setTouchSelect(!touchSelect)}>
             {touchSelect ? 'Terminé' : 'Sélectionner'}
           </Button>
         )}
@@ -130,7 +131,7 @@ export const Toolbar = forwardRef(function Toolbar({
             trigger={<span><IconButton icon={ZoomIn} label="Taille des vignettes" size="sm" /></span>}
             className="w-64 p-4"
           >
-            <p className="mb-3 text-sm font-semibold text-fg">Affichage de la grille</p>
+            <p className="label-mono mb-3">Grille</p>
             <div className="flex items-center gap-3">
               <ZoomOut size={15} className="text-subtle" />
               <input
@@ -141,15 +142,15 @@ export const Toolbar = forwardRef(function Toolbar({
               />
               <ZoomIn size={15} className="text-subtle" />
             </div>
-            <p className="mt-2 text-[11px] text-subtle">Astuce : pincez le pavé tactile ou Ctrl + molette sur la grille.</p>
+            <p className="mt-2 text-[11px] text-subtle">Ou pincez le pavé tactile sur la grille.</p>
             <div className="mt-4 space-y-1">
-              <button onClick={() => set({ groupByDate: !groupByDate })} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-fg hover:bg-overlay">
-                <Rows3 size={15} className="text-muted" /> <span className="flex-1 text-left">Grouper par date</span>
-                <span className={cn('h-2 w-2 rounded-full', groupByDate ? 'bg-accent-500' : 'bg-line-strong')} />
+              <button onClick={() => set({ groupByDate: !groupByDate })} className="flex w-full items-center gap-2.5 px-2 py-1.5 text-[13px] text-fg hover:bg-overlay">
+                <span className="flex-1 text-left">Grouper par date</span>
+                <span className="font-mono text-[11px] text-subtle">{groupByDate ? 'oui' : 'non'}</span>
               </button>
-              <button onClick={() => set({ showNames: !showNames })} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-fg hover:bg-overlay">
-                <Type size={15} className="text-muted" /> <span className="flex-1 text-left">Afficher les noms</span>
-                <span className={cn('h-2 w-2 rounded-full', showNames ? 'bg-accent-500' : 'bg-line-strong')} />
+              <button onClick={() => set({ showNames: !showNames })} className="flex w-full items-center gap-2.5 px-2 py-1.5 text-[13px] text-fg hover:bg-overlay">
+                <span className="flex-1 text-left">Afficher les noms</span>
+                <span className="font-mono text-[11px] text-subtle">{showNames ? 'oui' : 'non'}</span>
               </button>
             </div>
           </Popover>

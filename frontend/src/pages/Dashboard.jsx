@@ -42,8 +42,8 @@ export default function Dashboard() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">Administration</h1>
-        <p className="mt-1 text-sm text-muted">Utilisateurs, sécurité, sauvegardes et activité de l'instance. Astuce : clic droit sur une ligne pour ses actions.</p>
+        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Administration</h1>
+        <p className="mt-1 text-sm text-muted">Membres, sécurité, sauvegardes et journaux de l’instance.</p>
       </div>
       <Tabs value={tab} onChange={setTab} tabs={tabs} />
       <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>

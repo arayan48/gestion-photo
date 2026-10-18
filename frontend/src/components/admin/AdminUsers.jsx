@@ -30,13 +30,13 @@ function QuotaDialog({ user, onClose, onSave }) {
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={() => onSave({ storageQuota: Math.round(gb * GiB) })}>Enregistrer</Button></>}>
       <div className="space-y-4">
         <div className="flex items-baseline justify-center gap-1.5 py-2">
-          <input type="number" min={1} max={2000} value={gb} onChange={(e) => setGb(Number(e.target.value) || 1)} className="w-24 bg-transparent text-center text-4xl font-semibold tabular-nums text-fg outline-none" />
+          <input type="number" min={1} max={2000} value={gb} onChange={(e) => setGb(Number(e.target.value) || 1)} className="w-24 bg-transparent text-center text-4xl font-medium tabular-nums text-fg outline-none" />
           <span className="text-lg text-muted">Go</span>
         </div>
         <input type="range" min={1} max={200} value={Math.min(gb, 200)} onChange={(e) => setGb(Number(e.target.value))} className="w-full accent-[rgb(var(--accent-500))]" />
         <div className="flex flex-wrap justify-center gap-1.5">
           {QUOTA_PRESETS.map((p) => (
-            <button key={p} onClick={() => setGb(p)} className={cn('rounded-full px-3 py-1 text-xs font-medium transition-colors', gb === p ? 'bg-accent-600 text-white' : 'bg-overlay text-muted hover:text-fg')}>{p} Go</button>
+            <button key={p} onClick={() => setGb(p)} className={cn('rounded-sm border px-2.5 py-1 font-mono text-[11px] transition-colors', gb === p ? 'border-accent-600 bg-accent-600 text-white' : 'border-line text-muted hover:text-fg')}>{p} Go</button>
           ))}
         </div>
         {gb < usedGb && <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">Le quota est inférieur à l'espace déjà utilisé : les nouveaux envois seront bloqués.</p>}
@@ -53,8 +53,8 @@ function RoleDialog({ user, roles, onClose, onSave }) {
       <div className="space-y-1.5">
         {roles.filter((r) => !r.is_super_admin).map((r) => (
           <button key={r.id} onClick={() => setRoleId(r.id)}
-            className={cn('flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all', roleId === r.id ? 'border-accent-500 bg-accent-500/10' : 'border-line hover:border-line-strong')}>
-            <span className={cn('flex h-5 w-5 items-center justify-center rounded-full border-2', roleId === r.id ? 'border-accent-500 bg-accent-500 text-white' : 'border-line-strong')}>
+            className={cn('flex w-full items-center gap-3 border-b border-line px-1 py-2.5 text-left transition-colors', roleId === r.id ? 'text-fg' : 'text-muted hover:text-fg')}>
+            <span className={cn('flex h-4 w-4 items-center justify-center rounded-[2px] border', roleId === r.id ? 'border-accent-500 bg-accent-500 text-white' : 'border-line-strong')}>
               {roleId === r.id && <Check size={11} strokeWidth={3} />}
             </span>
             <span className="flex-1 text-sm font-medium text-fg">{r.name}</span>
@@ -101,7 +101,7 @@ function AddUserDialog({ roles, onClose, onDone }) {
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button type="submit" loading={loading} icon={UserPlus}>Créer</Button>
+          <Button type="submit" loading={loading}>Créer</Button>
         </div>
       </form>
     </Dialog>
@@ -192,24 +192,24 @@ export default function AdminUsers() {
           <option value="banned">Suspendus</option>
         </Select>
         <span className="text-xs text-subtle">{pluralize(users.length, 'utilisateur')}</span>
-        {can('users.accept_requests') && <Button icon={UserPlus} className="ml-auto" onClick={() => setModal({ type: 'add' })}>Ajouter</Button>}
+        {can('users.accept_requests') && <Button className="ml-auto" onClick={() => setModal({ type: 'add' })}>Ajouter</Button>}
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-2xl border border-accent-500/30 bg-accent-500/[0.07] px-4 py-2.5">
+        <div className="flex items-center gap-3 border-l-2 border-accent-500 bg-overlay/40 px-4 py-2">
           <span className="text-sm font-medium text-fg">{selected.size} sélectionné(s)</span>
-          {can('users.delete') && <Button size="sm" variant="danger-soft" icon={Trash2} onClick={() => remove(selectedUsers.filter((u) => !u.is_super_admin && u.id !== me?.id))}>Supprimer</Button>}
+          {can('users.delete') && <Button size="sm" variant="danger-soft" onClick={() => remove(selectedUsers.filter((u) => !u.is_super_admin && u.id !== me?.id))}>Supprimer</Button>}
           <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted hover:text-fg"><X size={15} /></button>
         </div>
       )}
 
       {isLoading ? (
-        <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}</div>
+        <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 " />)}</div>
       ) : !users.length ? (
         <EmptyState icon={Users} title="Aucun utilisateur" description={search ? 'Aucun résultat pour cette recherche.' : undefined} compact />
       ) : (
         <div className="table-wrapper">
-          <div className="hidden grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px] items-center gap-4 border-b border-line px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-subtle lg:grid">
+          <div className="hidden grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px] items-center gap-4 border-b border-line px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-subtle lg:grid">
             <Checkbox checked={allSel} indeterminate={selected.size > 0 && !allSel} onChange={() => setSelected(allSel ? new Set() : new Set(users.map((u) => u.id)))} />
             <span>Utilisateur</span><span>Rôle</span><span>Statut</span><span>Stockage</span><span>Inscrit</span><span />
           </div>

@@ -49,12 +49,12 @@ export default function Layout() {
 
   return (
     <DndProvider>
-      <div className="flex h-[100dvh] overflow-hidden bg-bg">
+      <div className="grain flex h-[100dvh] overflow-hidden bg-bg">
         <Sidebar />
         <MobileSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
-          <main className="relative min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+          <main className="relative min-h-0 flex-1 overflow-y-auto pb-16 md:pb-0">
             <Outlet />
           </main>
         </div>

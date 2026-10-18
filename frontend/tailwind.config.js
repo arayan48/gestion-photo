@@ -11,10 +11,23 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
+    // Direction « chambre noire » : angles presque droits partout.
+    // Les classes rounded-xl / 2xl existantes restent valides mais deviennent sobres.
+    borderRadius: {
+      none: '0',
+      sm: '2px',
+      DEFAULT: '3px',
+      md: '3px',
+      lg: '4px',
+      xl: '4px',
+      '2xl': '6px',
+      '3xl': '8px',
+      full: '9999px',
+    },
     extend: {
       fontFamily: {
-        sans: ['"Inter Variable"', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         bg: v('bg'),
@@ -28,13 +41,11 @@ export default {
         subtle: v('subtle'),
         accent: { ...accent, DEFAULT: v('accent-600') },
       },
-      borderRadius: {
-        '4xl': '2rem',
-      },
+      // Ombres minimales : la profondeur vient des filets, pas des halos
       boxShadow: {
-        soft: '0 1px 2px rgb(0 0 0 / 0.06), 0 4px 16px -4px rgb(0 0 0 / 0.12)',
-        float: '0 8px 30px -6px rgb(0 0 0 / 0.35), 0 2px 8px -2px rgb(0 0 0 / 0.2)',
-        glow: '0 0 0 1px rgb(var(--accent-500) / 0.35), 0 8px 28px -6px rgb(var(--accent-600) / 0.45)',
+        soft: '0 1px 0 rgb(0 0 0 / 0.04)',
+        float: '0 12px 32px -12px rgb(0 0 0 / 0.5)',
+        glow: 'none',
       },
       keyframes: {
         'fade-in': { from: { opacity: 0 }, to: { opacity: 1 } },

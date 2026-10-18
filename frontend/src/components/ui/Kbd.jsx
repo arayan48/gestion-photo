@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn.js'
 export function Kbd({ children, className }) {
   return (
     <kbd className={cn(
-      'inline-flex h-5 min-w-[20px] items-center justify-center rounded-md border border-line bg-overlay px-1.5 font-sans text-[10px] font-semibold text-muted',
+      'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-sm border border-line-strong px-1 font-mono text-[10px] text-muted',
       className
     )}>
       {children}
