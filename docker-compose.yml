@@ -21,10 +21,13 @@ services:
     networks:
       - obscura_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-obscura} -d ${DB_NAME:-obscura}"]
+      # -h 127.0.0.1 : en TCP. Via le socket, le serveur temporaire de l'initialisation
+      # (premier démarrage) répond déjà « prêt » alors que le port 5432 est encore fermé.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_USER:-obscura} -d ${DB_NAME:-obscura}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     logging: *logging
 
   backend:
