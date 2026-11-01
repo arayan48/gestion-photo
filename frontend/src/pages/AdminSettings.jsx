@@ -60,7 +60,9 @@ function PasswordInput({ value, onChange, placeholder, id }) {
 function UnitInput({ unit, className, ...props }) {
   return (
     <div className={cn('relative', className)}>
-      <input type="number" className="input pr-11 text-right tabular-nums" {...props} />
+      <input type="number"
+        className="input pr-11 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        {...props} />
       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-subtle">{unit}</span>
     </div>
   )
@@ -402,7 +404,7 @@ function TabGeneral({ config }) {
   const keys = [
     'app.name', 'app.url',
     'storage.media_pct', 'storage.backup_pct',
-    'storage.total_gb', 'storage.logs_gb',
+    'storage.total_gb', 'storage.max_gb', 'storage.logs_gb',
   ]
   const { form, set, save, bar } = useConfigForm(config, keys)
   const queryClient = useQueryClient()
@@ -422,7 +424,11 @@ function TabGeneral({ config }) {
   })
 
   const manualGb  = parseFloat(form['storage.total_gb'] || 0) || null
-  const autoGb    = infra ? Math.floor(infra.allocation.autoSafe / GiB) || null : null
+  const detectedGb = infra ? Math.floor(infra.allocation.autoSafe / GiB) || null : null
+  const maxGb     = parseFloat(form['storage.max_gb'] || 0) || null
+  // Même règle que le serveur (utils/infra.js) : l'auto suit le disque sans dépasser le plafond
+  const autoGb    = detectedGb && maxGb ? Math.min(detectedGb, maxGb) : detectedGb || maxGb
+  const capped    = !!(detectedGb && maxGb && maxGb < detectedGb)
   const isAuto    = !form['storage.total_gb']
   const totalGb   = manualGb || autoGb
   const mediaPct  = parseInt(form['storage.media_pct'] || 70)
@@ -472,7 +478,11 @@ function TabGeneral({ config }) {
               {totalGb ? `${fmtNum(totalGb)} Go` : 'Automatique'}
             </p>
             <p className="mt-1.5 text-[13px] text-muted">
-              {isAuto ? 'Alloués automatiquement à Obscura' : 'Alloués manuellement à Obscura'}
+              {!isAuto
+                ? 'Alloués manuellement à Obscura'
+                : capped
+                  ? `Alloués automatiquement, limités par le plafond (${fmtNum(detectedGb)} Go disponibles)`
+                  : 'Alloués automatiquement à Obscura'}
             </p>
           </div>
           <UsageBar segments={allocation} total={100} />
@@ -480,6 +490,12 @@ function TabGeneral({ config }) {
         <Row label="Taille automatique" description="Espace libre + données d'Obscura, moins 5 % de marge. Recalculée chaque heure.">
           <Switch checked={isAuto} onChange={(v) => set('storage.total_gb', v ? '' : String(autoGb || 100))} />
         </Row>
+        {isAuto && (
+          <Row label="Plafond" description="Jamais plus que cette taille, même si le disque se libère. Vide : aucun plafond." htmlFor="max-gb">
+            <UnitInput id="max-gb" unit="Go" min="1" step="1" className="w-32" placeholder="Aucun"
+              value={form['storage.max_gb'] || ''} onChange={(e) => set('storage.max_gb', e.target.value)} />
+          </Row>
+        )}
         {!isAuto && (
           <Row label="Taille allouée" htmlFor="total-gb">
             <UnitInput id="total-gb" unit="Go" min="1" step="1" className="w-32"

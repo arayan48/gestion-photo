@@ -21,6 +21,17 @@ test('limites : réglage manuel plafonné à la taille du disque', () => {
   assert.equal(l.mediaLimit, 35 * GB)
 })
 
+test('limites : le plafond borne le mode auto', () => {
+  const capped = computeLimits({ size: 100 * GB, autoSafe: 60 * GB }, { 'storage.max_gb': '50' })
+  assert.equal(capped.safeBytes, 50 * GB)
+  // Disque presque plein : l'auto reste sous le plafond
+  const under = computeLimits({ size: 100 * GB, autoSafe: 30 * GB }, { 'storage.max_gb': '50' })
+  assert.equal(under.safeBytes, 30 * GB)
+  // Une taille manuelle ignore le plafond
+  const manual = computeLimits({ size: 100 * GB, autoSafe: 30 * GB }, { 'storage.total_gb': '80', 'storage.max_gb': '50' })
+  assert.equal(manual.safeBytes, 80 * GB)
+})
+
 test('limites : valeurs par défaut en mode auto', () => {
   const l = computeLimits({ size: 100 * GB, autoSafe: 60 * GB }, {})
   assert.equal(l.mediaLimit, 42 * GB)

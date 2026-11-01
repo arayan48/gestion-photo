@@ -40,9 +40,11 @@ export function computeAutoSafe(size, free, obscuraBytes) {
 
 export function computeLimits({ size, autoSafe }, overrides) {
   const totalGb = parseFloat(overrides['storage.total_gb'])
+  // Mode auto : suit l'espace disponible, sans jamais dépasser le plafond s'il est défini
+  const maxGb = parseFloat(overrides['storage.max_gb'])
   const safeBytes = totalGb > 0
     ? Math.min(Math.floor(totalGb * GB), size)
-    : autoSafe
+    : maxGb > 0 ? Math.min(autoSafe, Math.floor(maxGb * GB)) : autoSafe
 
   const mediaPct = Math.min(Math.max(parseInt(overrides['storage.media_pct']) || 70, 1), 95)
   const backupPct = Math.min(Math.max(parseInt(overrides['storage.backup_pct']) || 10, 0), 95)

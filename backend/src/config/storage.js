@@ -9,7 +9,7 @@ import {
 } from '../utils/infra.js'
 
 // Réglages modifiables depuis Paramètres admin → Général (table system_config)
-const OVERRIDE_KEYS = ['storage.total_gb', 'storage.media_pct', 'storage.backup_pct', 'storage.logs_gb']
+const OVERRIDE_KEYS = ['storage.total_gb', 'storage.max_gb', 'storage.media_pct', 'storage.backup_pct', 'storage.logs_gb']
 
 async function readDisk(path) {
   try {
