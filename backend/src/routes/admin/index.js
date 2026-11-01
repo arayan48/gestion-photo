@@ -10,6 +10,9 @@ import { revokeAllUserTokens } from '../../services/auth.service.js'
 import { checkMediaStorageLimit, detectInfrastructure, initStorage } from '../../config/storage.js'
 import { checkForUpdate, updateState } from '../../services/update.service.js'
 import { getConfigForAdmin, setConfigValues, INTERNAL_KEYS, MASKED_VALUE } from '../../services/config.service.js'
+import { runBackup, importArchive, deleteBackup, restoreBackup, localArchivePath, isArchiveAvailable } from '../../services/backup.service.js'
+import { randomBytes } from 'crypto'
+import { basename, dirname } from 'path'
 
 const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
 // Valeurs calculées automatiquement au démarrage : non modifiables à la main
@@ -316,14 +319,96 @@ export default async function adminRoutes(fastify) {
     preHandler: [authenticate, requirePermission('system.manage_backups')],
   }, async (_, reply) => {
     const { rows } = await pool.query('SELECT * FROM backups ORDER BY created_at DESC LIMIT 50')
-    return reply.send(rows)
+    // Le chemin réel reste côté serveur
+    return reply.send(await Promise.all(rows.map(async ({ path, ...b }) => ({ ...b, available: await isArchiveAvailable({ ...b, path }) }))))
+  })
+
+  async function findBackup(id) {
+    if (!isUuid(id)) return null
+    const { rows: [row] } = await pool.query('SELECT * FROM backups WHERE id = $1', [id])
+    return row || null
+  }
+
+  // Lien de téléchargement à usage unique (60 s) : le navigateur télécharge l'archive
+  // directement, sans la charger en mémoire, et sans mettre le jeton de session dans l'URL
+  const downloadLinks = new Map()
+
+  fastify.post('/backups/:id/download-link', {
+    preHandler: [authenticate, requirePermission('system.manage_backups')],
+  }, async (request, reply) => {
+    const row = await findBackup(request.params.id)
+    if (!row || !(await isArchiveAvailable(row))) return reply.code(404).send({ error: 'Archive introuvable sur le serveur' })
+    const now = Date.now()
+    for (const [k, v] of downloadLinks) if (v.expires < now) downloadLinks.delete(k)
+    const token = randomBytes(24).toString('hex')
+    downloadLinks.set(token, { id: row.id, userId: request.currentUser.id, expires: now + 60_000 })
+    return reply.send({ url: `/api/admin/backups/download/${token}` })
+  })
+
+  fastify.get('/backups/download/:token', async (request, reply) => {
+    const link = downloadLinks.get(request.params.token)
+    downloadLinks.delete(request.params.token)
+    if (!link || link.expires < Date.now()) return reply.code(410).send({ error: 'Lien expiré' })
+    const row = await findBackup(link.id)
+    const path = localArchivePath(row)
+    if (!path || !(await isArchiveAvailable(row))) return reply.code(404).send({ error: 'Archive introuvable sur le serveur' })
+
+    await log({ category: 'system', level: 'info', action: 'backup_downloaded', userId: link.userId, ipAddress: extractIp(request), metadata: { id: row.id } })
+    reply.header('Content-Disposition', `attachment; filename="obscura-${basename(path)}"`)
+    reply.header('X-Content-Type-Options', 'nosniff')
+    return reply.sendFile(basename(path), dirname(path), { cacheControl: false })
+  })
+
+  fastify.post('/backups/import', {
+    preHandler: [authenticate, requirePermission('system.manage_backups')],
+  }, async (request, reply) => {
+    const { rows: [cfg] } = await pool.query("SELECT value FROM system_config WHERE key = 'storage.backup_limit'")
+    const limit = parseInt(cfg?.value) || Infinity
+    const data = await request.file({ limits: { fileSize: limit } })
+    if (!data) return reply.code(400).send({ error: 'Fichier requis' })
+    if (!/\.(tar\.gz|tgz)$/i.test(data.filename)) {
+      data.file.resume()
+      return reply.code(400).send({ error: 'Format attendu : archive .tar.gz créée par Obscura' })
+    }
+    try {
+      const row = await importArchive(data.file)
+      await log({ category: 'system', level: 'info', action: 'backup_imported', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id: row.id, size: row.size, filename: data.filename } })
+      return reply.send({ id: row.id, size: row.size })
+    } catch (err) {
+      data.file.resume()
+      return reply.code(err.statusCode || 400).send({ error: err.message })
+    }
+  })
+
+  fastify.post('/backups/:id/restore', {
+    preHandler: [authenticate, requirePermission('system.manage_backups')],
+  }, async (request, reply) => {
+    const row = await findBackup(request.params.id)
+    if (!row) return reply.code(404).send({ error: 'Sauvegarde introuvable' })
+    try {
+      const result = await restoreBackup(row)
+      await log({ category: 'system', level: 'warning', action: 'backup_restored', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id: row.id, safetyBackup: result.safetyBackup } })
+      return reply.send(result)
+    } catch (err) {
+      await log({ category: 'system', level: 'error', action: 'backup_restore_failed', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id: row.id, error: err.message } })
+      return reply.code(500).send({ error: err.message })
+    }
+  })
+
+  fastify.delete('/backups/:id', {
+    preHandler: [authenticate, requirePermission('system.manage_backups')],
+  }, async (request, reply) => {
+    const row = await findBackup(request.params.id)
+    if (!row) return reply.code(404).send({ error: 'Sauvegarde introuvable' })
+    await deleteBackup(row)
+    await log({ category: 'system', level: 'warning', action: 'backup_deleted', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id: row.id, type: row.type } })
+    return reply.send({ success: true })
   })
 
   fastify.post('/backups/run', {
     preHandler: [authenticate, requirePermission('system.manage_backups')],
   }, async (request, reply) => {
     const { type = 'local' } = request.body || {}
-    const { runBackup } = await import('../../services/backup.service.js')
     const result = await runBackup(type)
     if (!result.success) return reply.code(500).send({ error: `Échec de la sauvegarde : ${result.error}` })
     await log({ category: 'system', level: 'info', action: 'backup_manual', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { type } })

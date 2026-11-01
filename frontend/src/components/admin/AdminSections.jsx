@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   UserCheck, UserX, Inbox, Key, Pencil, Trash2, Shield, Copy, Database,
-  MoreHorizontal, CheckCircle2, XCircle,
+  MoreHorizontal, CheckCircle2, XCircle, Download, Upload, RotateCcw,
 } from 'lucide-react'
 import api, { apiError } from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
@@ -317,6 +317,73 @@ export function AdminBackups() {
     }
   }
 
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['backups'] })
+  const [busy, setBusy] = useState(null) // libellé de l'opération en cours
+  const fileInput = useRef(null)
+
+  const download = async (b) => {
+    try {
+      // Lien à usage unique : le navigateur télécharge directement, même une archive de plusieurs Go
+      const { data } = await api.post(`/admin/backups/${b.id}/download-link`)
+      const a = document.createElement('a')
+      a.href = data.url
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (err) { toast.error(apiError(err, 'Téléchargement impossible')) }
+  }
+
+  const importFile = async (file) => {
+    if (!file) return
+    const form = new FormData()
+    form.append('file', file)
+    setBusy('Import : 0 %')
+    try {
+      await api.post('/admin/backups/import', form, {
+        timeout: 0,
+        onUploadProgress: (e) => e.total && setBusy(`Import : ${Math.round((e.loaded / e.total) * 100)} %`),
+      })
+      toast.success('Archive importée. Vous pouvez la restaurer depuis la liste.')
+    } catch (err) { toast.error(apiError(err, "Erreur lors de l'import")) } finally {
+      setBusy(null)
+      refresh()
+    }
+  }
+
+  const restore = async (b) => {
+    const ok = await confirm(
+      `La base de données et tous les médias seront remplacés par ceux du ${formatDateTime(b.created_at)}. Tout ce qui a été ajouté depuis sera perdu. Une sauvegarde de l'état actuel est créée juste avant, au cas où.`,
+      { title: 'Restaurer cette sauvegarde ?', danger: true, confirmLabel: 'Restaurer' }
+    )
+    if (!ok) return
+    setBusy('Restauration en cours…')
+    try {
+      await api.post(`/admin/backups/${b.id}/restore`, null, { timeout: 0 })
+      toast.success('Restauration terminée. Reconnexion…')
+      // Les sessions de la base restaurée remplacent les actuelles
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (err) { toast.error(apiError(err, 'Échec de la restauration')) } finally {
+      setBusy(null)
+      refresh()
+    }
+  }
+
+  const remove = async (b) => {
+    const ok = await confirm(
+      b.type === 'backblaze' ? "L'archive sera supprimée du serveur et de Backblaze B2." : "L'archive sera supprimée du serveur. Cette action est définitive.",
+      { title: 'Supprimer la sauvegarde ?', danger: true, confirmLabel: 'Supprimer' }
+    )
+    if (!ok) return
+    try { await api.delete(`/admin/backups/${b.id}`); toast.success('Sauvegarde supprimée') } catch (err) { toast.error(apiError(err)) } finally { refresh() }
+  }
+
+  const menu = (b) => [
+    b.available && { label: 'Télécharger', icon: Download, onSelect: () => download(b) },
+    b.available && { label: 'Restaurer…', icon: RotateCcw, onSelect: () => restore(b) },
+    b.available && { type: 'separator' },
+    { label: 'Supprimer', icon: Trash2, danger: true, onSelect: () => remove(b) },
+  ]
+
   const last = backups[0]
   const okCount = backups.filter((b) => b.status === 'success').length
 
@@ -331,7 +398,12 @@ export function AdminBackups() {
               <option value="local">Locale (serveur)</option>
               <option value="backblaze">Backblaze B2</option>
             </Select>
-            <Button loading={running} onClick={run}>{running ? 'Sauvegarde en cours…' : 'Lancer maintenant'}</Button>
+            <Button loading={running} disabled={!!busy} onClick={run}>{running ? 'Sauvegarde en cours…' : 'Lancer maintenant'}</Button>
+            <Button variant="outline" icon={Upload} loading={!!busy} disabled={running} onClick={() => fileInput.current?.click()}>
+              {busy || 'Importer une archive'}
+            </Button>
+            <input ref={fileInput} type="file" accept=".tar.gz,.tgz,application/gzip" className="hidden"
+              onChange={(e) => { importFile(e.target.files[0]); e.target.value = '' }} />
           </div>
         </div>
         <div className="card p-5">
@@ -360,6 +432,8 @@ export function AdminBackups() {
               </div>
               <span className="hidden text-xs tabular-nums text-muted sm:block">{b.size ? formatSize(b.size) : '—'}</span>
               <Badge color={b.status === 'success' ? 'green' : 'red'} dot>{b.status === 'success' ? 'Succès' : 'Échec'}</Badge>
+              {b.status === 'success' && !b.available && <span title="Archive supprimée du serveur par la rétention"><Badge>Hors serveur</Badge></span>}
+              <DropdownMenu items={() => menu(b)} trigger={MoreTrigger} />
             </div>
           ))}
         </div>
