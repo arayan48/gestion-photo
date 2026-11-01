@@ -341,6 +341,7 @@ export default async function userRoutes(fastify) {
 
     params.push(user.id)
     await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params)
+    await invalidate(`user:${user.id}`)
 
     if (passwordChanged) {
       // Les autres appareils sont déconnectés ; cette session reçoit de nouveaux jetons

@@ -103,11 +103,13 @@ export async function recordFailedAttempt({ ip, identifier, userAgent = '', jwtH
   }
 }
 
-export async function resetAttempts({ ip, identifier }) {
+// Uniquement le compte connecté : remettre aussi à zéro par IP permettrait à un attaquant
+// d'effacer ses échecs sur un autre compte en se connectant au sien depuis la même IP
+export async function resetAttempts({ identifier }) {
   await pool.query(
     `UPDATE login_attempts SET attempt_count = 0, ban_level = 0, banned_until = NULL
-     WHERE identifier = $1 OR ip_address = $2`,
-    [identifier, ip]
+     WHERE identifier = $1`,
+    [identifier]
   )
 }
 

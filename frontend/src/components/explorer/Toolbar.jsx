@@ -1,9 +1,8 @@
 import { forwardRef } from 'react'
 import {
-  Search, X, LayoutGrid, List, Images, Film, Layers, CalendarRange, ArrowDownWideNarrow, CheckSquare,
-  ZoomIn, ZoomOut, CalendarArrowDown, CalendarArrowUp, ArrowDownAZ, ArrowUpZA, HardDrive, Rows3, Type,
+  Search, X, LayoutGrid, List, ArrowDownWideNarrow,
+  ZoomIn, ZoomOut, CalendarArrowDown, CalendarArrowUp, ArrowDownAZ, ArrowUpZA, HardDrive,
 } from 'lucide-react'
-import { cn } from '../../lib/cn.js'
 import { usePreferencesStore, GRID_SIZES } from '../../stores/preferences.store.js'
 import { Segmented } from '../ui/Form.jsx'
 import { DropdownMenu } from '../ui/Menu.jsx'

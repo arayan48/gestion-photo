@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FolderInput, Folder, FolderOpen, ChevronRight, Home, FolderPlus, Search } from 'lucide-react'
+import { FolderInput, Folder, FolderOpen, ChevronRight, Search } from 'lucide-react'
 import api from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
 import { useUiStore } from '../../stores/ui.store.js'

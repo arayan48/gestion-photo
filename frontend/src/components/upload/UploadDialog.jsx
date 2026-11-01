@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CloudUpload, X, FileVideo, Folder, Plus } from 'lucide-react'
+import { CloudUpload, X, FileVideo } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUiStore } from '../../stores/ui.store.js'
 import { useUploadStore } from '../../stores/upload.store.js'

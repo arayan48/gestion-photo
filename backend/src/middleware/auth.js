@@ -38,7 +38,7 @@ export async function authenticate(request, reply) {
     }
 
     request.currentUser = user
-  } catch (err) {
+  } catch {
     return reply.code(401).send({ error: 'Token invalide ou expiré' })
   }
 }

@@ -1,9 +1,7 @@
-import { mkdir, unlink, stat } from 'fs/promises'
+import { mkdir, unlink } from 'fs/promises'
 import { join, extname } from 'path'
 import { nanoid } from 'nanoid'
 import sharp from 'sharp'
-import { createWriteStream } from 'fs'
-import { pipeline } from 'stream/promises'
 import ffmpeg from 'fluent-ffmpeg'
 import { config } from '../config/env.js'
 
@@ -140,7 +138,6 @@ export function getVideoMetadata(filePath) {
       if (!videoStream) {
         return reject(Object.assign(new Error('Aucune piste vidéo détectée'), { statusCode: 400 }))
       }
-      const audioStream = metadata.streams.find((s) => s.codec_type === 'audio')
 
       resolve({
         duration: metadata.format.duration ? parseFloat(metadata.format.duration) : null,

@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { v4 as uuidv4 } from 'uuid'
 import pool from '../../config/database.js'
+import { invalidate } from '../../config/redis.js'
 import { config } from '../../config/env.js'
 import {
   hashPassword,
@@ -258,7 +259,7 @@ export default async function authRoutes(fastify) {
       }
     }
 
-    await resetAttempts({ ip, identifier })
+    await resetAttempts({ identifier })
 
     const { accessToken, refreshToken } = generateTokenPair(fastify, user.id, user.email)
     await saveRefreshToken(user.id, refreshToken, ip, userAgent)
@@ -535,8 +536,13 @@ export default async function authRoutes(fastify) {
     const secret = generateTotpSecret()
     const qrCode = await generateTotpQrCode(secret, user.email)
 
-    // Stocker le secret (chiffré) temporairement, avant confirmation
-    await pool.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [encryptSecret(secret), user.id])
+    // Stocker le secret (chiffré) temporairement, avant confirmation. Condition vérifiée en
+    // base : currentUser vient du cache et peut ignorer une activation toute récente
+    const { rowCount } = await pool.query(
+      'UPDATE users SET totp_secret = $1 WHERE id = $2 AND totp_enabled = false',
+      [encryptSecret(secret), user.id]
+    )
+    if (!rowCount) return reply.code(400).send({ error: '2FA déjà activée' })
 
     return reply.send({ secret, qrCode })
   })
@@ -554,6 +560,7 @@ export default async function authRoutes(fastify) {
     }
 
     await pool.query('UPDATE users SET totp_enabled = true WHERE id = $1', [user.id])
+    await invalidate(`user:${user.id}`)
     await log({ category: 'security', level: 'info', action: 'totp_enabled', userId: user.id, ipAddress: extractIp(request) })
     return reply.send({ message: '2FA TOTP activé avec succès' })
   })
@@ -570,6 +577,7 @@ export default async function authRoutes(fastify) {
     }
 
     await pool.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [user.id])
+    await invalidate(`user:${user.id}`)
     await log({ category: 'security', level: 'warning', action: 'totp_disabled', userId: user.id, ipAddress: extractIp(request) })
     return reply.send({ message: '2FA TOTP désactivé' })
   })

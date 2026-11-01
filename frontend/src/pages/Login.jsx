@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuthStore } from '../stores/auth.store.js'
 import api from '../utils/api.js'

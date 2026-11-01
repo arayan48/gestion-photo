@@ -4,8 +4,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useDropzone } from 'react-dropzone'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  HardDrive, Globe, Clock, Heart, Trash2, Search, Upload, FolderPlus, CloudUpload, Info,
-  FolderOpen, SearchX, Sparkles, ArrowDown, ArrowUp,
+  HardDrive, Globe, Clock, Heart, Trash2, Search,
+  ArrowDown, ArrowUp,
 } from 'lucide-react'
 import api from '../utils/api.js'
 import { cn } from '../lib/cn.js'

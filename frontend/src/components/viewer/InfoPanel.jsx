@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, Copy, Link2, Link2Off, Tag, Plus, Calendar, HardDrive, Image as ImageIcon, Film, User, Gauge, Clock, Eye, Pencil } from 'lucide-react'
+import { X, Copy, Plus, Calendar, HardDrive, Image as ImageIcon, Film, User, Gauge, Clock, Pencil } from 'lucide-react'
 import api, { apiError } from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
 import { formatSize, formatDuration, formatDateTime } from '../../lib/format.js'

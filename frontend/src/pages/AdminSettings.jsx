@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import api from '../utils/api.js'
-import { Save, Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, HardDrive, Cpu, MemoryStick, Server, RefreshCw, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, HardDrive, Cpu, MemoryStick, Server, RefreshCw, X } from 'lucide-react'
 import { Button } from '../components/ui/Button.jsx'
 import { Switch } from '../components/ui/Form.jsx'
 import { Tooltip as UiTooltip } from '../components/ui/Tooltip.jsx'
@@ -381,17 +381,6 @@ function TabNotifications({ config }) {
 }
 
 // ── Onglet Sauvegardes ────────────────────────────────────────────────────────
-const BACKUP_PROVIDERS = [
-  { value: 'local',     label: 'Local',          desc: 'Disque du serveur' },
-  { value: 'backblaze', label: 'Backblaze B2',   desc: 'Gratuit jusqu\'à 10 Go' },
-  { value: 's3',        label: 'Amazon S3',      desc: 'S3 / Wasabi / MinIO' },
-  { value: 'ftp',       label: 'FTP',            desc: 'Serveur FTP classique' },
-  { value: 'sftp',      label: 'SFTP',           desc: 'SSH / SFTP sécurisé' },
-  { value: 'webdav',    label: 'WebDAV',         desc: 'Nextcloud, ownCloud…' },
-  { value: 'gdrive',    label: 'Google Drive',   desc: 'Via rclone OAuth2' },
-  { value: 'rclone',    label: 'rclone custom',  desc: 'Remote rclone configuré' },
-]
-
 function ProviderConfig({ name, form, set }) {
   if (name === 'backblaze') return (
     <div className="space-y-3">

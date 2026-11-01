@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   User, Palette, Lock, Link2, Bell, HardDrive, MousePointerClick, Camera, Sun, Moon, Monitor, Check,
-  ShieldCheck, Unlink, Save, Images, Film, Trash2, Heart, Folder, Keyboard,
+  Images, Film, Trash2,
 } from 'lucide-react'
 import api, { apiError } from '../utils/api.js'
 import { cn } from '../lib/cn.js'

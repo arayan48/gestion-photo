@@ -1,12 +1,10 @@
 import argon2 from 'argon2'
 import { createHash, randomInt } from 'crypto'
 import { nanoid } from 'nanoid'
-import { v4 as uuidv4 } from 'uuid'
 import { authenticator } from 'otplib'
 import qrcode from 'qrcode'
 import pool from '../config/database.js'
 import { config } from '../config/env.js'
-import { log } from '../utils/logger.js'
 
 export async function hashPassword(password) {
   return argon2.hash(password, { type: argon2.argon2id })

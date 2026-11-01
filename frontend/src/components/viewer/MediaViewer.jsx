@@ -3,7 +3,7 @@ import * as RDialog from '@radix-ui/react-dialog'
 import { AnimatePresence, motion } from 'framer-motion'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import {
-  X, ChevronLeft, ChevronRight, Download, Heart, Info, ZoomIn, ZoomOut, Maximize, Play, Pause,
+  X, ChevronLeft, ChevronRight, Download, Heart, Info, ZoomIn, ZoomOut, Play, Pause,
   Trash2, MoreHorizontal, Copy, Share2, Loader2, ImageOff,
 } from 'lucide-react'
 import { cn } from '../../lib/cn.js'

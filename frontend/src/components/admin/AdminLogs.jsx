@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { Search, X, Info, AlertTriangle, XCircle, Activity, Copy, Filter, ScrollText } from 'lucide-react'
+import { Search, Info, AlertTriangle, XCircle, Activity, Copy, Filter, ScrollText } from 'lucide-react'
 import api from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
 import { formatRelative, formatDate } from '../../lib/format.js'

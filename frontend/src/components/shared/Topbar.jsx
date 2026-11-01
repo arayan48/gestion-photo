@@ -1,18 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Bell, Search, Sun, Moon, Monitor, Settings, LogOut, Trash2, CheckCheck, Menu, Upload, Keyboard,
-  User, Palette, BellOff, HardDrive, ShieldAlert, CloudUpload, UserPlus, Database, FileX, CircleArrowUp,
+  Bell, Search, Sun, Moon, Monitor, Settings, LogOut, Trash2, Menu, Keyboard,
+  User, Palette, HardDrive, ShieldAlert, CloudUpload, UserPlus, Database, FileX, CircleArrowUp,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
 import { formatRelative } from '../../lib/format.js'
-import { useAuthStore, usePermission } from '../../stores/auth.store.js'
+import { useAuthStore } from '../../stores/auth.store.js'
 import { useNotificationStore } from '../../stores/notification.store.js'
 import { useThemeStore } from '../../stores/theme.store.js'
 import { useUiStore } from '../../stores/ui.store.js'
-import { pickFiles } from '../../lib/actions.js'
 import { MOD } from '../../hooks/useHotkeys.js'
 import { Avatar, userAvatar } from '../ui/Avatar.jsx'
 import { Button, IconButton } from '../ui/Button.jsx'
@@ -134,7 +133,6 @@ export default function Topbar() {
   const unreadCount = useNotificationStore((s) => s.unreadCount)
   const { resolvedTheme, theme, setTheme, toggle: toggleTheme } = useThemeStore()
   const { setCommandOpen, setShortcutsOpen, setMobileNavOpen } = useUiStore()
-  const can = usePermission()
   const navigate = useNavigate()
   const [notifOpen, setNotifOpen] = useState(false)
 

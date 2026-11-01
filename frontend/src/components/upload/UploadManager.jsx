@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, X, Check, AlertCircle, RotateCcw, FileVideo, Loader2, CloudUpload, Ban } from 'lucide-react'
+import { ChevronDown, X, Check, AlertCircle, RotateCcw, FileVideo, Loader2, Ban } from 'lucide-react'
 import { useUploadStore } from '../../stores/upload.store.js'
 import { formatSize } from '../../lib/format.js'
 import { QUALITY_LABELS } from '../../lib/media.js'
