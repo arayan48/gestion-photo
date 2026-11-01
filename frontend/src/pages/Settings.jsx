@@ -359,6 +359,7 @@ const ADMIN_NOTIFS = [
   { key: 'storage_warning', label: 'Alerte de stockage', desc: 'Le serveur dépasse 90 % de sa capacité médias.' },
   { key: 'backup_success', label: 'Sauvegarde réussie' },
   { key: 'backup_failed', label: 'Échec de sauvegarde', desc: 'Recommandé : à garder activé.' },
+  { key: 'update_available', label: 'Mise à jour disponible', desc: 'Une nouvelle version d’Obscura est publiée.' },
 ]
 
 function NotificationsTab() {

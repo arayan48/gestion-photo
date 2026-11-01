@@ -25,8 +25,10 @@ export async function notifyAdmins({ type, message }) {
     for (const user of rows) {
       await notify({ userId: user.id, type, message })
     }
+    return rows.length
   } catch {
     // silencieux
+    return 0
   }
 }
 

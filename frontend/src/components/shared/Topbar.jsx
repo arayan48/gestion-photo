@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell, Search, Sun, Moon, Monitor, Settings, LogOut, Trash2, CheckCheck, Menu, Upload, Keyboard,
-  User, Palette, BellOff, HardDrive, ShieldAlert, CloudUpload, UserPlus, Database, FileX,
+  User, Palette, BellOff, HardDrive, ShieldAlert, CloudUpload, UserPlus, Database, FileX, CircleArrowUp,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../../utils/api.js'
@@ -28,6 +28,7 @@ const NOTIF_ICONS = {
   new_account_request: { icon: UserPlus, tone: 'text-accent-500' },
   backup_success: { icon: Database, tone: 'text-subtle' },
   backup_failed: { icon: ShieldAlert, tone: 'text-red-500' },
+  update_available: { icon: CircleArrowUp, tone: 'text-accent-500' },
 }
 
 // Page ouverte au clic sur une notification
@@ -37,6 +38,7 @@ const NOTIF_TARGETS = {
   storage_warning: '/dashboard?tab=overview',
   backup_success: '/dashboard?tab=backups',
   backup_failed: '/dashboard?tab=backups',
+  update_available: '/dashboard?tab=overview',
 }
 
 function NotificationsPanel({ onNavigate }) {

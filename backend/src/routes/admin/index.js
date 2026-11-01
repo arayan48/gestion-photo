@@ -8,6 +8,7 @@ import { isUuid, parsePagination, likePattern, optionalString } from '../../util
 import { unban } from '../../services/ban.service.js'
 import { revokeAllUserTokens } from '../../services/auth.service.js'
 import { checkMediaStorageLimit, detectInfrastructure, initStorage } from '../../config/storage.js'
+import { checkForUpdate, updateState } from '../../services/update.service.js'
 import { getConfigForAdmin, setConfigValues, INTERNAL_KEYS, MASKED_VALUE } from '../../services/config.service.js'
 
 const CONFIG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
@@ -69,6 +70,21 @@ export default async function adminRoutes(fastify) {
       topUsers: topUsers.rows,
       last24h: security.rows[0],
     })
+  })
+
+  // ─── Version et mises à jour ──────────────────────────────────────────────
+  // ?refresh=1 : interroge le registre tout de suite (bouton « Vérifier »)
+  fastify.get('/version', {
+    preHandler: [authenticate, requirePermission('system.view_stats')],
+  }, async (request, reply) => {
+    if (request.query?.refresh) {
+      try {
+        await checkForUpdate()
+      } catch (err) {
+        return reply.code(502).send({ error: `Vérification impossible : ${err.message}` })
+      }
+    }
+    return reply.send(updateState)
   })
 
   // ─── Liste blanche IP ─────────────────────────────────────────────────────

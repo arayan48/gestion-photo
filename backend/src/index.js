@@ -14,6 +14,7 @@ import { config } from './config/env.js'
 import { initStorage } from './config/storage.js'
 import { ensureStorageDirs } from './services/storage.service.js'
 import { startCronJobs } from './utils/cron.js'
+import { startUpdateCheck, updateState } from './services/update.service.js'
 import { registerWebsocketRoutes } from './websocket/notifications.js'
 import authRoutes from './routes/auth/index.js'
 import userRoutes from './routes/users/index.js'
@@ -215,7 +216,7 @@ if (existsSync(publicDir)) {
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
-fastify.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
+fastify.get('/api/health', async () => ({ status: 'ok', version: updateState.current, timestamp: new Date().toISOString() }))
 
 // ── Démarrage ─────────────────────────────────────────────────────────────────
 async function start() {
@@ -229,6 +230,7 @@ async function start() {
 
     // Démarrer les cron jobs
     startCronJobs()
+    startUpdateCheck()
 
     await fastify.listen({ port: config.port, host: '0.0.0.0' })
     console.log(`🚀 Obscura backend démarré sur le port ${config.port}`)

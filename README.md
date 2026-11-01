@@ -124,6 +124,12 @@ git pull
 docker compose up -d --build
 ```
 
+Toutes les 12 heures, Obscura regarde la dernière version publiée de l'image `ghcr.io/arayan48/obscura`. Si elle est plus récente, les Super Admins reçoivent une notification et un bandeau s'affiche dans **Administration → Vue d'ensemble** (bouton « vérifier » pour relancer à la main). La version installée est affichée en bas de cette page et dans `/api/health`. Pour couper la vérification : `UPDATE_CHECK=false`.
+
+Sur ZimaOS (store arayan48), chaque release met le store à jour : l'App Store propose alors la mise à jour d'Obscura.
+
+**Publier une version** : `git tag v1.2.0 && git push origin v1.2.0`. Le workflow *Release* lance les tests, publie l'image, crée la release GitHub puis met à jour le store.
+
 ### Déploiement avec Coolify
 
 1. Nouvelle ressource → dépôt Git → build pack **Docker Compose**.

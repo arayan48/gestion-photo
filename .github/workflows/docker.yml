@@ -1,7 +1,8 @@
-name: Docker
+name: Release
 
-# Publie l'image sur GHCR pour l'installation via l'App Store ZimaOS (arayan48/appstore).
-# Tag vX.Y.Z → image vX.Y.Z ; lancement manuel → latest.
+# Tag vX.Y.Z → image ghcr.io/arayan48/obscura:vX.Y.Z, release GitHub, puis mise à jour
+# du store ZimaOS (arayan48/appstore) : l'App Store du NAS propose alors la nouvelle version.
+# Lancement manuel → image latest seulement.
 on:
   push:
     tags: [ "v*" ]
@@ -10,8 +11,29 @@ on:
 permissions: {}
 
 jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+
+      - name: Run tests
+        working-directory: backend
+        run: npm install --no-audit --no-fund && npm test
+
   build:
     name: Image obscura
+    needs: [ test ]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,7 +72,69 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          build-args: |
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    name: Release GitHub
+    needs: [ build ]
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Notes : les commits depuis la version précédente
+      - name: Notes de version
+        run: |
+          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          git log --no-merges --format='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME" > notes.md
+          cat notes.md
+
+      - name: Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: notes.md
+
+  appstore:
+    name: Store ZimaOS
+    needs: [ release ]
+    if: ${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout store
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: arayan48/appstore
+          ssh-key: ${{ secrets.APPSTORE_DEPLOY_KEY }}
+          path: appstore
+
+      - name: Pointer Obscura sur la release
+        run: scripts/update-appstore.sh "$GITHUB_REF_NAME" appstore
+
+      # Le workflow Publish du store le reconstruit et le déploie à ce push
+      - name: Push
+        working-directory: appstore
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(obscura): $GITHUB_REF_NAME"
+          git push

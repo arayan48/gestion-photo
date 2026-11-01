@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
 import api from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
@@ -8,6 +8,8 @@ import { useThemeStore } from '../../stores/theme.store.js'
 import { Progress } from '../ui/Progress.jsx'
 import { Avatar } from '../ui/Avatar.jsx'
 import { Skeleton } from '../ui/Skeleton.jsx'
+import { toast } from '../../stores/toast.store.js'
+import { apiError } from '../../utils/api.js'
 
 // Palette catégorielle validée (daltonisme, contraste) en clair et en sombre
 const TYPE_COLORS = {
@@ -106,7 +108,67 @@ function TypeBreakdown({ types }) {
   )
 }
 
+// Version installée et mise à jour disponible (vérifiée par le serveur toutes les 12 h)
+const DISMISS_KEY = 'obscura.update-dismissed'
+
+function readDismissed() {
+  try { return localStorage.getItem(DISMISS_KEY) } catch { return null }
+}
+
+function UpdateBanner({ version }) {
+  const [dismissed, setDismissed] = useState(readDismissed)
+  if (!version?.updateAvailable || dismissed === version.latest) return null
+  const later = () => {
+    try { localStorage.setItem(DISMISS_KEY, version.latest) } catch { /* bandeau masqué pour cette session seulement */ }
+    setDismissed(version.latest)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-accent-500 bg-overlay/50 px-4 py-3 text-sm text-fg">
+      <p className="min-w-0 flex-1">
+        <strong>Obscura {version.latest}</strong> est disponible (installée : {version.current}).
+        Mettez à jour depuis l'App Store de ZimaOS, ou avec <code className="font-mono text-xs">docker compose pull && docker compose up -d</code>.
+      </p>
+      <button onClick={later} className="text-xs text-muted transition-colors hover:text-fg">Plus tard</button>
+    </div>
+  )
+}
+
+function VersionLine({ version }) {
+  const queryClient = useQueryClient()
+  const [checking, setChecking] = useState(false)
+  if (!version) return null
+  const check = async () => {
+    setChecking(true)
+    try {
+      const { data } = await api.get('/admin/version', { params: { refresh: 1 } })
+      queryClient.setQueryData(['admin-version'], data)
+      if (!data.updateAvailable) toast.success('Obscura est à jour')
+    } catch (err) {
+      toast.error(apiError(err))
+    } finally {
+      setChecking(false)
+    }
+  }
+  return (
+    <p className="font-mono text-[11px] text-subtle">
+      Obscura {version.current}
+      {' · '}
+      {version.updateAvailable ? `${version.latest} disponible` : version.checkedAt ? 'à jour' : 'pas encore vérifié'}
+      {' · '}
+      <button onClick={check} disabled={checking} className="underline-offset-2 hover:text-fg hover:underline disabled:opacity-50">
+        {checking ? 'vérification…' : 'vérifier'}
+      </button>
+    </p>
+  )
+}
+
 export default function AdminOverview({ onNavigate }) {
+  const { data: version } = useQuery({
+    queryKey: ['admin-version'],
+    queryFn: () => api.get('/admin/version').then((r) => r.data),
+    staleTime: 3600_000,
+  })
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: () => api.get('/admin/stats').then((r) => r.data),
@@ -127,6 +189,7 @@ export default function AdminOverview({ onNavigate }) {
 
   return (
     <div className="space-y-4">
+      <UpdateBanner version={version} />
       {pct >= 90 && (
         <div className="border-l-2 border-red-500 bg-overlay/50 px-4 py-3 text-sm text-fg">
           Stockage serveur à <strong>{pct} %</strong>. Au-delà de 100 %, les envois sont bloqués automatiquement.
@@ -185,6 +248,8 @@ export default function AdminOverview({ onNavigate }) {
           </div>
         </button>
       </div>
+
+      <VersionLine version={version} />
     </div>
   )
 }

@@ -26,6 +26,9 @@ WORKDIR /app
 # ffmpeg (vidéos), pg_dump + rclone + tar (sauvegardes), su-exec (abandon des droits root)
 RUN apk add --no-cache ffmpeg postgresql-client rclone tar su-exec
 ENV NODE_ENV=production
+# Version affichée dans l'admin et comparée aux nouvelles versions publiées (tag Git, ex. v1.2.0)
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 COPY --from=deps /app/node_modules ./node_modules
 COPY backend/ ./
 COPY --from=frontend /app/dist ./public
