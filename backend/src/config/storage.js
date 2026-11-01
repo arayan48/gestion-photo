@@ -125,7 +125,7 @@ export async function detectInfrastructure() {
   }
   if (disk.free < MIN_FREE_BYTES) warnings.push('Moins de 512 Mo libres sur le disque : les uploads sont bloqués.')
   else if (disk.free / disk.size < 0.1) warnings.push('Moins de 10% d\'espace libre sur le disque.')
-  if (otherBytes > disk.size * 0.3) warnings.push(`D'autres données occupent ${(otherBytes / GB).toFixed(1)} Go sur ce disque : l'auto-détection en tient compte.`)
+  if (otherBytes > disk.size * 0.3) warnings.push(`D'autres données occupent ${(otherBytes / GB).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go sur ce disque : l'auto-détection en tient compte.`)
   if (device?.kind === 'HDD') warnings.push('Disque mécanique (HDD) : les miniatures et le streaming vidéo seront plus lents qu\'avec un SSD.')
   if (['nfs', 'cifs', 'fuse'].includes(disk.fsType)) warnings.push(`Stockage réseau (${disk.fsType}) : vérifiez la latence et la fiabilité du montage.`)
   if (!ffmpeg.available || !ffprobe.available) warnings.push('FFmpeg introuvable : les vidéos ne pourront pas être traitées (miniatures, métadonnées).')

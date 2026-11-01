@@ -40,22 +40,25 @@ export function Tabs({ value, onChange, tabs, className }) {
   )
 }
 
-// Navigation verticale (paramètres sur grand écran)
+// Navigation verticale (paramètres sur grand écran), à la manière des barres latérales macOS
 export function SideTabs({ value, onChange, tabs }) {
   return (
     <nav className="flex flex-col gap-0.5">
       {tabs.map((tab) => {
         const active = tab.value === value
+        const Icon = tab.icon
         return (
           <button
             key={tab.value}
             onClick={() => onChange(tab.value)}
+            aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex items-center gap-3 border-l px-3 py-2 text-left text-sm transition-colors',
-              active ? 'border-accent-500 text-fg' : 'border-line text-muted hover:border-line-strong hover:text-fg'
+              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150',
+              active ? 'bg-overlay font-medium text-fg' : 'text-muted hover:bg-overlay/50 hover:text-fg'
             )}
           >
-            <span className="relative">{tab.label}</span>
+            {Icon && <Icon size={16} strokeWidth={1.75} className={cn('shrink-0', active ? 'text-accent-600 dark:text-accent-400' : 'text-subtle')} />}
+            {tab.label}
           </button>
         )
       })}

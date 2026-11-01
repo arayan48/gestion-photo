@@ -2,142 +2,121 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import api from '../utils/api.js'
-import { Check, Eye, EyeOff, Mail, MessageSquare, Database, Globe, AlertTriangle, Bell, Info, HardDrive, Cpu, MemoryStick, Server, RefreshCw, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Mail, MessageSquare, Database, SlidersHorizontal, AlertTriangle, Bell, RefreshCw } from 'lucide-react'
 import { Button } from '../components/ui/Button.jsx'
 import { Switch } from '../components/ui/Form.jsx'
-import { Tooltip as UiTooltip } from '../components/ui/Tooltip.jsx'
 import { Tabs, SideTabs } from '../components/ui/Tabs.jsx'
 import { Spinner } from '../components/ui/Spinner.jsx'
+import { Group, Row, Value, ChoiceRows, UnsavedBar } from '../components/ui/SettingsList.jsx'
+import { cn } from '../lib/cn.js'
 import { useIsDesktop } from '../hooks/useMediaQuery.js'
 
-function Toggle({ checked, onChange, label }) {
-  return <Switch checked={checked} onChange={onChange} label={label} />
-}
-
-function Tooltip({ text }) {
-  return (
-    <UiTooltip content={<span className="block max-w-xs whitespace-normal leading-relaxed">{text}</span>} side="top">
-      <span className="inline-flex cursor-help items-center"><Info size={14} className="text-subtle" /></span>
-    </UiTooltip>
-  )
-}
-
-// ── Helpers UI ────────────────────────────────────────────────────────────────
-function Section({ title, children }) {
-  return (
-    <div className="space-y-4">
-      <h3 className="text-[11px] font-medium uppercase tracking-wider text-subtle">{title}</h3>
-      {children}
-    </div>
-  )
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-fg">{label}</div>
-      {children}
-      {hint && <p className="mt-1.5 text-xs text-subtle">{hint}</p>}
-    </div>
-  )
-}
-
+// ── Champs ────────────────────────────────────────────────────────────────────
 // Valeur renvoyée par l'API pour un secret déjà enregistré (jamais transmis en clair)
 const MASKED_SECRET = '••••••••'
 
-function PasswordInput({ value, onChange, placeholder, ...props }) {
+function TextInput({ className, ...props }) {
+  return <input className={cn('input', className)} {...props} />
+}
+
+function PasswordInput({ value, onChange, placeholder, id }) {
   const [show, setShow] = useState(false)
   const isStored = value === MASKED_SECRET
   return (
     <div>
       <div className="relative">
         <input
+          id={id}
           type={show && !isStored ? 'text' : 'password'}
-          className="input pr-10"
+          className="input pr-10 font-mono text-[13px]"
           value={value}
           onChange={onChange}
           onFocus={(e) => isStored && e.target.select()}
           placeholder={placeholder}
           autoComplete="off"
-          {...props}
         />
         {!isStored && (
           <button
             type="button"
             onClick={() => setShow((v) => !v)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-subtle hover:text-fg"
-            tabIndex={-1}
+            aria-label={show ? 'Masquer' : 'Afficher'}
           >
-            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+            {show ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         )}
       </div>
       {isStored && (
-        <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-          Enregistré (chiffré en base). Saisissez une nouvelle valeur pour le remplacer.
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+          <Check size={12} className="text-emerald-600 dark:text-emerald-400" />
+          Enregistré et chiffré. Saisissez une nouvelle valeur pour le remplacer.
         </p>
       )}
     </div>
   )
 }
 
-function SaveBar({ saving, saved, error }) {
+// Champ numérique avec unité à l'intérieur (« Go »)
+function UnitInput({ unit, className, ...props }) {
   return (
-    <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-between gap-3 rounded-b-2xl border-t border-line bg-surface px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:px-6">
-      <div className="text-sm">
-        {saved && <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400"><Check size={14} /> Enregistré</span>}
-        {error && <span className="text-red-500">{error}</span>}
-      </div>
-      <Button type="submit" loading={saving}>Enregistrer</Button>
+    <div className={cn('relative', className)}>
+      <input type="number" className="input pr-11 text-right tabular-nums" {...props} />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-subtle">{unit}</span>
     </div>
   )
 }
 
-// ── Hook générique pour les formulaires config ────────────────────────────────
+// ── Formulaire de configuration ───────────────────────────────────────────────
+// Suit les modifications : la barre d'enregistrement n'apparaît que si quelque chose a changé
 function useConfigForm(config, keys) {
   const queryClient = useQueryClient()
+  const [initial, setInitial] = useState({})
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (config) {
-      const init = {}
-      keys.forEach((k) => { init[k] = config[k] ?? '' })
-      setForm(init)
-    }
+    if (!config) return
+    const init = {}
+    keys.forEach((k) => { init[k] = config[k] ?? '' })
+    setInitial(init)
+    setForm(init)
   }, [config])
 
-  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }))
+  const dirty = keys.some((k) => String(form[k] ?? '') !== String(initial[k] ?? ''))
+  const set = (key, val) => { setSaved(false); setError(''); setForm((f) => ({ ...f, [key]: val })) }
+  const reset = () => { setForm(initial); setError('') }
 
   const save = async (e) => {
     e.preventDefault()
+    if (!dirty) return
     setSaving(true)
-    setSaved(false)
     setError('')
     try {
       await api.patch('/admin/config', form)
+      setInitial(form)
       queryClient.invalidateQueries({ queryKey: ['admin-config'] })
       setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+      setTimeout(() => setSaved(false), 2500)
     } catch (err) {
-      setError(err.response?.data?.error || 'Erreur lors de la sauvegarde')
+      setError(err.response?.data?.error || 'Erreur lors de l\'enregistrement')
     } finally {
       setSaving(false)
     }
   }
 
-  return { form, set, save, saving, saved, error }
+  const bar = <UnsavedBar dirty={dirty} saving={saving} saved={saved} error={error} onReset={reset} />
+  return { form, set, save, bar }
 }
 
-// ── Onglet Email ──────────────────────────────────────────────────────────────
+// ── Email ─────────────────────────────────────────────────────────────────────
 const EMAIL_PROVIDERS = [
-  { value: 'brevo',    label: 'Brevo',     desc: 'Gratuit (300/jour)' },
-  { value: 'smtp',     label: 'SMTP',      desc: 'Serveur custom' },
-  { value: 'resend',   label: 'Resend',    desc: 'API moderne' },
-  { value: 'mailgun',  label: 'Mailgun',   desc: 'Usage avancé' },
-  { value: 'sendgrid', label: 'SendGrid',  desc: 'Production' },
+  { value: 'brevo',    label: 'Brevo',    description: '300 emails par jour gratuits' },
+  { value: 'smtp',     label: 'SMTP',     description: 'Votre propre serveur de messagerie' },
+  { value: 'resend',   label: 'Resend',   description: 'API simple, offre gratuite' },
+  { value: 'mailgun',  label: 'Mailgun',  description: 'Gros volumes' },
+  { value: 'sendgrid', label: 'SendGrid', description: 'Gros volumes' },
 ]
 
 function TabEmail({ config }) {
@@ -149,356 +128,220 @@ function TabEmail({ config }) {
     'email.mailgun_key', 'email.mailgun_domain',
     'email.sendgrid_key',
   ]
-  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+  const { form, set, save, bar } = useConfigForm(config, keys)
   const provider = form['email.provider'] || 'brevo'
+  const providerLabel = EMAIL_PROVIDERS.find((p) => p.value === provider)?.label
+  const field = (key) => ({ value: form[key] || '', onChange: (e) => set(key, e.target.value) })
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <Section title="Fournisseur">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {EMAIL_PROVIDERS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => set('email.provider', p.value)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all text-center ${
-                provider === p.value
-                  ? 'border-accent-500 bg-accent-500/10'
-                  : 'border-line hover:border-line-strong'
-              }`}
-            >
-              <span className={`text-sm font-medium ${provider === p.value ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>
-                {p.label}
-              </span>
-              <span className="text-xs text-subtle">{p.desc}</span>
-            </button>
-          ))}
-        </div>
-      </Section>
+    <form onSubmit={save} className="space-y-8">
+      <Group title="Service d'envoi" footer="Utilisé pour les codes de connexion, la réinitialisation des mots de passe et les validations de compte.">
+        <ChoiceRows name="email-provider" value={provider} onChange={(v) => set('email.provider', v)} options={EMAIL_PROVIDERS} />
+      </Group>
 
-      <Section title="Expéditeur">
-        <Field label="Adresse d'envoi" hint="Apparaît dans le champ 'De :' des emails">
-          <input className="input" value={form['email.from'] || ''} onChange={(e) => set('email.from', e.target.value)} placeholder="noreply@mon-domaine.com" />
-        </Field>
-      </Section>
+      <Group title="Expéditeur">
+        <Row stack label="Adresse d'envoi" description="Affichée dans le champ « De » des emails." htmlFor="email-from">
+          <TextInput id="email-from" type="email" {...field('email.from')} placeholder="noreply@mon-domaine.fr" />
+        </Row>
+      </Group>
 
-      {/* Brevo */}
-      {provider === 'brevo' && (
-        <Section title="Brevo">
-          <Field label="Clé API Brevo">
-            <PasswordInput value={form['email.brevo_key'] || ''} onChange={(e) => set('email.brevo_key', e.target.value)} placeholder="xkeysib-..." />
-          </Field>
-        </Section>
-      )}
+      <Group title={`Identifiants ${providerLabel}`}>
+        {provider === 'brevo' && (
+          <Row stack label="Clé API" htmlFor="brevo-key">
+            <PasswordInput id="brevo-key" {...field('email.brevo_key')} placeholder="xkeysib-…" />
+          </Row>
+        )}
+        {provider === 'smtp' && (
+          <>
+            <Row stack label="Serveur" htmlFor="smtp-host">
+              <TextInput id="smtp-host" {...field('email.smtp_host')} placeholder="smtp.mon-domaine.fr" />
+            </Row>
+            <Row label="Port" htmlFor="smtp-port">
+              <TextInput id="smtp-port" type="number" className="w-24 text-right tabular-nums" {...field('email.smtp_port')} placeholder="587" />
+            </Row>
+            <Row label="Connexion chiffrée (TLS)" description="À activer pour le port 465.">
+              <Switch checked={form['email.smtp_secure'] === 'true'} onChange={(v) => set('email.smtp_secure', String(v))} />
+            </Row>
+            <Row stack label="Utilisateur" htmlFor="smtp-user">
+              <TextInput id="smtp-user" {...field('email.smtp_user')} placeholder="utilisateur@mon-domaine.fr" />
+            </Row>
+            <Row stack label="Mot de passe" htmlFor="smtp-password">
+              <PasswordInput id="smtp-password" {...field('email.smtp_password')} placeholder="••••••••" />
+            </Row>
+          </>
+        )}
+        {provider === 'resend' && (
+          <Row stack label="Clé API" htmlFor="resend-key">
+            <PasswordInput id="resend-key" {...field('email.resend_key')} placeholder="re_…" />
+          </Row>
+        )}
+        {provider === 'mailgun' && (
+          <>
+            <Row stack label="Clé API" htmlFor="mailgun-key">
+              <PasswordInput id="mailgun-key" {...field('email.mailgun_key')} placeholder="key-…" />
+            </Row>
+            <Row stack label="Domaine" htmlFor="mailgun-domain">
+              <TextInput id="mailgun-domain" {...field('email.mailgun_domain')} placeholder="mg.mon-domaine.fr" />
+            </Row>
+          </>
+        )}
+        {provider === 'sendgrid' && (
+          <Row stack label="Clé API" htmlFor="sendgrid-key">
+            <PasswordInput id="sendgrid-key" {...field('email.sendgrid_key')} placeholder="SG.…" />
+          </Row>
+        )}
+      </Group>
 
-      {/* SMTP */}
-      {provider === 'smtp' && (
-        <Section title="SMTP">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Hôte">
-              <input className="input" value={form['email.smtp_host'] || ''} onChange={(e) => set('email.smtp_host', e.target.value)} placeholder="smtp.example.com" />
-            </Field>
-            <Field label="Port">
-              <input className="input" type="number" value={form['email.smtp_port'] || ''} onChange={(e) => set('email.smtp_port', e.target.value)} placeholder="587" />
-            </Field>
-          </div>
-          <Field label="Utilisateur">
-            <input className="input" value={form['email.smtp_user'] || ''} onChange={(e) => set('email.smtp_user', e.target.value)} placeholder="user@example.com" />
-          </Field>
-          <Field label="Mot de passe">
-            <PasswordInput value={form['email.smtp_password'] || ''} onChange={(e) => set('email.smtp_password', e.target.value)} placeholder="••••••••" />
-          </Field>
-          <Field label="TLS / SSL">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form['email.smtp_secure'] === 'true'}
-                onChange={(e) => set('email.smtp_secure', String(e.target.checked))}
-                className="w-4 h-4 rounded text-accent-600"
-              />
-              <span className="text-sm text-fg">Activer TLS (port 465)</span>
-            </label>
-          </Field>
-        </Section>
-      )}
-
-      {/* Resend */}
-      {provider === 'resend' && (
-        <Section title="Resend">
-          <Field label="Clé API Resend">
-            <PasswordInput value={form['email.resend_key'] || ''} onChange={(e) => set('email.resend_key', e.target.value)} placeholder="re_..." />
-          </Field>
-        </Section>
-      )}
-
-      {/* Mailgun */}
-      {provider === 'mailgun' && (
-        <Section title="Mailgun">
-          <Field label="Clé API Mailgun">
-            <PasswordInput value={form['email.mailgun_key'] || ''} onChange={(e) => set('email.mailgun_key', e.target.value)} placeholder="key-..." />
-          </Field>
-          <Field label="Domaine Mailgun">
-            <input className="input" value={form['email.mailgun_domain'] || ''} onChange={(e) => set('email.mailgun_domain', e.target.value)} placeholder="mg.mon-domaine.com" />
-          </Field>
-        </Section>
-      )}
-
-      {/* SendGrid */}
-      {provider === 'sendgrid' && (
-        <Section title="SendGrid">
-          <Field label="Clé API SendGrid">
-            <PasswordInput value={form['email.sendgrid_key'] || ''} onChange={(e) => set('email.sendgrid_key', e.target.value)} placeholder="SG...." />
-          </Field>
-        </Section>
-      )}
-
-      <SaveBar saving={saving} saved={saved} error={error} />
+      {bar}
     </form>
   )
 }
 
-// ── Onglet Discord ────────────────────────────────────────────────────────────
+// ── Discord ───────────────────────────────────────────────────────────────────
 function TabDiscord({ config }) {
   const keys = ['discord.client_id', 'discord.client_secret', 'discord.redirect_uri']
-  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+  const { form, set, save, bar } = useConfigForm(config, keys)
+  const field = (key) => ({ value: form[key] || '', onChange: (e) => set(key, e.target.value) })
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <div className="flex items-start gap-3 p-4 bg-[#5865F2]/10 border border-[#5865F2]/30 rounded-xl">
-        <svg width="20" height="15" viewBox="0 0 71 55" fill="#5865F2" className="shrink-0 mt-0.5">
-          <path d="M60.1 4.9C55.5 2.8 50.6 1.2 45.5.5c-.6 1.1-1.3 2.6-1.8 3.8C38.4 3.7 33.2 3.7 28 4.3c-.5-1.2-1.2-2.7-1.9-3.8C20.9 1.2 16 2.8 11.4 4.9 1.6 20.1-1 35 .3 49.7c5.7 4.2 11.2 6.7 16.7 8.4 1.3-1.8 2.5-3.8 3.5-5.8-1.9-.7-3.7-1.6-5.5-2.7.5-.3.9-.7 1.4-1 11.2 5.2 23.4 5.2 34.5 0 .4.3.9.7 1.4 1-1.7 1.1-3.6 2-5.5 2.7 1 2 2.2 4 3.5 5.8 5.5-1.7 11-4.2 16.7-8.4 1.5-17.3-2.6-32-10.9-44.8zM23.7 40.7c-3.9 0-7.1-3.6-7.1-8s3.1-8 7.1-8 7.2 3.6 7.1 8c0 4.4-3.1 8-7.1 8zm23.6 0c-3.9 0-7.1-3.6-7.1-8s3.1-8 7.1-8 7.2 3.6 7.1 8c0 4.4-3.1 8-7.1 8z" />
-        </svg>
-        <div>
-          <p className="text-sm font-medium text-[#5865F2]">OAuth2 Discord</p>
-          <p className="text-xs text-muted mt-0.5">
-            Créez une application sur <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="underline hover:text-accent-500">discord.com/developers</a>, puis copiez les identifiants OAuth2.
-          </p>
-        </div>
-      </div>
+    <form onSubmit={save} className="space-y-8">
+      <Group
+        title="Application OAuth2"
+        footer={<>Créez une application sur <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-fg underline decoration-line-strong underline-offset-2 hover:decoration-fg">discord.com/developers</a>, puis copiez ses identifiants OAuth2 ici.</>}
+      >
+        <Row stack label="Client ID" htmlFor="discord-id">
+          <TextInput id="discord-id" className="font-mono text-[13px]" {...field('discord.client_id')} placeholder="123456789012345678" />
+        </Row>
+        <Row stack label="Client Secret" htmlFor="discord-secret">
+          <PasswordInput id="discord-secret" {...field('discord.client_secret')} placeholder="••••••••" />
+        </Row>
+        <Row stack label="URL de redirection" description="Laissez vide pour utiliser celle proposée. Elle doit être déclarée à l'identique sur le portail Discord." htmlFor="discord-redirect">
+          <TextInput id="discord-redirect" className="font-mono text-[13px]" {...field('discord.redirect_uri')}
+            placeholder={`${config?.['app.url'] || 'https://mon-domaine.fr'}/api/auth/discord/callback`} />
+        </Row>
+      </Group>
 
-      <Section title="Identifiants">
-        <Field label="Client ID">
-          <input className="input font-mono" value={form['discord.client_id'] || ''} onChange={(e) => set('discord.client_id', e.target.value)} placeholder="123456789012345678" />
-        </Field>
-        <Field label="Client Secret">
-          <PasswordInput value={form['discord.client_secret'] || ''} onChange={(e) => set('discord.client_secret', e.target.value)} placeholder="••••••••••••••••••••••••••••••••" />
-        </Field>
-        <Field label="Redirect URI" hint="Laisser vide pour utiliser l'URL affichée en grisé (déduite de l'URL publique). Doit correspondre exactement à celle déclarée sur le Discord Developer Portal.">
-          <input className="input font-mono" value={form['discord.redirect_uri'] || ''} onChange={(e) => set('discord.redirect_uri', e.target.value)} placeholder={`${config?.['app.url'] || 'https://mon-domaine.com'}/api/auth/discord/callback`} />
-        </Field>
-      </Section>
-
-      <SaveBar saving={saving} saved={saved} error={error} />
+      {bar}
     </form>
   )
 }
 
-// ── Onglet Notifications ──────────────────────────────────────────────────────
+// ── Notifications ─────────────────────────────────────────────────────────────
 const NOTIF_EVENTS = [
-  { key: 'new_request',    label: 'Nouvelle demande de compte',  desc: 'Un utilisateur soumet une demande' },
-  { key: 'storage_alert',  label: 'Alerte stockage (90%)',        desc: 'Espace disque presque saturé' },
-  { key: 'backup_done',    label: 'Sauvegarde terminée',          desc: 'Succès ou échec d\'une sauvegarde' },
-  { key: 'backup_failed',  label: 'Échec de sauvegarde',          desc: 'Une sauvegarde a échoué' },
-  { key: 'login_alert',    label: 'Connexion suspecte détectée',  desc: 'Tentative de brute-force ou ban' },
-  { key: 'user_banned',    label: 'Utilisateur banni',            desc: 'Un utilisateur a été banni automatiquement' },
-  { key: 'system_error',   label: 'Erreur critique système',      desc: 'Erreur backend non gérée' },
-  { key: 'upload_done',    label: 'Upload terminé (bulk)',         desc: 'Quand un utilisateur termine un gros upload' },
+  { key: 'new_request',   label: 'Nouvelle demande de compte' },
+  { key: 'storage_alert', label: 'Stockage presque plein', description: 'À 90 % de la part réservée aux médias' },
+  { key: 'backup_done',   label: 'Sauvegarde terminée' },
+  { key: 'backup_failed', label: 'Échec de sauvegarde' },
+  { key: 'login_alert',   label: 'Connexion suspecte', description: 'Tentatives répétées ou bannissement' },
+  { key: 'user_banned',   label: 'Utilisateur banni automatiquement' },
+  { key: 'system_error',  label: 'Erreur critique du serveur' },
+  { key: 'upload_done',   label: 'Gros envoi terminé' },
 ]
 
-function TabNotifications({ config }) {
-  const emailKeys = NOTIF_EVENTS.map((e) => `notif.email.${e.key}`)
-  const discordKeys = NOTIF_EVENTS.map((e) => `notif.discord.${e.key}`)
-  const keys = ['notif.email.enabled', 'notif.discord.enabled', 'notif.discord.webhook', ...emailKeys, ...discordKeys]
-  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+function NotifChannel({ channel, title, description, form, set, children }) {
+  const enabled = form[`notif.${channel}.enabled`] === 'true'
+  return (
+    <Group title={title}>
+      <Row label="Activer" description={description}>
+        <Switch checked={enabled} onChange={(v) => set(`notif.${channel}.enabled`, String(v))} />
+      </Row>
+      {enabled && children}
+      {enabled && NOTIF_EVENTS.map((e) => (
+        <Row key={e.key} label={e.label} description={e.description}>
+          <Switch size="sm" checked={form[`notif.${channel}.${e.key}`] === 'true'} onChange={(v) => set(`notif.${channel}.${e.key}`, String(v))} />
+        </Row>
+      ))}
+    </Group>
+  )
+}
 
-  const emailEnabled = form['notif.email.enabled'] === 'true'
-  const discordEnabled = form['notif.discord.enabled'] === 'true'
+function TabNotifications({ config }) {
+  const keys = [
+    'notif.email.enabled', 'notif.discord.enabled', 'notif.discord.webhook',
+    ...NOTIF_EVENTS.map((e) => `notif.email.${e.key}`),
+    ...NOTIF_EVENTS.map((e) => `notif.discord.${e.key}`),
+  ]
+  const { form, set, save, bar } = useConfigForm(config, keys)
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      {/* Email notifications */}
-      <Section title="Notifications Email">
-        <div className="flex items-center justify-between p-3 bg-overlay/50 rounded-xl border border-line">
-          <div>
-            <p className="text-sm font-medium text-fg">Notifications par email</p>
-            <p className="text-xs text-subtle">Envoie un email aux admins pour les événements sélectionnés</p>
-          </div>
-          <Toggle checked={emailEnabled} onChange={(v) => set('notif.email.enabled', String(v))} />
-        </div>
-        {emailEnabled && (
-          <div className="space-y-2 mt-2">
-            {NOTIF_EVENTS.map(({ key, label, desc }) => (
-              <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-overlay cursor-pointer transition-colors">
-                <input type="checkbox"
-                  checked={form[`notif.email.${key}`] === 'true'}
-                  onChange={(e) => set(`notif.email.${key}`, String(e.target.checked))}
-                  className="mt-0.5 w-4 h-4 rounded text-accent-600" />
-                <div>
-                  <p className="text-sm font-medium text-fg">{label}</p>
-                  <p className="text-xs text-subtle">{desc}</p>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </Section>
+    <form onSubmit={save} className="space-y-8">
+      <NotifChannel channel="email" title="Par email" description="Un email aux administrateurs pour les événements choisis." form={form} set={set} />
+      <NotifChannel channel="discord" title="Sur Discord" description="Un message dans un salon, via un webhook." form={form} set={set}>
+        <Row stack label="URL du webhook" description="Discord → Paramètres du salon → Intégrations → Webhooks." htmlFor="discord-webhook">
+          <TextInput id="discord-webhook" className="font-mono text-[13px]" value={form['notif.discord.webhook'] || ''}
+            onChange={(e) => set('notif.discord.webhook', e.target.value)} placeholder="https://discord.com/api/webhooks/…" />
+        </Row>
+      </NotifChannel>
 
-      {/* Discord webhook */}
-      <Section title="Notifications Discord (Webhook)">
-        <div className="flex items-center justify-between p-3 bg-overlay/50 rounded-xl border border-line">
-          <div>
-            <p className="text-sm font-medium text-fg">Notifications Discord</p>
-            <p className="text-xs text-subtle">Envoie des messages dans un channel Discord via Webhook</p>
-          </div>
-          <Toggle checked={discordEnabled} onChange={(v) => set('notif.discord.enabled', String(v))} />
-        </div>
-        {discordEnabled && (
-          <div className="space-y-3 mt-2">
-            <Field label="URL du Webhook Discord" hint="Paramètres Discord → Intégrations → Créer un webhook → Copier l'URL">
-              <input className="input font-mono text-sm" value={form['notif.discord.webhook'] || ''} onChange={(e) => set('notif.discord.webhook', e.target.value)} placeholder="https://discord.com/api/webhooks/..." />
-            </Field>
-            <div className="space-y-2">
-              {NOTIF_EVENTS.map(({ key, label, desc }) => (
-                <label key={key} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-overlay cursor-pointer transition-colors">
-                  <input type="checkbox"
-                    checked={form[`notif.discord.${key}`] === 'true'}
-                    onChange={(e) => set(`notif.discord.${key}`, String(e.target.checked))}
-                    className="mt-0.5 w-4 h-4 rounded text-accent-600" />
-                  <div>
-                    <p className="text-sm font-medium text-fg">{label}</p>
-                    <p className="text-xs text-subtle">{desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </Section>
-
-      <SaveBar saving={saving} saved={saved} error={error} />
+      {bar}
     </form>
   )
 }
 
-// ── Onglet Sauvegardes ────────────────────────────────────────────────────────
-function ProviderConfig({ name, form, set }) {
-  if (name === 'backblaze') return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
-        <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-700 dark:text-amber-400">Gratuit jusqu'à 10 Go. Créez un bucket sur <strong>backblaze.com</strong>.</p>
-      </div>
-      <Field label="Key ID"><input className="input font-mono text-sm" value={form['b2.key_id'] || ''} onChange={(e) => set('b2.key_id', e.target.value)} placeholder="00xxxxxxxxxxxxxxxxxxxxxxx" /></Field>
-      <Field label="App Key"><PasswordInput value={form['b2.key'] || ''} onChange={(e) => set('b2.key', e.target.value)} placeholder="K00xxx..." /></Field>
-      <Field label="Bucket"><input className="input font-mono text-sm" value={form['b2.bucket'] || ''} onChange={(e) => set('b2.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
-    </div>
-  )
-  return null
-}
+// ── Sauvegardes ───────────────────────────────────────────────────────────────
+const SCHEDULES = [
+  { value: 'hourly', label: 'Toutes les heures' },
+  { value: 'daily', label: 'Chaque jour', description: 'À 3 h UTC' },
+  { value: 'weekly', label: 'Chaque semaine', description: 'Le dimanche à 3 h UTC' },
+  { value: 'manual', label: 'Manuellement', description: 'Depuis Administration → Sauvegardes' },
+]
 
-function TabBackblaze({ config }) {
-  const allKeys = [
+function TabBackups({ config }) {
+  const keys = [
     'backup.schedule', 'backup.keep_n',
     'backup.local.enabled', 'backup.backblaze.enabled',
     'b2.key_id', 'b2.key', 'b2.bucket',
   ]
-  const { form, set, save, saving, saved, error } = useConfigForm(config, allKeys)
-
-  // Seules destinations prises en charge par le serveur (services/backup.service.js)
-  const providers = [
-    { value: 'local',     label: 'Local',          desc: 'Disque du serveur (toujours recommandé)' },
-    { value: 'backblaze', label: 'Backblaze B2',   desc: 'Gratuit jusqu\'à 10 Go' },
-  ]
-
+  const { form, set, save, bar } = useConfigForm(config, keys)
   // Le serveur sauvegarde en local tant que ce n'est pas explicitement désactivé
-  const isOn = (v) => (v === 'local' ? form['backup.local.enabled'] !== 'false' : form[`backup.${v}.enabled`] === 'true')
-  const toggle = (v) => set(`backup.${v}.enabled`, isOn(v) ? 'false' : 'true')
+  const localOn = form['backup.local.enabled'] !== 'false'
+  const b2On = form['backup.backblaze.enabled'] === 'true'
+  const field = (key) => ({ value: form[key] || '', onChange: (e) => set(key, e.target.value) })
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <Section title="Destinations">
-        <p className="text-xs text-muted">Activez plusieurs destinations pour sauvegarder simultanément sur différents supports.</p>
-        <div className="space-y-2">
-          {providers.map((p) => (
-            <div key={p.value} className={`rounded-xl border-2 overflow-hidden transition-all ${isOn(p.value) ? 'border-accent-500' : 'border-line'}`}>
-              <div className={`flex items-center justify-between px-4 py-3 cursor-pointer ${isOn(p.value) ? 'bg-accent-500/10' : 'bg-surface'}`} onClick={() => toggle(p.value)}>
-                <div>
-                  <p className={`text-sm font-medium ${isOn(p.value) ? 'text-accent-600 dark:text-accent-400' : 'text-fg'}`}>{p.label}</p>
-                  <p className="text-xs text-subtle">{p.desc}</p>
-                </div>
-                <Toggle checked={isOn(p.value)} onChange={() => toggle(p.value)} />
-              </div>
-              {isOn(p.value) && p.value !== 'local' && (
-                <div className="px-4 pb-4 pt-3 border-t border-line bg-overlay/30">
-                  <ProviderConfig name={p.value} form={form} set={set} />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </Section>
+    <form onSubmit={save} className="space-y-8">
+      <Group title="Destinations" footer="Base de données et médias sont archivés ensemble. Plusieurs destinations peuvent être actives à la fois.">
+        <Row label="Sur ce serveur" description="Recommandé, même avec une copie distante.">
+          <Switch checked={localOn} onChange={(v) => set('backup.local.enabled', String(v))} />
+        </Row>
+        <Row label="Backblaze B2" description="Stockage distant, gratuit jusqu'à 10 Go.">
+          <Switch checked={b2On} onChange={(v) => set('backup.backblaze.enabled', String(v))} />
+        </Row>
+        {b2On && (
+          <>
+            <Row stack label="Key ID" htmlFor="b2-key-id">
+              <TextInput id="b2-key-id" className="font-mono text-[13px]" {...field('b2.key_id')} placeholder="00xxxxxxxxxxxxxxxxxxxxxxx" />
+            </Row>
+            <Row stack label="Application Key" htmlFor="b2-key">
+              <PasswordInput id="b2-key" {...field('b2.key')} placeholder="K00…" />
+            </Row>
+            <Row stack label="Bucket" htmlFor="b2-bucket">
+              <TextInput id="b2-bucket" className="font-mono text-[13px]" {...field('b2.bucket')} placeholder="mon-bucket" />
+            </Row>
+          </>
+        )}
+      </Group>
 
-      <Section title="Planification">
-        <Field label="Fréquence">
-          <div className="flex flex-wrap gap-2">
-            {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3 h UTC)' }, { v: 'weekly', l: 'Hebdomadaire (dimanche 3 h UTC)' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
-              <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-accent-500 bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'border-line text-fg hover:border-line-strong'}`}>
-                <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-accent-600" />
-                {l}
-              </label>
-            ))}
-          </div>
-        </Field>
-        <Field label="Sauvegardes à conserver" hint="Les plus anciennes sont auto-supprimées">
-          <input type="number" min="1" max="30" className="input w-28" value={form['backup.keep_n'] || '7'} onChange={(e) => set('backup.keep_n', e.target.value)} />
-        </Field>
-      </Section>
+      <Group title="Fréquence">
+        <ChoiceRows name="backup-schedule" value={form['backup.schedule'] || 'daily'} onChange={(v) => set('backup.schedule', v)} options={SCHEDULES} />
+      </Group>
 
-      <SaveBar saving={saving} saved={saved} error={error} />
+      <Group>
+        <Row label="Archives conservées" description="Les plus anciennes sont supprimées automatiquement." htmlFor="keep-n">
+          <TextInput id="keep-n" type="number" min="1" max="30" className="w-20 text-right tabular-nums"
+            value={form['backup.keep_n'] || '7'} onChange={(e) => set('backup.keep_n', e.target.value)} />
+        </Row>
+      </Group>
+
+      {bar}
     </form>
   )
 }
 
-// ── Onglet Général ────────────────────────────────────────────────────────────
-function StorageBar({ segments }) {
-  return (
-    <div className="flex h-7 rounded-xl overflow-hidden text-[10px] font-medium shadow-inner">
-      {segments.map(({ color, pct, label, gb }) =>
-        pct > 0 ? (
-          <div
-            key={label}
-            className={`${color} flex items-center justify-center text-white transition-all duration-300 overflow-hidden`}
-            style={{ width: `${pct}%` }}
-            title={`${label} : ${pct}% ${gb ? `(${gb} Go)` : ''}`}
-          >
-            {pct >= 7 ? `${pct}%` : ''}
-          </div>
-        ) : null
-      )}
-    </div>
-  )
-}
-
-function StorageLegend({ segments, totalGb }) {
-  return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-      {segments.map(({ color, label, pct, gb, fixed }) => (
-        <div key={label} className="flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-sm shrink-0 ${color}`} />
-          <span className="text-muted flex-1 truncate">{label}</span>
-          <span className="font-medium text-fg">
-            {fixed ? `${gb} Go` : totalGb ? `${((pct / 100) * totalGb).toFixed(1)} Go` : `${pct}%`}
-          </span>
-          {!fixed && <span className="text-subtle">({pct}%)</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Infrastructure détectée ───────────────────────────────────────────────────
+// ── Général ───────────────────────────────────────────────────────────────────
 const GiB = 1024 ** 3
-const fmtGb = (b) => `${(b / GiB).toFixed(b < 10 * GiB ? 1 : 0)} Go`
+const fmtNum = (n) => Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
+const fmtGb = (b) => `${fmtNum(b / GiB)} Go`
 
 function fmtUptime(sec) {
   const d = Math.floor(sec / 86400)
@@ -506,124 +349,53 @@ function fmtUptime(sec) {
   return d > 0 ? `${d} j ${h} h` : `${h} h ${Math.floor((sec % 3600) / 60)} min`
 }
 
-function InfraStat({ icon: Icon, label, value, sub }) {
+// Barre segmentée + légende (à la manière du « Stockage » iOS / macOS)
+function UsageBar({ segments, total }) {
   return (
-    <div className="rounded-xl border border-line bg-overlay/40 p-3 min-w-0">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-subtle">
-        <Icon size={13} strokeWidth={1.75} /> {label}
+    <div className="space-y-3">
+      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-overlay" role="img"
+        aria-label={segments.map((s) => `${s.label} : ${s.display}`).join(', ')}>
+        {segments.map((s) => s.value > 0 && (
+          <div key={s.label} className={cn('min-w-[3px] transition-[width] duration-300 ease-out first:rounded-l-full last:rounded-r-full', s.color)}
+            style={{ width: `${(s.value / total) * 100}%` }} />
+        ))}
       </div>
-      <p className="mt-1 truncate text-sm font-medium text-fg" title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="mt-0.5 truncate text-xs text-subtle" title={typeof sub === 'string' ? sub : undefined}>{sub}</p>}
+      <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
+        {segments.map((s) => (
+          <li key={s.label} className="flex items-center gap-1.5">
+            <span className={cn('h-2 w-2 shrink-0 rounded-full', s.dot || s.color)} />
+            <span className="text-muted">{s.label}</span>
+            <span className="tabular-nums text-fg">{s.display}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-function ToolBadge({ name, tool }) {
+function SliderRow({ id, label, description, value, min, max, gb, onChange }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${tool.available ? 'border-line text-fg' : 'border-red-500/40 text-red-600 dark:text-red-400'}`}>
-      {tool.available ? <Check size={11} /> : <X size={11} />}
-      {name}{tool.version ? ` ${tool.version}` : ''}
-    </span>
+    <div className="space-y-2.5 px-4 py-3.5">
+      <div className="flex items-baseline justify-between gap-4">
+        <label htmlFor={id} className="min-w-0">
+          <span className="block text-sm text-fg">{label}</span>
+          <span className="mt-0.5 block text-xs text-muted">{description}</span>
+        </label>
+        <span className="shrink-0 text-sm tabular-nums">
+          <span className="text-fg">{value} %</span>
+          {gb != null && <span className="text-muted"> · {fmtNum(gb)} Go</span>}
+        </span>
+      </div>
+      <input id={id} type="range" min={min} max={max} value={value} onChange={(e) => onChange(e.target.value)}
+        className="block w-full" style={{ '--fill': `${((value - min) / (max - min)) * 100}%` }} aria-valuetext={`${value} %`} />
+    </div>
   )
 }
 
-function InfraPanel({ infra, onRedetect, redetecting, onApply, currentTotalGb }) {
-  const { disk, allocation, host, cpu, memory, gpu, tools, warnings } = infra
-  const diskInfo = [disk.device?.kind, disk.fsType, disk.device?.model].filter(Boolean).join(' · ')
-  const hasGpu = gpu.nvidia || gpu.renderNodes.length > 0
-  const pct = (b) => (disk.size > 0 ? (b / disk.size) * 100 : 0)
-  const diskSegments = [
-    { color: 'bg-accent-500', label: 'Médias Obscura', bytes: disk.obscura.media },
-    { color: 'bg-blue-400', label: 'Sauvegardes', bytes: disk.obscura.backups },
-    { color: 'bg-zinc-400 dark:bg-zinc-600', label: 'Autres données', bytes: disk.other },
-  ]
-  const recommended = allocation.recommendedTotalGb
-
-  return (
-    <Section title="Infrastructure détectée">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-subtle">
-          Analyse du serveur le {new Date(infra.detectedAt).toLocaleString('fr-FR')}
-        </p>
-        <Button size="sm" variant="outline" icon={RefreshCw} loading={redetecting} onClick={onRedetect}>
-          Re-détecter
-        </Button>
-      </div>
-
-      {/* Occupation réelle du disque */}
-      <div className="rounded-xl border border-line p-4 space-y-2">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5 font-medium text-fg">
-            <HardDrive size={14} /> Disque <code className="font-mono text-xs text-subtle">{disk.path}</code>
-            {diskInfo && <span className="text-xs font-normal text-muted">— {diskInfo}</span>}
-          </span>
-          <span className="text-xs text-muted">{fmtGb(disk.free)} libres sur {fmtGb(disk.size)}</span>
-        </div>
-        <div className="flex h-3 overflow-hidden rounded-full bg-overlay">
-          {diskSegments.map((s) => s.bytes > 0 && (
-            <div key={s.label} className={s.color} style={{ width: `${pct(s.bytes)}%` }} title={`${s.label} : ${fmtGb(s.bytes)}`} />
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-          {diskSegments.map((s) => (
-            <span key={s.label} className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${s.color}`} />{s.label} : {fmtGb(s.bytes)}
-            </span>
-          ))}
-          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-overlay border border-line" />Libre : {fmtGb(disk.free)}</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <InfraStat icon={Server} label="Système" value={host.os}
-          sub={`${host.hostname} · ${host.arch} · en ligne depuis ${fmtUptime(host.uptime)}${host.container ? ` · ${host.container}${host.image ? ` (${host.image})` : ''}` : ''}`} />
-        <InfraStat icon={Cpu} label="Processeur"
-          value={cpu.limit ? `${cpu.limit} cœur(s) alloué(s) / ${cpu.cores}` : `${cpu.cores} cœur(s)`}
-          sub={`${cpu.model} · charge ${cpu.load[0]}`} />
-        <InfraStat icon={MemoryStick} label="Mémoire"
-          value={`${fmtGb(memory.total)}${memory.limited ? ' (limite conteneur)' : ''}`}
-          sub={`${fmtGb(memory.free)} libres${memory.limited ? ` · hôte ${fmtGb(memory.host)}` : ''}`} />
-        <InfraStat icon={HardDrive} label="Espace utilisable"
-          value={fmtGb(allocation.autoSafe)}
-          sub="Libre + déjà utilisé par Obscura − 5% de marge" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-subtle mr-1">Outils :</span>
-        <ToolBadge name="FFmpeg" tool={tools.ffmpeg} />
-        <ToolBadge name="FFprobe" tool={tools.ffprobe} />
-        <ToolBadge name="Rclone" tool={tools.rclone} />
-        <span
-          className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg"
-          title={gpu.hwaccels.length ? `Accélérations FFmpeg compilées : ${gpu.hwaccels.join(', ')}` : undefined}
-        >
-          {hasGpu ? `GPU ${gpu.nvidia ? 'NVIDIA' : 'VAAPI'} accessible` : 'Pas de GPU — encodage CPU'}
-        </span>
-        <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">Node {host.node}</span>
-        {host.postgres && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 text-xs text-fg">PostgreSQL {host.postgres}</span>}
-      </div>
-
-      {warnings.length > 0 && (
-        <div className="space-y-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-          {warnings.map((w) => (
-            <p key={w} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
-              <AlertTriangle size={13} className="mt-px shrink-0" /> {w}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {recommended > 0 && currentTotalGb !== recommended && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-3">
-          <p className="text-xs text-muted">
-            Taille recommandée pour ce serveur : <span className="font-medium text-fg">{recommended} Go</span>
-            {!currentTotalGb && ' (appliquée automatiquement tant que le champ reste vide)'}
-          </p>
-          <Button size="xs" variant="secondary" onClick={() => onApply(recommended)}>Fixer à {recommended} Go</Button>
-        </div>
-      )}
-    </Section>
-  )
+function ToolValue({ tool }) {
+  return tool.available
+    ? <Value>{tool.version || 'Installé'}</Value>
+    : <Value tone="danger">Introuvable</Value>
 }
 
 function TabGeneral({ config }) {
@@ -632,10 +404,10 @@ function TabGeneral({ config }) {
     'storage.media_pct', 'storage.backup_pct',
     'storage.total_gb', 'storage.logs_gb',
   ]
-  const { form, set, save, saving, saved, error } = useConfigForm(config, keys)
+  const { form, set, save, bar } = useConfigForm(config, keys)
   const queryClient = useQueryClient()
 
-  // Réservé à system.manage_storage : sans cette permission, le panneau est masqué
+  // Réservé à system.manage_storage : sans cette permission, la partie serveur est masquée
   const { data: infra } = useQuery({
     queryKey: ['admin-infra'],
     queryFn: () => api.get('/admin/infra').then((r) => r.data),
@@ -649,181 +421,164 @@ function TabGeneral({ config }) {
     },
   })
 
-  const manualGb   = parseFloat(form['storage.total_gb'] || 0) || null
-  // Champ vide : on affiche les tailles réelles à partir de l'espace auto-détecté
-  const autoGb     = infra ? Math.floor(infra.allocation.autoSafe / GiB) || null : null
-  const totalGb    = manualGb || autoGb
-  const mediaPct   = parseInt(form['storage.media_pct']  || 70)
-  const backupPct  = parseInt(form['storage.backup_pct'] || 10)
-  const logsGb     = parseFloat(form['storage.logs_gb']  || 2)
-
-  const logsPct    = totalGb ? Math.round((logsGb / totalGb) * 100) : 5
-  const systemPct  = Math.max(0, 100 - mediaPct - backupPct - logsPct)
-  const overLimit  = mediaPct + backupPct + logsPct > 95
+  const manualGb  = parseFloat(form['storage.total_gb'] || 0) || null
+  const autoGb    = infra ? Math.floor(infra.allocation.autoSafe / GiB) || null : null
+  const isAuto    = !form['storage.total_gb']
+  const totalGb   = manualGb || autoGb
+  const mediaPct  = parseInt(form['storage.media_pct'] || 70)
+  const backupPct = parseInt(form['storage.backup_pct'] || 10)
+  const logsGb    = parseFloat(form['storage.logs_gb'] || 2)
+  const logsPct   = totalGb ? Math.round((logsGb / totalGb) * 100) : 5
+  const systemPct = Math.max(0, 100 - mediaPct - backupPct - logsPct)
+  const overLimit = mediaPct + backupPct + logsPct > 95
+  const gbOf = (pct) => (totalGb ? (pct / 100) * totalGb : null)
 
   const url = form['app.url'] || ''
   const isInsecure = url && !url.startsWith('https://')
 
-  const minRecommended = totalGb ? (logsGb + 1 + totalGb * 0.05).toFixed(1) : null
-  const maxMedia       = totalGb ? (totalGb * 0.85).toFixed(1) : null
-
-  const segments = [
-    { color: 'bg-accent-500', label: 'Médias',      pct: mediaPct,  gb: totalGb ? ((mediaPct / 100) * totalGb).toFixed(1) : null },
-    { color: 'bg-blue-400',   label: 'Sauvegardes', pct: backupPct, gb: totalGb ? ((backupPct / 100) * totalGb).toFixed(1) : null },
-    { color: 'bg-amber-400',  label: 'Logs',        pct: logsPct,   gb: logsGb, fixed: true },
-    { color: 'bg-zinc-400 dark:bg-zinc-600', label: 'Système',   pct: systemPct, gb: totalGb ? ((systemPct / 100) * totalGb).toFixed(1) : null },
-  ]
+  const allocation = [
+    { color: 'bg-accent-500', label: 'Médias', value: mediaPct },
+    { color: 'bg-blue-400', label: 'Sauvegardes', value: backupPct },
+    { color: 'bg-amber-400', label: 'Journaux', value: logsPct },
+    { color: 'bg-line-strong', label: 'Marge système', value: systemPct },
+  ].map((s) => ({ ...s, display: totalGb ? `${fmtNum(gbOf(s.value))} Go` : `${s.value} %` }))
 
   return (
-    <form onSubmit={save} className="space-y-6">
-      <Section title="Identité du projet">
-        <Field label="Nom du projet" hint="Affiché dans l'interface et les emails">
-          <input className="input" value={form['app.name'] || ''} onChange={(e) => set('app.name', e.target.value)} placeholder="Obscura" />
-        </Field>
-        <Field label={
-          <span className="flex items-center gap-1.5">
-            URL publique de l'instance
-            <Tooltip text="Saisissez l'URL complète avec le protocole (ex: https://dashboard.example.com). Sans « https:// » au début, l'instance ne sera pas sécurisée." />
-          </span>
-        }>
-          <input
-            className={`input ${isInsecure ? 'border-amber-400 dark:border-amber-600 focus:ring-amber-400' : ''}`}
-            value={url}
-            onChange={(e) => set('app.url', e.target.value)}
-            placeholder="https://dashboard.exemple.com"
-          />
-          {isInsecure && (
-            <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
-              <AlertTriangle size={11} /> HTTPS requis — ajoutez <code className="font-mono bg-amber-50 dark:bg-amber-900/20 px-1 rounded">https://</code> au début de l'URL
-            </p>
-          )}
-        </Field>
-      </Section>
+    <form onSubmit={save} className="space-y-8">
+      <Group
+        title="Instance"
+        footer={isInsecure
+          ? <span className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300"><AlertTriangle size={13} className="mt-px shrink-0" />Sans https://, les connexions et les cookies de session ne sont pas chiffrés.</span>
+          : 'Le nom apparaît dans l\'interface et les emails ; l\'URL sert à construire les liens envoyés.'}
+      >
+        <Row stack label="Nom" htmlFor="app-name">
+          <TextInput id="app-name" value={form['app.name'] || ''} onChange={(e) => set('app.name', e.target.value)} placeholder="Obscura" />
+        </Row>
+        <Row stack label="URL publique" htmlFor="app-url">
+          <TextInput id="app-url" inputMode="url" className={cn('font-mono text-[13px]', isInsecure && 'border-amber-500/60')}
+            value={url} onChange={(e) => set('app.url', e.target.value)} placeholder="https://photos.mon-domaine.fr" />
+        </Row>
+      </Group>
 
-      {infra && (
-        <InfraPanel
-          infra={infra}
-          onRedetect={() => redetect.mutate()}
-          redetecting={redetect.isPending}
-          onApply={(gb) => set('storage.total_gb', String(gb))}
-          currentTotalGb={manualGb}
-        />
-      )}
-
-      <Section title="Allocation du stockage">
-        {/* Espace total */}
-        <Field
-          label={
-            <span className="flex items-center gap-1.5">
-              Espace total alloué au projet
-              <Tooltip text="Taille maximale qu'Obscura peut utiliser sur le disque. Laissez vide pour que le serveur l'auto-détecte : espace libre + espace déjà utilisé par Obscura, moins 5% de marge. Recalculé toutes les heures." />
-            </span>
-          }
-          hint={totalGb ? `Min recommandé : ${minRecommended} Go — Max médias possible : ${maxMedia} Go` : 'Renseignez la taille pour voir les tailles en Go dans le graphe'}
-        >
-          <div className="flex items-center gap-2">
-            <input
-              type="number" min="1" step="1"
-              className="input w-32"
-              value={form['storage.total_gb'] || ''}
-              onChange={(e) => set('storage.total_gb', e.target.value)}
-              placeholder={autoGb ? `Auto (${autoGb})` : 'Auto'}
-            />
-            <span className="text-muted text-sm">Go</span>
-            {manualGb && (
-              <span className="text-xs text-subtle ml-1">
-                = {(totalGb * 1024).toFixed(0)} Mo
-              </span>
-            )}
-          </div>
-        </Field>
-
-        {/* Sliders */}
-        <div className="space-y-4">
-          {[
-            { key: 'storage.media_pct',  label: 'Médias',       min: 10, max: 85, default: 70, color: 'text-accent-600', hint: 'Images et vidéos uploadées' },
-            { key: 'storage.backup_pct', label: 'Sauvegardes',  min: 5,  max: 40, default: 10, color: 'text-blue-500',   hint: 'Sauvegardes locales (avant envoi cloud)' },
-          ].map(({ key, label, min, max, default: def, color, hint }) => {
-            const val = parseInt(form[key] || def)
-            const gb  = totalGb ? ((val / 100) * totalGb).toFixed(1) : null
-            return (
-              <div key={key}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-fg">{label}</span>
-                  <span className="flex items-center gap-2">
-                    {gb && <span className="text-xs text-subtle">{gb} Go</span>}
-                    <span className={`text-sm font-medium w-10 text-right ${color}`}>{val}%</span>
-                  </span>
-                </div>
-                <input
-                  type="range" min={min} max={max}
-                  className="w-full accent-accent-600 h-2 rounded-full"
-                  value={val}
-                  onChange={(e) => set(key, e.target.value)}
-                />
-                <p className="text-xs text-subtle mt-0.5">{hint} — min {min}%, max {max}%</p>
-              </div>
-            )
-          })}
-
-          {/* Logs en Go fixe */}
+      <Group
+        title="Stockage"
+        footer={overLimit
+          ? <span role="alert" className="flex items-start gap-1.5 text-red-600 dark:text-red-400"><AlertTriangle size={13} className="mt-px shrink-0" />Médias, sauvegardes et journaux dépassent 95 % : laissez de la marge au système.</span>
+          : 'Les envois sont bloqués quand la part des médias est pleine ; une alerte part à 90 %.'}
+      >
+        <div className="space-y-4 px-4 py-5">
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-fg">Logs</span>
-              <span className={`text-sm font-medium text-amber-500`}>{logsGb} Go</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="number" min="0.5" max="20" step="0.5"
-                className="input w-24 text-sm"
-                value={form['storage.logs_gb'] || 2}
-                onChange={(e) => set('storage.logs_gb', e.target.value)}
-              />
-              <span className="text-sm text-muted">Go — rotation automatique</span>
-            </div>
+            <p className="text-[28px] font-medium leading-none tracking-tight text-fg tabular-nums">
+              {totalGb ? `${fmtNum(totalGb)} Go` : 'Automatique'}
+            </p>
+            <p className="mt-1.5 text-[13px] text-muted">
+              {isAuto ? 'Alloués automatiquement à Obscura' : 'Alloués manuellement à Obscura'}
+            </p>
           </div>
+          <UsageBar segments={allocation} total={100} />
         </div>
-
-        {/* Graphe visuel */}
-        <div className="space-y-3 mt-4 p-4 bg-overlay/50 rounded-xl border border-line">
-          <div className="flex items-center justify-between text-xs text-muted mb-1">
-            <span>0 {totalGb ? 'Go' : '%'}</span>
-            <span className="font-medium text-fg">
-              {totalGb ? `${totalGb} Go total${manualGb ? '' : ' (auto)'}` : 'Répartition (%)'}
-            </span>
-            <span>{totalGb ? `${totalGb} Go` : '100%'}</span>
-          </div>
-          <StorageBar segments={segments} />
-          <StorageLegend segments={segments} totalGb={totalGb} />
-        </div>
-
-        {overLimit && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <AlertTriangle size={14} className="text-red-500 shrink-0" />
-            <p className="text-xs text-red-600 dark:text-red-400">La somme dépasse 95% — laissez une marge pour le système d'exploitation.</p>
-          </div>
+        <Row label="Taille automatique" description="Espace libre + données d'Obscura, moins 5 % de marge. Recalculée chaque heure.">
+          <Switch checked={isAuto} onChange={(v) => set('storage.total_gb', v ? '' : String(autoGb || 100))} />
+        </Row>
+        {!isAuto && (
+          <Row label="Taille allouée" htmlFor="total-gb">
+            <UnitInput id="total-gb" unit="Go" min="1" step="1" className="w-32"
+              value={form['storage.total_gb'] || ''} onChange={(e) => set('storage.total_gb', e.target.value)} />
+          </Row>
         )}
-      </Section>
+        <SliderRow id="media-pct" label="Médias" description="Photos et vidéos" value={mediaPct} min={10} max={85}
+          gb={gbOf(mediaPct)} onChange={(v) => set('storage.media_pct', v)} />
+        <SliderRow id="backup-pct" label="Sauvegardes" description="Archives conservées sur ce serveur" value={backupPct} min={5} max={40}
+          gb={gbOf(backupPct)} onChange={(v) => set('storage.backup_pct', v)} />
+        <Row label="Journaux" description="Les plus anciens sont supprimés au-delà." htmlFor="logs-gb">
+          <UnitInput id="logs-gb" unit="Go" min="0.5" max="20" step="0.5" className="w-28"
+            value={form['storage.logs_gb'] || 2} onChange={(e) => set('storage.logs_gb', e.target.value)} />
+        </Row>
+      </Group>
 
-      <SaveBar saving={saving} saved={saved} error={error} />
+      {infra && <ServerGroups infra={infra} onRedetect={() => redetect.mutate()} redetecting={redetect.isPending} />}
+
+      {bar}
     </form>
   )
 }
 
-// ── Page principale ───────────────────────────────────────────────────────────
+function ServerGroups({ infra, onRedetect, redetecting }) {
+  const { disk, host, cpu, memory, gpu, tools, warnings } = infra
+  const diskInfo = [disk.device?.kind, disk.fsType, disk.device?.model].filter(Boolean).join(' · ')
+  const hasGpu = gpu.nvidia || gpu.renderNodes.length > 0
+  const diskSegments = [
+    { color: 'bg-accent-500', label: 'Obscura', value: disk.obscura.media },
+    { color: 'bg-blue-400', label: 'Sauvegardes', value: disk.obscura.backups },
+    { color: 'bg-line-strong', label: 'Autres données', value: disk.other },
+    { color: 'bg-transparent', dot: 'border border-line-strong', label: 'Libre', value: disk.free },
+  ].map((s) => ({ ...s, display: fmtGb(s.value) }))
+
+  return (
+    <>
+      <Group
+        title="Serveur"
+        description={`Analysé le ${new Date(infra.detectedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}`}
+        action={<Button type="button" size="sm" variant="outline" icon={RefreshCw} loading={redetecting} onClick={onRedetect}>Analyser</Button>}
+      >
+        {warnings.map((w) => (
+          <div key={w} className="flex items-start gap-3 bg-amber-500/[0.06] px-4 py-3 text-[13px] leading-relaxed text-amber-800 dark:text-amber-200">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" /> {w}
+          </div>
+        ))}
+        <div className="space-y-4 px-4 py-5">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+            <div>
+              <p className="text-[28px] font-medium leading-none tracking-tight text-fg tabular-nums">{fmtGb(disk.free)}</p>
+              <p className="mt-1.5 text-[13px] text-muted">libres sur {fmtGb(disk.size)}</p>
+            </div>
+            {diskInfo && <p className="text-xs text-subtle">{diskInfo}</p>}
+          </div>
+          <UsageBar segments={diskSegments} total={disk.size || 1} />
+        </div>
+        <Row label="Emplacement">
+          <span className="block max-w-[16rem] truncate font-mono text-xs text-muted sm:max-w-sm" title={disk.path}>{disk.path}</span>
+        </Row>
+        <Row label="Système"><Value>{host.os}</Value></Row>
+        <Row label="Machine"><Value>{host.hostname} · {host.arch}</Value></Row>
+        {host.container && <Row label="Conteneur"><Value>{host.container}{host.image ? ` · ${host.image}` : ''}</Value></Row>}
+        <Row label="En ligne depuis"><Value>{fmtUptime(host.uptime)}</Value></Row>
+        <Row label="Processeur" description={cpu.model}>
+          <Value>{cpu.limit ? `${cpu.limit} sur ${cpu.cores} cœurs` : `${cpu.cores} cœurs`}</Value>
+        </Row>
+        <Row label="Mémoire" description={`${fmtGb(memory.free)} libres${memory.limited ? ` · hôte ${fmtGb(memory.host)}` : ''}`}>
+          <Value>{fmtGb(memory.total)}{memory.limited && ' (conteneur)'}</Value>
+        </Row>
+        <Row label="Vidéo" description={gpu.hwaccels.length ? `Accélérations FFmpeg : ${gpu.hwaccels.join(', ')}` : undefined}>
+          <Value>{hasGpu ? `GPU ${gpu.nvidia ? 'NVIDIA' : 'VAAPI'}` : 'Processeur (pas de GPU)'}</Value>
+        </Row>
+      </Group>
+
+      <Group title="Logiciels" footer="FFmpeg traite les vidéos ; Rclone envoie les sauvegardes vers Backblaze.">
+        <Row label="FFmpeg"><ToolValue tool={tools.ffmpeg} /></Row>
+        <Row label="FFprobe"><ToolValue tool={tools.ffprobe} /></Row>
+        <Row label="Rclone"><ToolValue tool={tools.rclone} /></Row>
+        <Row label="Node.js"><Value>{host.node}</Value></Row>
+        {host.postgres && <Row label="PostgreSQL"><Value>{host.postgres}</Value></Row>}
+      </Group>
+    </>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'email',     label: 'Email',        icon: Mail },
-  { key: 'discord',   label: 'Discord',      icon: MessageSquare },
-  { key: 'notifs',    label: 'Notifications', icon: Bell },
-  { key: 'backups',   label: 'Sauvegardes',  icon: Database },
-  { key: 'general',   label: 'Général',      icon: Globe },
+  { key: 'general', label: 'Général',       icon: SlidersHorizontal, description: 'Identité de l\'instance, stockage et état du serveur.', Component: TabGeneral },
+  { key: 'email',   label: 'Email',         icon: Mail,              description: 'Service utilisé pour envoyer les emails.', Component: TabEmail },
+  { key: 'discord', label: 'Discord',       icon: MessageSquare,     description: 'Connexion avec un compte Discord.', Component: TabDiscord },
+  { key: 'notifs',  label: 'Notifications', icon: Bell,              description: 'Alertes envoyées aux administrateurs.', Component: TabNotifications },
+  { key: 'backups', label: 'Sauvegardes',   icon: Database,          description: 'Où, quand et combien de sauvegardes garder.', Component: TabBackups },
 ]
 
 export default function AdminSettings() {
   const [params, setParams] = useSearchParams()
   const isDesktop = useIsDesktop()
   const requested = params.get('tab')
-  const activeTab = TABS.some((t) => t.key === requested) ? requested : 'email'
+  const active = TABS.find((t) => t.key === requested) || TABS[0]
   const setActiveTab = (t) => setParams({ tab: t }, { replace: true })
   const tabs = TABS.map((t) => ({ value: t.key, label: t.label, icon: t.icon }))
 
@@ -833,27 +588,25 @@ export default function AdminSettings() {
   })
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-medium tracking-[-0.01em] text-fg">Configuration système</h1>
-        <p className="mt-1 text-sm text-muted">Connexions externes et paramètres serveur. Les secrets sont chiffrés en base.</p>
-      </div>
-      <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <header className="mb-6 lg:mb-10">
+        <h1 className="text-[26px] font-medium tracking-[-0.015em] text-fg">Configuration</h1>
+        <p className="mt-1 text-sm text-muted">Réglages du serveur. Les clés et mots de passe sont chiffrés en base.</p>
+      </header>
+
+      <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12">
         {isDesktop
-          ? <div className="sticky top-6 self-start"><SideTabs value={activeTab} onChange={setActiveTab} tabs={tabs} /></div>
-          : <Tabs value={activeTab} onChange={setActiveTab} tabs={tabs} className="mb-5" />}
-        <div className="card min-w-0 p-5 sm:p-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16"><Spinner /></div>
-          ) : (
-            <>
-              {activeTab === 'email' && <TabEmail config={config} />}
-              {activeTab === 'discord' && <TabDiscord config={config} />}
-              {activeTab === 'notifs' && <TabNotifications config={config} />}
-              {activeTab === 'backups' && <TabBackblaze config={config} />}
-              {activeTab === 'general' && <TabGeneral config={config} />}
-            </>
-          )}
+          ? <div className="sticky top-6 self-start"><SideTabs value={active.key} onChange={setActiveTab} tabs={tabs} /></div>
+          : <Tabs value={active.key} onChange={setActiveTab} tabs={tabs} className="mb-6" />}
+
+        <div className="min-w-0 max-w-2xl">
+          <div className="mb-6 hidden lg:block">
+            <h2 className="text-lg font-medium text-fg">{active.label}</h2>
+            <p className="mt-0.5 text-[13px] text-muted">{active.description}</p>
+          </div>
+          {isLoading
+            ? <div className="flex items-center justify-center py-20"><Spinner /></div>
+            : <active.Component key={active.key} config={config} />}
         </div>
       </div>
     </div>

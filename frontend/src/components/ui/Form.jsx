@@ -80,7 +80,7 @@ export function Switch({ checked, onChange, disabled, label, description, classN
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked) }}
       className={cn(
-        'relative inline-flex shrink-0 items-center rounded-sm border p-px transition-colors duration-150 disabled:opacity-50',
+        'relative inline-flex shrink-0 items-center rounded-full border p-px transition-colors duration-150 disabled:opacity-50',
         track,
         checked ? 'border-accent-600 bg-accent-600' : 'border-line-strong bg-transparent'
       )}
@@ -89,7 +89,7 @@ export function Switch({ checked, onChange, disabled, label, description, classN
         initial={false}
         animate={{ x: checked ? shift : 0 }}
         transition={{ type: 'spring', stiffness: 700, damping: 35 }}
-        className={cn('block rounded-[1px]', checked ? 'bg-white' : 'bg-subtle', knob)}
+        className={cn('block rounded-full shadow-sm', checked ? 'bg-white' : 'bg-subtle', knob)}
       />
     </button>
   )
