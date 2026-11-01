@@ -300,7 +300,7 @@ export function AdminWhitelist() {
 }
 
 // ── Sauvegardes ──────────────────────────────────────────────────────────────
-export function AdminBackups() {
+export function AdminBackups({ isSuperAdmin }) {
   const queryClient = useQueryClient()
   const [type, setType] = useState('local')
   const [running, setRunning] = useState(false)
@@ -377,10 +377,12 @@ export function AdminBackups() {
     try { await api.delete(`/admin/backups/${b.id}`); toast.success('Sauvegarde supprimée') } catch (err) { toast.error(apiError(err)) } finally { refresh() }
   }
 
+  // Télécharger, importer, restaurer : Super Admin uniquement (refusé aussi côté serveur)
+  const canRestore = (b) => isSuperAdmin && b.available
   const menu = (b) => [
-    b.available && { label: 'Télécharger', icon: Download, onSelect: () => download(b) },
-    b.available && { label: 'Restaurer…', icon: RotateCcw, onSelect: () => restore(b) },
-    b.available && { type: 'separator' },
+    canRestore(b) && { label: 'Télécharger', icon: Download, onSelect: () => download(b) },
+    canRestore(b) && { label: 'Restaurer…', icon: RotateCcw, onSelect: () => restore(b) },
+    canRestore(b) && { type: 'separator' },
     { label: 'Supprimer', icon: Trash2, danger: true, onSelect: () => remove(b) },
   ]
 
@@ -399,11 +401,15 @@ export function AdminBackups() {
               <option value="backblaze">Backblaze B2</option>
             </Select>
             <Button loading={running} disabled={!!busy} onClick={run}>{running ? 'Sauvegarde en cours…' : 'Lancer maintenant'}</Button>
-            <Button variant="outline" icon={Upload} loading={!!busy} disabled={running} onClick={() => fileInput.current?.click()}>
-              {busy || 'Importer une archive'}
-            </Button>
-            <input ref={fileInput} type="file" accept=".tar.gz,.tgz,application/gzip" className="hidden"
-              onChange={(e) => { importFile(e.target.files[0]); e.target.value = '' }} />
+            {isSuperAdmin && (
+              <>
+                <Button variant="outline" icon={Upload} loading={!!busy} disabled={running} onClick={() => fileInput.current?.click()}>
+                  {busy || 'Importer une archive'}
+                </Button>
+                <input ref={fileInput} type="file" accept=".tar.gz,.tgz,application/gzip" className="hidden"
+                  onChange={(e) => { importFile(e.target.files[0]); e.target.value = '' }} />
+              </>
+            )}
           </div>
         </div>
         <div className="card p-5">

@@ -52,7 +52,7 @@ export default function Dashboard() {
         {tab === 'users' && <AdminUsers />}
         {tab === 'roles' && <AdminRoles isSuperAdmin={!!user?.is_super_admin} />}
         {tab === 'whitelist' && <AdminWhitelist />}
-        {tab === 'backups' && <AdminBackups />}
+        {tab === 'backups' && <AdminBackups isSuperAdmin={!!user?.is_super_admin} />}
         {tab === 'logs' && <AdminLogs />}
       </motion.div>
     </div>

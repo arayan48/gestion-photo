@@ -1,7 +1,7 @@
 import { isIP } from 'net'
 import pool from '../../config/database.js'
 import { invalidate } from '../../config/redis.js'
-import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
+import { authenticate, requirePermission, requireSuperAdmin, userHasPermission } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp, normalizeIp } from '../../utils/fingerprint.js'
 import { isUuid, parsePagination, likePattern, optionalString } from '../../utils/validation.js'
@@ -329,12 +329,16 @@ export default async function adminRoutes(fastify) {
     return row || null
   }
 
+  // Télécharger, importer et restaurer : Super Admin uniquement. Une archive contient toute
+  // la base (comptes, empreintes de mots de passe) et sa restauration exécute son SQL avec
+  // les droits de l'utilisateur PostgreSQL : de quoi se donner tous les droits.
+
   // Lien de téléchargement à usage unique (60 s) : le navigateur télécharge l'archive
   // directement, sans la charger en mémoire, et sans mettre le jeton de session dans l'URL
   const downloadLinks = new Map()
 
   fastify.post('/backups/:id/download-link', {
-    preHandler: [authenticate, requirePermission('system.manage_backups')],
+    preHandler: [authenticate, requireSuperAdmin],
   }, async (request, reply) => {
     const row = await findBackup(request.params.id)
     if (!row || !(await isArchiveAvailable(row))) return reply.code(404).send({ error: 'Archive introuvable sur le serveur' })
@@ -360,7 +364,7 @@ export default async function adminRoutes(fastify) {
   })
 
   fastify.post('/backups/import', {
-    preHandler: [authenticate, requirePermission('system.manage_backups')],
+    preHandler: [authenticate, requireSuperAdmin],
   }, async (request, reply) => {
     const { rows: [cfg] } = await pool.query("SELECT value FROM system_config WHERE key = 'storage.backup_limit'")
     const limit = parseInt(cfg?.value) || Infinity
@@ -381,7 +385,7 @@ export default async function adminRoutes(fastify) {
   })
 
   fastify.post('/backups/:id/restore', {
-    preHandler: [authenticate, requirePermission('system.manage_backups')],
+    preHandler: [authenticate, requireSuperAdmin],
   }, async (request, reply) => {
     const row = await findBackup(request.params.id)
     if (!row) return reply.code(404).send({ error: 'Sauvegarde introuvable' })
