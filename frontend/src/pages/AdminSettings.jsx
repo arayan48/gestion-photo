@@ -394,6 +394,47 @@ function SliderRow({ id, label, description, value, min, max, gb, onChange }) {
   )
 }
 
+// Suivi des versions (modèle « Mise à jour logicielle ») : visible avec system.view_stats
+function VersionGroup() {
+  const queryClient = useQueryClient()
+  const { data: version, isError } = useQuery({
+    queryKey: ['admin-version'],
+    queryFn: () => api.get('/admin/version').then((r) => r.data),
+    staleTime: 3600_000,
+    retry: false,
+  })
+  const check = useMutation({
+    mutationFn: () => api.get('/admin/version', { params: { refresh: 1 } }).then((r) => r.data),
+    onSuccess: (data) => queryClient.setQueryData(['admin-version'], data),
+  })
+  if (isError || !version) return null
+
+  const checkedAt = version.checkedAt && new Date(version.checkedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })
+  return (
+    <Group
+      title="Version"
+      action={<Button type="button" size="sm" variant="outline" icon={RefreshCw} loading={check.isPending} onClick={() => check.mutate()}>Rechercher</Button>}
+      footer={check.isError
+        ? <span className="text-red-600 dark:text-red-400">{check.error.response?.data?.error || 'Vérification impossible'}</span>
+        : version.updateAvailable
+          ? <>Mettez à jour depuis l'App Store de ZimaOS, ou avec <code className="font-mono">docker compose pull && docker compose up -d</code>. Les réglages et les fichiers sont conservés.</>
+          : 'Les nouvelles versions sont recherchées toutes les 12 heures ; une notification prévient les administrateurs.'}
+    >
+      <Row label="Version installée"><Value>{version.current}</Value></Row>
+      <Row label="Dernière version publiée">
+        <Value>{version.latest || '—'}</Value>
+      </Row>
+      <Row label="État" description={checkedAt ? `Vérifié le ${checkedAt}` : undefined}>
+        {version.updateAvailable
+          ? <span className="text-sm font-medium text-accent-600 dark:text-accent-400">Mise à jour disponible</span>
+          : version.checkedAt
+            ? <span className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400"><Check size={14} />À jour</span>
+            : <Value>Pas encore vérifié</Value>}
+      </Row>
+    </Group>
+  )
+}
+
 function ToolValue({ tool }) {
   return tool.available
     ? <Value>{tool.version || 'Installé'}</Value>
@@ -451,6 +492,8 @@ function TabGeneral({ config }) {
 
   return (
     <form onSubmit={save} className="space-y-8">
+      <VersionGroup />
+
       <Group
         title="Instance"
         footer={isInsecure
@@ -583,7 +626,7 @@ function ServerGroups({ infra, onRedetect, redetecting }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'general', label: 'Général',       icon: SlidersHorizontal, description: 'Identité de l\'instance, stockage et état du serveur.', Component: TabGeneral },
+  { key: 'general', label: 'Général',       icon: SlidersHorizontal, description: 'Version, identité de l\'instance, stockage et état du serveur.', Component: TabGeneral },
   { key: 'email',   label: 'Email',         icon: Mail,              description: 'Service utilisé pour envoyer les emails.', Component: TabEmail },
   { key: 'discord', label: 'Discord',       icon: MessageSquare,     description: 'Connexion avec un compte Discord.', Component: TabDiscord },
   { key: 'notifs',  label: 'Notifications', icon: Bell,              description: 'Alertes envoyées aux administrateurs.', Component: TabNotifications },

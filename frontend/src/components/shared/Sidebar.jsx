@@ -289,12 +289,38 @@ export function SidebarContent({ collapsed = false, onNavigate }) {
           </Tooltip>
         ) : (
           <p className="px-1 font-mono text-[10px] text-subtle/70">
-            <a href="https://arayan.fr" target="_blank" rel="noreferrer" className="hover:text-fg">arayan.fr</a> · {new Date().getFullYear()}
+            <AppVersion /> · <a href="https://arayan.fr" target="_blank" rel="noreferrer" className="hover:text-fg">arayan.fr</a> · {new Date().getFullYear()}
           </p>
         )}
       </div>
     </div>
   )
+}
+
+// Version installée (route publique) ; les admins voient aussi qu'une mise à jour est publiée
+function AppVersion() {
+  const can = usePermission()
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => api.get('/health').then((r) => r.data),
+    staleTime: Infinity,
+  })
+  const { data: update } = useQuery({
+    queryKey: ['admin-version'],
+    queryFn: () => api.get('/admin/version').then((r) => r.data),
+    enabled: can('system.view_stats'),
+    staleTime: 3600_000,
+  })
+  if (!health?.version) return null
+  if (update?.updateAvailable) {
+    return (
+      <Link to="/admin/settings?tab=general" className="text-accent-600 hover:text-accent-500 dark:text-accent-400"
+        title={`${update.latest} disponible`}>
+        {health.version} → {update.latest}
+      </Link>
+    )
+  }
+  return <span title="Version installée">{health.version}</span>
 }
 
 export default function Sidebar() {
