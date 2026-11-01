@@ -14,6 +14,7 @@ import { config } from './config/env.js'
 import { initStorage } from './config/storage.js'
 import { ensureStorageDirs } from './services/storage.service.js'
 import { startCronJobs } from './utils/cron.js'
+import { resumeTranscodes } from './services/transcode.service.js'
 import { startUpdateCheck, updateState } from './services/update.service.js'
 import { registerWebsocketRoutes } from './websocket/notifications.js'
 import authRoutes from './routes/auth/index.js'
@@ -109,6 +110,14 @@ fastify.addHook('onSend', async (request, reply) => {
   reply.header('X-Frame-Options', 'SAMEORIGIN')
   reply.header('X-Content-Type-Options', 'nosniff')
   reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  // Aucun script externe ni inline : une injection HTML ne peut pas exécuter de code.
+  // Styles inline autorisés (animations framer-motion), avatars Discord depuis leur CDN.
+  reply.header('Content-Security-Policy', [
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://cdn.discordapp.com", "media-src 'self' blob:",
+    "connect-src 'self'", "font-src 'self' data:", "object-src 'none'",
+    "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
+  ].join('; '))
 })
 
 // ── Gestion centralisée des erreurs ──────────────────────────────────────────
@@ -231,6 +240,7 @@ async function start() {
 
     // Démarrer les cron jobs
     startCronJobs()
+    resumeTranscodes().catch((err) => console.error('Reprise des conversions vidéo :', err))
     startUpdateCheck()
 
     await fastify.listen({ port: config.port, host: '0.0.0.0' })

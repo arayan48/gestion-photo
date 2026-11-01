@@ -5,7 +5,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FolderOpen, Clock, Heart, Trash2, Globe, LayoutDashboard, Wrench, HardDrive, Plus, Upload,
-  FolderPlus, ChevronRight, Folder, PanelLeftClose, PanelLeftOpen, Camera,
+  FolderPlus, ChevronRight, Folder, PanelLeftClose, PanelLeftOpen, Camera, Users,
 } from 'lucide-react'
 import api from '../../utils/api.js'
 import { cn } from '../../lib/cn.js'
@@ -23,6 +23,7 @@ import { Progress } from '../ui/Progress.jsx'
 export const NAV_ITEMS = [
   { view: null, to: '/explorer', icon: FolderOpen, label: 'Mon espace' },
   { view: 'others', to: '/explorer?view=others', icon: Globe, label: 'Espace commun', permission: 'files.view_others' },
+  { view: 'shared', to: '/explorer?view=shared', icon: Users, label: 'Partagés avec moi' },
   { view: 'recent', to: '/explorer?view=recent', icon: Clock, label: 'Récents' },
   { view: 'favorites', to: '/explorer?view=favorites', icon: Heart, label: 'Favoris' },
   { view: 'trash', to: '/explorer?view=trash', icon: Trash2, label: 'Corbeille' },

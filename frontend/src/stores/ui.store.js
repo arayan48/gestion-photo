@@ -12,6 +12,7 @@ export const useUiStore = create((set) => ({
   pendingUpload: null, // { files: File[], folderId, folderName }
   moveDialog: null,    // { items: [{ kind: 'file' | 'folder', ... }] }
   folderDelete: null,  // { folders, stats: { fileCount, folderCount } }
+  folderShare: null,   // dossier dont on gère le partage
 
   setCommandOpen: (v) => set({ commandOpen: v }),
   setShortcutsOpen: (v) => set({ shortcutsOpen: v }),

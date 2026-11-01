@@ -10,7 +10,7 @@ import { revokeAllUserTokens } from '../../services/auth.service.js'
 import { checkMediaStorageLimit, detectInfrastructure, initStorage } from '../../config/storage.js'
 import { checkForUpdate, updateState } from '../../services/update.service.js'
 import { getConfigForAdmin, setConfigValues, INTERNAL_KEYS, MASKED_VALUE } from '../../services/config.service.js'
-import { runBackup, importArchive, deleteBackup, restoreBackup, localArchivePath, isArchiveAvailable } from '../../services/backup.service.js'
+import { runBackup, importArchive, deleteBackup, restoreBackup, localArchivePath, isArchiveAvailable, listRemoteArchives, fetchRemoteArchive } from '../../services/backup.service.js'
 import { randomBytes } from 'crypto'
 import { basename, dirname } from 'path'
 
@@ -381,6 +381,31 @@ export default async function adminRoutes(fastify) {
     } catch (err) {
       data.file.resume()
       return reply.code(err.statusCode || 400).send({ error: err.message })
+    }
+  })
+
+  // Archives B2 : après la perte du serveur, on les rapatrie puis on les restaure
+  fastify.get('/backups/remote', {
+    preHandler: [authenticate, requireSuperAdmin],
+  }, async (_, reply) => {
+    try {
+      return reply.send(await listRemoteArchives())
+    } catch (err) {
+      return reply.code(400).send({ error: err.message })
+    }
+  })
+
+  fastify.post('/backups/remote/fetch', {
+    preHandler: [authenticate, requireSuperAdmin],
+  }, async (request, reply) => {
+    const { name, encrypted } = request.body || {}
+    if (typeof name !== 'string') return reply.code(400).send({ error: 'Nom d\'archive requis' })
+    try {
+      const row = await fetchRemoteArchive(name, encrypted === true)
+      await log({ category: 'system', level: 'info', action: 'backup_fetched_from_b2', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id: row.id, name } })
+      return reply.send({ id: row.id, size: row.size })
+    } catch (err) {
+      return reply.code(400).send({ error: err.message })
     }
   })
 

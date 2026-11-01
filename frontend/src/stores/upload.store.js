@@ -74,6 +74,7 @@ export const useUploadStore = create((set, get) => ({
     form.append('name', item.name)
     form.append('qualityPreset', item.quality)
     if (item.folderId) form.append('folderId', item.folderId)
+    if (item.allowDuplicate) form.append('allowDuplicate', 'true')
     form.append('file', item.file) // le fichier en dernier : les champs sont lus avant le flux
 
     try {
@@ -103,7 +104,8 @@ export const useUploadStore = create((set, get) => ({
         const message = typeof err.response?.data?.error === 'string'
           ? err.response.data.error
           : status === 413 ? 'Fichier trop volumineux' : 'Échec de l\'envoi'
-        get().update(id, { status: 'error', error: message })
+        // Doublon : « Réessayer » enverra le fichier quand même
+        get().update(id, { status: 'error', error: message, allowDuplicate: status === 409 })
         if (status === 507) toast.error(message)
       }
     } finally {
@@ -143,7 +145,8 @@ export const useUploadStore = create((set, get) => ({
   },
 
   retryFailed() {
-    get().items.filter((i) => i.status === 'error' || i.status === 'canceled').forEach((i) => get().retry(i.id))
+    // Les doublons ne sont renvoyés qu'un par un, sur demande explicite
+    get().items.filter((i) => (i.status === 'error' && !i.allowDuplicate) || i.status === 'canceled').forEach((i) => get().retry(i.id))
   },
 
   clearFinished() {

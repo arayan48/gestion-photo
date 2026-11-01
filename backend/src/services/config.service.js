@@ -13,6 +13,7 @@ export const SECRET_KEYS = new Set([
   'email.sendgrid_key',
   'b2.key_id',
   'b2.key',
+  'b2.passphrase',
   's3.access_key',
   's3.secret_key',
   'ftp.password',

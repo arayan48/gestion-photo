@@ -347,6 +347,47 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at DESC);
     `,
   },
+  {
+    // Empreinte SHA-256 du fichier envoyé : détection des doublons à l'upload
+    name: '025_add_files_content_hash',
+    sql: `
+      ALTER TABLE files ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64);
+      CREATE INDEX IF NOT EXISTS idx_files_owner_hash ON files(owner_id, content_hash) WHERE is_deleted = false;
+    `,
+  },
+  {
+    // Copie MP4 lisible par tous les navigateurs (MOV, HEVC…) ; l'original reste dans stored_name
+    name: '026_add_files_playback_copy',
+    sql: `
+      ALTER TABLE files ADD COLUMN IF NOT EXISTS playback_name VARCHAR(255);
+      ALTER TABLE files ADD COLUMN IF NOT EXISTS transcode_status VARCHAR(20);
+    `,
+  },
+  {
+    // Dossier partagé en lecture avec d'autres membres (sous-dossiers compris)
+    name: '027_create_folder_shares',
+    sql: `
+      CREATE TABLE IF NOT EXISTS folder_shares (
+        folder_id UUID REFERENCES folders(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (folder_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_folder_shares_user ON folder_shares(user_id);
+
+      -- Vrai si le dossier ou l'un de ses parents est partagé avec l'utilisateur
+      CREATE OR REPLACE FUNCTION folder_shared_with(p_folder UUID, p_user UUID) RETURNS BOOLEAN
+      LANGUAGE sql STABLE AS $$
+        WITH RECURSIVE chain AS (
+          SELECT id, parent_id, 0 AS depth FROM folders WHERE id = p_folder
+          UNION ALL
+          SELECT f.id, f.parent_id, c.depth + 1 FROM folders f JOIN chain c ON f.id = c.parent_id
+          WHERE c.depth < 100
+        )
+        SELECT EXISTS (SELECT 1 FROM folder_shares s JOIN chain c ON s.folder_id = c.id WHERE s.user_id = p_user)
+      $$;
+    `,
+  },
 ]
 
 export async function runMigrations({ closePool = false } = {}) {

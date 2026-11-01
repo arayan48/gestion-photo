@@ -9,6 +9,7 @@ import ShortcutsDialog from './ShortcutsDialog.jsx'
 import { DndProvider } from './DndProvider.jsx'
 import MoveDialog from '../explorer/MoveDialog.jsx'
 import FolderDeleteDialog from '../explorer/FolderDeleteDialog.jsx'
+import FolderShareDialog from '../explorer/FolderShareDialog.jsx'
 import UploadDialog from '../upload/UploadDialog.jsx'
 import UploadManager from '../upload/UploadManager.jsx'
 import { useAuthStore } from '../../stores/auth.store.js'
@@ -63,6 +64,7 @@ export default function Layout() {
         <UploadDialog />
         <MoveDialog />
         <FolderDeleteDialog />
+        <FolderShareDialog />
         <CommandPalette />
         <ShortcutsDialog />
         <ConfirmDialog />

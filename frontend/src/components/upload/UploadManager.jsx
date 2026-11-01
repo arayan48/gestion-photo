@@ -26,7 +26,7 @@ export default function UploadManager() {
   const { items, panelOpen, collapsed, setCollapsed, cancel, retry, retryFailed, cancelAll, clearFinished } = useUploadStore()
   const active = items.filter((i) => ACTIVE.includes(i.status))
   const done = items.filter((i) => i.status === 'done').length
-  const failed = items.filter((i) => i.status === 'error').length
+  const failed = items.filter((i) => i.status === 'error' && !i.allowDuplicate).length
   const totalBytes = items.filter((i) => i.status !== 'canceled').reduce((s, i) => s + i.size, 0)
   const sentBytes = items.filter((i) => i.status !== 'canceled').reduce((s, i) => s + (i.size * i.progress) / 100, 0)
   const overall = totalBytes ? Math.round((sentBytes / totalBytes) * 100) : 0
@@ -93,7 +93,7 @@ export default function UploadManager() {
                           : it.status === 'processing' ? <Loader2 size={15} className="mx-1.5 animate-spin text-subtle" />
                             : <IconButton size="xs" icon={Ban} label="Retirer" onClick={() => cancel(it.id)} />
                       )}
-                      {(it.status === 'error' || it.status === 'canceled') && <IconButton size="xs" icon={RotateCcw} label="Réessayer" onClick={() => retry(it.id)} />}
+                      {(it.status === 'error' || it.status === 'canceled') && <IconButton size="xs" icon={RotateCcw} label={it.allowDuplicate ? 'Envoyer quand même' : 'Réessayer'} onClick={() => retry(it.id)} />}
                     </div>
                   ))}
                 </div>

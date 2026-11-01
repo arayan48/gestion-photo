@@ -284,6 +284,11 @@ export default function MediaViewer({ files, fileId, onNavigate, onClose, onNeed
                   ) : (
                     <ImageStage file={file} onZoomChange={setZoom} zoomApi={zoomApi} onSwipe={go} onClose={onClose} />
                   )}
+                  {video && file.transcode_status === 'pending' && (
+                    <p className="pointer-events-none absolute inset-x-0 bottom-20 mx-auto w-fit rounded bg-black/70 px-3 py-1.5 text-xs text-white">
+                      Conversion en cours pour la lecture dans le navigateur. Le téléchargement donne déjà l'original.
+                    </p>
+                  )}
                 </motion.div>
               </AnimatePresence>
 

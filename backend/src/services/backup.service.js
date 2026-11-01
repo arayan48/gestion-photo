@@ -37,12 +37,13 @@ function newArchiveName() {
 }
 
 async function getB2Config() {
-  const db = await getConfigValues(['b2.key_id', 'b2.key', 'b2.bucket'])
+  const db = await getConfigValues(['b2.key_id', 'b2.key', 'b2.bucket', 'b2.passphrase'])
   // Paramètres admin → Sauvegardes (identifiants stockés chiffrés)
   return {
     keyId: db['b2.key_id'] || '',
     key: db['b2.key'] || '',
     bucket: db['b2.bucket'] || '',
+    passphrase: db['b2.passphrase'] || '',
   }
 }
 
@@ -91,24 +92,47 @@ async function createArchive() {
   return { backupPath, filename, size }
 }
 
-async function rcloneB2(args) {
+// Préfixe du champ backups.path des archives B2 chiffrées (rclone crypt) ; les anciennes en clair : « b2:backups/ »
+const B2_ENC = 'b2-enc:'
+
+// Remotes rclone définis par variables d'environnement : aucun fichier rclone.conf nécessaire.
+// `enc` chiffre contenu et noms de fichiers (AES-256) avec la phrase choisie par l'admin.
+async function rcloneB2() {
   const b2 = await getB2Config()
   if (!b2.keyId || !b2.key || !b2.bucket) {
     throw new Error('Backblaze B2 non configuré (Key ID, clé et bucket requis)')
   }
-  // Remote rclone défini par variables d'environnement : aucun fichier rclone.conf nécessaire
-  await execFileAsync('rclone', args(`obscurab2:${b2.bucket}/backups/`), {
-    env: {
-      ...process.env,
-      RCLONE_CONFIG_OBSCURAB2_TYPE: 'b2',
-      RCLONE_CONFIG_OBSCURAB2_ACCOUNT: b2.keyId,
-      RCLONE_CONFIG_OBSCURAB2_KEY: b2.key,
-    },
-    maxBuffer: 10 * 1024 * 1024,
-  })
+  const env = {
+    ...process.env,
+    RCLONE_CONFIG_OBSCURAB2_TYPE: 'b2',
+    RCLONE_CONFIG_OBSCURAB2_ACCOUNT: b2.keyId,
+    RCLONE_CONFIG_OBSCURAB2_KEY: b2.key,
+  }
+  if (b2.passphrase) {
+    // Phrase passée par stdin : jamais visible dans la liste des processus
+    const obscure = execFileAsync('rclone', ['obscure', '-'])
+    obscure.child.stdin.end(b2.passphrase)
+    env.RCLONE_CONFIG_OBSCURAENC_TYPE = 'crypt'
+    env.RCLONE_CONFIG_OBSCURAENC_REMOTE = `obscurab2:${b2.bucket}/backups-enc`
+    env.RCLONE_CONFIG_OBSCURAENC_PASSWORD = (await obscure).stdout.trim()
+  }
+  const run = (args) => execFileAsync('rclone', args, { env, maxBuffer: 50 * 1024 * 1024 })
+  return { run, plain: `obscurab2:${b2.bucket}/backups/`, enc: b2.passphrase ? 'obscuraenc:' : null }
 }
 
-const uploadToBackblaze = (backupPath) => rcloneB2((remote) => ['copy', backupPath, remote])
+function remoteFileOf(rclone, row) {
+  const name = basename(row.path || '')
+  if (!ARCHIVE_NAME_RE.test(name)) return null
+  if (row.path.startsWith(B2_ENC)) return rclone.enc && rclone.enc + name
+  return rclone.plain + name
+}
+
+async function uploadToBackblaze(backupPath) {
+  const rclone = await rcloneB2()
+  if (!rclone.enc) throw new Error('Phrase de chiffrement B2 manquante (Configuration → Sauvegardes) : rien n\'est envoyé en clair')
+  await rclone.run(['copy', backupPath, rclone.enc])
+  return B2_ENC + basename(backupPath)
+}
 
 // Ne garder que les N dernières archives locales (Paramètres → Sauvegardes → Rétention)
 async function applyRetention() {
@@ -140,11 +164,11 @@ export async function runBackup(type = 'local') {
   let archive
   try {
     archive = await exclusive(createArchive)
-    if (type === 'backblaze') await uploadToBackblaze(archive.backupPath)
+    const path = type === 'backblaze' ? await uploadToBackblaze(archive.backupPath) : archive.backupPath
 
     await pool.query(
       'INSERT INTO backups (type, status, size, path) VALUES ($1, $2, $3, $4)',
-      [type, 'success', archive.size, type === 'local' ? archive.backupPath : `b2:backups/${archive.filename}`]
+      [type, 'success', archive.size, path]
     )
 
     await applyRetention()
@@ -184,7 +208,7 @@ export async function isArchiveAvailable(row) {
 
 // Liste le contenu et refuse toute entrée hors des dossiers attendus (anti « tar slip »).
 // Renvoie le chemin du dump SQL dans l'archive.
-async function inspectArchive(archivePath) {
+export async function inspectArchive(archivePath) {
   let stdout
   try {
     ({ stdout } = await execFileAsync('tar', ['-tzf', archivePath], { maxBuffer: 200 * 1024 * 1024 }))
@@ -204,28 +228,61 @@ async function inspectArchive(archivePath) {
   return dump
 }
 
-// Enregistre une archive envoyée par un administrateur (flux multipart)
-export async function importArchive(fileStream) {
-  return exclusive(async () => {
-    await mkdir(BACKUP_DIR, { recursive: true })
-    const partPath = join(BACKUP_DIR, `.import_${nanoid(8)}.part`)
-    try {
-      await pipeline(fileStream, createWriteStream(partPath))
-      if (fileStream.truncated) throw Object.assign(new Error('Archive trop volumineuse pour la place réservée aux sauvegardes'), { statusCode: 413 })
-      await inspectArchive(partPath)
+// Valide une archive téléchargée dans `fill(partPath)` puis l'ajoute à l'historique
+async function registerArchive(fill, createdAt = new Date()) {
+  await mkdir(BACKUP_DIR, { recursive: true })
+  const partPath = join(BACKUP_DIR, `.import_${nanoid(8)}.part`)
+  try {
+    await fill(partPath)
+    await inspectArchive(partPath)
 
-      const finalPath = join(BACKUP_DIR, newArchiveName())
-      await rename(partPath, finalPath)
-      const { size } = await stat(finalPath)
-      const { rows: [row] } = await pool.query(
-        'INSERT INTO backups (type, status, size, path) VALUES ($1, $2, $3, $4) RETURNING *',
-        ['local', 'success', size, finalPath]
-      ).catch(async (err) => { await unlink(finalPath).catch(() => {}); throw err })
-      return row
-    } finally {
-      await unlink(partPath).catch(() => {})
-    }
-  })
+    const finalPath = join(BACKUP_DIR, newArchiveName())
+    await rename(partPath, finalPath)
+    const { size } = await stat(finalPath)
+    const { rows: [row] } = await pool.query(
+      'INSERT INTO backups (type, status, size, path, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      ['local', 'success', size, finalPath, createdAt]
+    ).catch(async (err) => { await unlink(finalPath).catch(() => {}); throw err })
+    return row
+  } finally {
+    await unlink(partPath).catch(() => {})
+  }
+}
+
+// Enregistre une archive envoyée par un administrateur (flux multipart)
+export function importArchive(fileStream) {
+  return exclusive(() => registerArchive(async (partPath) => {
+    await pipeline(fileStream, createWriteStream(partPath))
+    if (fileStream.truncated) throw Object.assign(new Error('Archive trop volumineuse pour la place réservée aux sauvegardes'), { statusCode: 413 })
+  }))
+}
+
+// Archives présentes sur B2 (chiffrées et anciennes en clair) : utile après la perte du serveur
+export async function listRemoteArchives() {
+  const rclone = await rcloneB2()
+  const list = async (remote, encrypted) => {
+    if (!remote) return []
+    const { stdout } = await rclone.run(['lsjson', remote, '--files-only']).catch(() => ({ stdout: '[]' }))
+    return JSON.parse(stdout)
+      .filter((f) => ARCHIVE_NAME_RE.test(f.Name))
+      .map((f) => ({ name: f.Name, size: f.Size, modified: f.ModTime, encrypted }))
+  }
+  const files = [...await list(rclone.enc, true), ...await list(rclone.plain, false)]
+  return files.sort((a, b) => b.modified.localeCompare(a.modified))
+}
+
+// Rapatrie une archive B2 sur le serveur ; elle peut ensuite être restaurée comme une locale
+export async function fetchRemoteArchive(name, encrypted) {
+  if (!ARCHIVE_NAME_RE.test(name)) throw new Error('Nom d\'archive invalide')
+  const rclone = await rcloneB2()
+  const remote = encrypted ? rclone.enc : rclone.plain
+  if (!remote) throw new Error('Phrase de chiffrement B2 manquante : impossible de lire les archives chiffrées')
+  const [file] = (await listRemoteArchives()).filter((f) => f.name === name && f.encrypted === !!encrypted)
+  if (!file) throw new Error('Archive introuvable sur B2')
+  return exclusive(() => registerArchive(
+    (partPath) => rclone.run(['copyto', remote + name, partPath]),
+    new Date(file.modified),
+  ))
 }
 
 export async function deleteBackup(row) {
@@ -233,9 +290,14 @@ export async function deleteBackup(row) {
   if (path) await unlink(path).catch((err) => { if (err.code !== 'ENOENT') throw err })
   if (row.type === 'backblaze' && row.status === 'success' && path) {
     // Best effort : des identifiants B2 retirés ne doivent pas bloquer le ménage de l'historique
-    await rcloneB2((remote) => ['deletefile', remote + basename(path)]).catch((err) =>
-      log({ category: 'system', level: 'warning', action: 'backup_remote_delete_failed', metadata: { id: row.id, error: err.message } })
-    )
+    try {
+      const rclone = await rcloneB2()
+      const remote = remoteFileOf(rclone, row)
+      if (!remote) throw new Error('Phrase de chiffrement B2 manquante')
+      await rclone.run(['deletefile', remote])
+    } catch (err) {
+      await log({ category: 'system', level: 'warning', action: 'backup_remote_delete_failed', metadata: { id: row.id, error: err.message } })
+    }
   }
   await pool.query('DELETE FROM backups WHERE id = $1', [row.id])
 }

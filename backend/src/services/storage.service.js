@@ -206,5 +206,6 @@ export async function deleteThumbnail(thumbnailPath) {
 // Supprime du disque l'original et la miniature d'un fichier (ligne de la table files)
 export async function deleteMediaFiles(file) {
   await deleteFile(file.stored_name, getMediaSubdir(file.mime_type))
+  if (file.playback_name) await deleteFile(file.playback_name, 'videos')
   await deleteThumbnail(file.thumbnail_path)
 }

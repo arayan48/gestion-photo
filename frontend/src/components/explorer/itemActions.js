@@ -1,6 +1,6 @@
 import {
   Eye, Download, Link2, Link2Off, Heart, HeartOff, Pencil, Info, Trash2, RotateCcw,
-  FolderInput, FolderOpen, FolderPlus, Upload, CheckSquare, Share2, Copy, ExternalLink,
+  FolderInput, FolderOpen, FolderPlus, Upload, CheckSquare, Share2, Copy, ExternalLink, Users,
   LayoutGrid, List, ArrowDownAZ, ArrowUpZA, CalendarArrowDown, CalendarArrowUp, HardDrive, XCircle,
 } from 'lucide-react'
 import api, { apiError } from '../../utils/api.js'
@@ -230,6 +230,7 @@ export function folderMenu(folder, ctx) {
     can('files.upload') && { label: 'Importer ici…', icon: Upload, onSelect: () => { useUiStore.getState().setCurrentFolder({ id: folder.id, name: folder.name }); pickFiles() } },
     can('files.create_folder') && { label: 'Nouveau sous-dossier', icon: FolderPlus, onSelect: () => createFolder({ id: folder.id, name: folder.name }) },
     sep,
+    folder.owner_id === useAuthStore.getState().user?.id && { label: 'Partager…', icon: Users, onSelect: () => useUiStore.setState({ folderShare: folder }) },
     can('files.rename_move') && { label: 'Renommer', icon: Pencil, shortcut: 'F2', onSelect: () => renameFolder(folder) },
     can('files.rename_move') && { label: 'Déplacer vers…', icon: FolderInput, shortcut: 'M', onSelect: () => openMoveDialog([{ ...folder, kind: 'folder' }]) },
     ctx.select && { label: 'Sélectionner', icon: CheckSquare, onSelect: () => ctx.select(folder) },

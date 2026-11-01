@@ -3,6 +3,7 @@ import { readFile, writeFile, unlink, mkdir, rename, stat } from 'fs/promises'
 import { createReadStream, createWriteStream } from 'fs'
 import { pipeline } from 'stream/promises'
 import { nanoid } from 'nanoid'
+import { createHash } from 'crypto'
 import pool from '../../config/database.js'
 import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { checkIpWhitelist } from '../../middleware/ipWhitelist.js'
@@ -23,6 +24,7 @@ import {
   MEDIA_EXT_RE,
 } from '../../services/storage.service.js'
 import { checkMediaStorageLimit } from '../../config/storage.js'
+import { needsPlaybackCopy, queueTranscode } from '../../services/transcode.service.js'
 import { config } from '../../config/env.js'
 import { extractIp } from '../../utils/fingerprint.js'
 import { isUuid, isNonEmptyString, parsePagination, likePattern } from '../../utils/validation.js'
@@ -39,7 +41,15 @@ function contentDisposition(type, filename) {
 // Le propriétaire, le Super Admin ou un rôle avec files.view_others peut consulter un fichier
 async function canViewFile(user, file) {
   if (file.owner_id === user.id) return true
+  if (file.folder_id && await isSharedFolder(file.folder_id, user.id)) return true
   return userHasPermission(user, 'files.view_others')
+}
+
+// Dossier (ou l'un de ses parents) partagé en lecture avec l'utilisateur
+async function isSharedFolder(folderId, userId) {
+  if (!isUuid(folderId)) return false
+  const { rows: [r] } = await pool.query('SELECT folder_shared_with($1, $2) AS shared', [folderId, userId])
+  return r.shared
 }
 
 // Peut modifier (renommer, déplacer, lien, tags) : propriétaire ou Super Admin
@@ -92,7 +102,7 @@ export default async function fileRoutes(fastify) {
 
     // Le fichier est écrit en streaming dans storage/temp (pas de buffer de 500 Mo en RAM)
     const fields = {}
-    const upload = { tempPath: null, filename: null, mimetype: null, truncated: false }
+    const upload = { tempPath: null, filename: null, mimetype: null, truncated: false, hash: null }
 
     try {
       for await (const part of request.parts()) {
@@ -104,8 +114,13 @@ export default async function fileRoutes(fastify) {
           upload.tempPath = getFilePath('temp', `upload_${nanoid(16)}`)
           upload.filename = part.filename
           upload.mimetype = part.mimetype
-          await pipeline(part.file, createWriteStream(upload.tempPath))
+          // Empreinte calculée pendant l'écriture : pas de deuxième lecture du fichier
+          const hash = createHash('sha256')
+          await pipeline(part.file, async function* (source) {
+            for await (const chunk of source) { hash.update(chunk); yield chunk }
+          }, createWriteStream(upload.tempPath))
           upload.truncated = part.file.truncated
+          upload.hash = hash.digest('hex')
         } else {
           fields[part.fieldname] = part.value
         }
@@ -131,6 +146,18 @@ export default async function fileRoutes(fastify) {
 
     const folderId = fields.folderId || null
     if (!(await isOwnFolder(folderId, user.id))) return fail(400, 'Dossier de destination invalide')
+
+    // Même contenu déjà présent chez cet utilisateur : refusé sauf confirmation explicite
+    if (fields.allowDuplicate !== 'true') {
+      const { rows: [dup] } = await pool.query(
+        'SELECT id, original_name FROM files WHERE owner_id = $1 AND content_hash = $2 AND is_deleted = false LIMIT 1',
+        [user.id, upload.hash]
+      )
+      if (dup) {
+        await cleanupTemp()
+        return reply.code(409).send({ error: `Déjà présent : « ${dup.original_name} »`, duplicate: { id: dup.id, name: dup.original_name } })
+      }
+    }
 
     const isImage = upload.mimetype.startsWith('image/')
     // Seule une extension média est retirée : « Fête.2024 » reste « Fête.2024 »
@@ -205,14 +232,15 @@ export default async function fileRoutes(fastify) {
       const { rows: fileRows } = await client.query(
         `INSERT INTO files (original_name, stored_name, folder_id, owner_id, mime_type, size,
                             width, height, fps, duration, codec, format, quality_preset,
-                            thumbnail_path, link_token)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                            thumbnail_path, link_token, content_hash, transcode_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          RETURNING *`,
         [
           originalName, storedName, folderId, user.id, mimeType, fileSize,
           metadata.width || null, metadata.height || null, metadata.fps || null,
           metadata.duration || null, metadata.codec || null, metadata.format || null,
-          qualityPreset, metadata.thumbnailPath || null, linkToken,
+          qualityPreset, metadata.thumbnailPath || null, linkToken, upload.hash,
+          !isImage && needsPlaybackCopy(mimeType, metadata.codec) ? 'pending' : null,
         ]
       )
       file = fileRows[0]
@@ -224,6 +252,8 @@ export default async function fileRoutes(fastify) {
     } finally {
       client.release()
     }
+
+    if (file.transcode_status === 'pending') queueTranscode(file.id)
 
     // Alerte si 90% de la limite serveur
     if (storageStatus.percent >= 90 && Date.now() - lastStorageWarning > STORAGE_WARNING_INTERVAL) {
@@ -250,9 +280,15 @@ export default async function fileRoutes(fastify) {
     let where = 'WHERE f.is_deleted = false'
     const params = []
 
-    if (view === 'mine') {
+    // Dossier partagé par un autre membre : on liste son contenu, quel qu'en soit le propriétaire
+    const sharedFolder = view === 'mine' && folderId && !global && isUuid(folderId) && !(await isOwnFolder(folderId, user.id))
+      && await isSharedFolder(folderId, user.id)
+
+    if (view === 'mine' && !sharedFolder) {
       params.push(user.id)
       where += ` AND f.owner_id = $${params.length}`
+    } else if (view === 'mine') {
+      // accès vérifié ci-dessus
     } else if (!(await userHasPermission(user, 'files.view_others'))) {
       return reply.code(403).send({ error: 'Permission refusée' })
     }
@@ -532,7 +568,7 @@ export default async function fileRoutes(fastify) {
     }
 
     reply.header('X-Content-Type-Options', 'nosniff')
-    return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)))
+    return reply.sendFile(file.playback_name || file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)))
   })
 
   // ─── Visionner un fichier (authentifié, sans whitelist IP) ──────────────
@@ -545,7 +581,7 @@ export default async function fileRoutes(fastify) {
     reply.header('X-Content-Type-Options', 'nosniff')
 
     // sendFile gère les requêtes Range : indispensable pour lire/avancer dans une vidéo
-    return reply.sendFile(file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)), { cacheControl: false })
+    return reply.sendFile(file.playback_name || file.stored_name, join(config.storage.path, getMediaSubdir(file.mime_type)), { cacheControl: false })
   })
 
   // ─── Télécharger un fichier ───────────────────────────────────────────────
@@ -568,6 +604,11 @@ export default async function fileRoutes(fastify) {
 
     if (parentId) {
       if (!isUuid(parentId)) return reply.code(400).send({ error: 'Dossier invalide' })
+      // Sous-dossiers d'un dossier partagé : ceux de son propriétaire
+      if (!(await isOwnFolder(parentId, request.currentUser.id)) && await isSharedFolder(parentId, request.currentUser.id)) {
+        where = 'WHERE true'
+        params.length = 0
+      }
       params.push(parentId)
       where += ` AND fo.parent_id = $${params.length}`
     } else {
@@ -732,9 +773,88 @@ export default async function fileRoutes(fastify) {
     return reply.send({ message: 'Dossier supprimé.' })
   })
 
+  // ─── Partage de dossiers (lecture seule, sous-dossiers compris) ───────────
+  fastify.get('/folders/shared', { preHandler: [authenticate] }, async (request, reply) => {
+    const { rows } = await pool.query(
+      `SELECT fo.*, u.pseudo AS owner_pseudo,
+              (SELECT COUNT(*) FROM files fi WHERE fi.folder_id = fo.id AND fi.is_deleted = false)::int AS file_count,
+              (SELECT COUNT(*) FROM folders sub WHERE sub.parent_id = fo.id)::int AS folder_count,
+              (SELECT COALESCE(json_agg(c.thumbnail_path), '[]') FROM (
+                 SELECT fi.thumbnail_path FROM files fi
+                 WHERE fi.folder_id = fo.id AND fi.is_deleted = false AND fi.thumbnail_path IS NOT NULL
+                 ORDER BY fi.created_at DESC LIMIT 3
+               ) c) AS covers
+       FROM folder_shares s
+       JOIN folders fo ON fo.id = s.folder_id
+       JOIN users u ON u.id = fo.owner_id
+       WHERE s.user_id = $1
+       ORDER BY fo.name`,
+      [request.currentUser.id]
+    )
+    return reply.send(rows)
+  })
+
+  fastify.get('/folders/:id/shares', { preHandler: [authenticate] }, async (request, reply) => {
+    if (!request.params.id || !(await isOwnFolder(request.params.id, request.currentUser.id))) {
+      return reply.code(404).send({ error: 'Dossier introuvable' })
+    }
+    const { rows } = await pool.query(
+      `SELECT u.id, u.pseudo, u.avatar_path, u.discord_avatar, s.created_at
+       FROM folder_shares s JOIN users u ON u.id = s.user_id
+       WHERE s.folder_id = $1 ORDER BY u.pseudo`,
+      [request.params.id]
+    )
+    return reply.send(rows)
+  })
+
+  // Partage par pseudo exact : la liste des membres n'est pas exposée
+  fastify.post('/folders/:id/shares', { preHandler: [authenticate] }, async (request, reply) => {
+    const owner = request.currentUser
+    if (!request.params.id || !(await isOwnFolder(request.params.id, owner.id))) {
+      return reply.code(404).send({ error: 'Dossier introuvable' })
+    }
+    const pseudo = typeof request.body?.pseudo === 'string' ? request.body.pseudo.trim() : ''
+    const { rows: [target] } = await pool.query(
+      'SELECT id, pseudo FROM users WHERE LOWER(pseudo) = LOWER($1) AND is_active = true AND is_banned = false',
+      [pseudo]
+    )
+    if (!target) return reply.code(404).send({ error: 'Aucun membre actif avec ce pseudo' })
+    if (target.id === owner.id) return reply.code(400).send({ error: 'Ce dossier vous appartient déjà' })
+
+    const { rowCount } = await pool.query(
+      'INSERT INTO folder_shares (folder_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [request.params.id, target.id]
+    )
+    if (rowCount) {
+      const { rows: [folder] } = await pool.query('SELECT name FROM folders WHERE id = $1', [request.params.id])
+      await notify({ userId: target.id, type: 'folder_shared', message: `${owner.pseudo} a partagé le dossier « ${folder.name} » avec vous` })
+      await log({ category: 'files', level: 'info', action: 'folder_shared', userId: owner.id, ipAddress: extractIp(request), metadata: { folderId: request.params.id, with: target.id } })
+    }
+    return reply.code(201).send({ id: target.id, pseudo: target.pseudo })
+  })
+
+  fastify.delete('/folders/:id/shares/:userId', { preHandler: [authenticate] }, async (request, reply) => {
+    const { id, userId } = request.params
+    if (!id || !(await isOwnFolder(id, request.currentUser.id)) || !isUuid(userId)) {
+      return reply.code(404).send({ error: 'Partage introuvable' })
+    }
+    await pool.query('DELETE FROM folder_shares WHERE folder_id = $1 AND user_id = $2', [id, userId])
+    await log({ category: 'files', level: 'info', action: 'folder_unshared', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { folderId: id, with: userId } })
+    return reply.send({ success: true })
+  })
+
   fastify.get('/folders/:id/breadcrumb', { preHandler: [authenticate] }, async (request, reply) => {
     if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Dossier introuvable' })
-    const chain = await getFolderBreadcrumb(request.params.id, request.currentUser.id)
+    const userId = request.currentUser.id
+    let chain = await getFolderBreadcrumb(request.params.id, userId)
+    if (!chain.length && await isSharedFolder(request.params.id, userId)) {
+      // Dossier partagé : chemin coupé au premier dossier partagé (les parents restent privés)
+      const { rows: [folder] } = await pool.query('SELECT owner_id FROM folders WHERE id = $1', [request.params.id])
+      const full = await getFolderBreadcrumb(request.params.id, folder.owner_id)
+      const { rows: shares } = await pool.query('SELECT folder_id FROM folder_shares WHERE user_id = $1 AND folder_id = ANY($2)', [userId, full.map((c) => c.id)])
+      const roots = new Set(shares.map((s) => s.folder_id))
+      chain = full.slice(full.findIndex((c) => roots.has(c.id))).map((c) => ({ ...c, shared: true }))
+    }
     return reply.send(chain)
   })
 
@@ -750,7 +870,8 @@ export default async function fileRoutes(fastify) {
     const user = request.currentUser
     const canViewOthers = await userHasPermission(user, 'files.view_others')
     const { rows: files } = await pool.query(
-      `SELECT * FROM files WHERE id = ANY($1) AND is_deleted = false AND ($2 OR owner_id = $3)`,
+      `SELECT * FROM files WHERE id = ANY($1) AND is_deleted = false
+         AND ($2 OR owner_id = $3 OR (folder_id IS NOT NULL AND folder_shared_with(folder_id, $3)))`,
       [ids, canViewOthers, user.id]
     )
     if (!files.length) return reply.code(404).send({ error: 'Aucun fichier trouvé' })

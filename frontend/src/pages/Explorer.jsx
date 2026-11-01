@@ -4,7 +4,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useDropzone } from 'react-dropzone'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  HardDrive, Globe, Clock, Heart, Trash2, Search,
+  HardDrive, Globe, Clock, Heart, Trash2, Search, Users,
   ArrowDown, ArrowUp,
 } from 'lucide-react'
 import api from '../utils/api.js'
@@ -42,6 +42,7 @@ const PAGE_SIZE = 60
 const VIEWS = {
   mine: { title: 'Mon espace', icon: HardDrive, filter: 'Filtrer ce dossier…' },
   others: { title: 'Espace commun', icon: Globe, desc: 'Les fichiers partagés par tous les membres.', filter: 'Filtrer l’espace commun…' },
+  shared: { title: 'Partagés avec moi', icon: Users, desc: 'Les dossiers que d’autres membres partagent avec vous, en lecture seule.', filter: 'Filtrer les dossiers…' },
   recent: { title: 'Récents', icon: Clock, desc: 'Vos 20 derniers fichiers ajoutés ou modifiés.', filter: 'Filtrer les récents…' },
   favorites: { title: 'Favoris', icon: Heart, desc: 'Vos fichiers marqués d’un cœur.', filter: 'Filtrer les favoris…' },
   trash: { title: 'Corbeille', icon: Trash2, desc: 'Les fichiers sont supprimés définitivement après 48 h.', filter: 'Filtrer la corbeille…' },
@@ -141,13 +142,16 @@ export default function Explorer() {
   const listQuery = useQuery({
     queryKey: ['files', view],
     queryFn: async () => (await api.get(`/files/${view}`)).data,
-    enabled: !paged,
+    // « Partagés avec moi » ne liste que des dossiers ; leur contenu s'ouvre dans la vue normale
+    enabled: !paged && view !== 'shared',
   })
 
   const foldersQuery = useQuery({
-    queryKey: ['folders', folderId ?? null],
-    queryFn: () => api.get('/files/folders', { params: { parentId: folderId } }).then((r) => r.data),
-    enabled: view === 'mine',
+    queryKey: ['folders', view === 'shared' ? 'shared' : folderId ?? null],
+    queryFn: () => (view === 'shared'
+      ? api.get('/files/folders/shared')
+      : api.get('/files/folders', { params: { parentId: folderId } })).then((r) => r.data),
+    enabled: view === 'mine' || view === 'shared',
   })
 
   const { data: chain = [], isSuccess: chainLoaded } = useQuery({
@@ -164,10 +168,11 @@ export default function Explorer() {
 
   // Destination des envois / nouveaux dossiers
   useEffect(() => {
-    setCurrentFolder(view === 'mine' && folderId
+    // Dossier partagé par un autre membre : lecture seule, les envois vont dans « Mon espace »
+    setCurrentFolder(view === 'mine' && folderId && !currentFolder?.shared
       ? { id: folderId, name: currentFolder?.name || 'Dossier' }
       : { id: null, name: 'Mon espace' })
-  }, [view, folderId, currentFolder?.name])
+  }, [view, folderId, currentFolder?.name, currentFolder?.shared])
   useEffect(() => () => setCurrentFolder({ id: null, name: 'Mon espace' }), [])
 
   const files = useMemo(() => {
@@ -193,7 +198,7 @@ export default function Explorer() {
   }, [paged, filesQuery.data, listQuery.data, debouncedFilter, type, dateRange, view, sortBy, sortDir])
 
   const folders = useMemo(() => {
-    if (view !== 'mine' || type !== 'all' || dateRange.from || dateRange.to) return []
+    if ((view !== 'mine' && view !== 'shared') || type !== 'all' || dateRange.from || dateRange.to) return []
     let list = foldersQuery.data || []
     if (debouncedFilter) list = list.filter((f) => f.name.toLowerCase().includes(debouncedFilter.toLowerCase()))
     if (sortBy === 'original_name' && sortDir === 'desc') list = [...list].reverse()
@@ -204,8 +209,8 @@ export default function Explorer() {
   const itemsRef = useRef(items)
   itemsRef.current = items
   const total = paged ? (filesQuery.data?.pages[0]?.total ?? files.length) + folders.length : items.length
-  const isLoading = paged ? filesQuery.isLoading && (view !== 'search' || !!q) : listQuery.isLoading
-  const loadingFolders = view === 'mine' && foldersQuery.isLoading
+  const isLoading = paged ? filesQuery.isLoading && (view !== 'search' || !!q) : view !== 'shared' && listQuery.isLoading
+  const loadingFolders = (view === 'mine' || view === 'shared') && foldersQuery.isLoading
 
   // ── Sélection ──────────────────────────────────────────────────────────────
   const [selected, setSelected] = useState(() => new Set())
@@ -569,6 +574,7 @@ export default function Explorer() {
     }
     if (view === 'trash') return <EmptyState label="Corbeille" title="La corbeille est vide" description="Les fichiers supprimés y restent 48 h, puis sont effacés." />
     if (view === 'favorites') return <EmptyState label="Favoris" title="Aucun favori" description="Appuyez sur F sur un fichier pour le garder ici." />
+    if (view === 'shared') return <EmptyState label="Partages" title="Aucun dossier partagé" description="Quand un membre partage un dossier avec vous, il apparaît ici." />
     if (view === 'recent') return <EmptyState label="Récents" title="Rien de récent" description="Vos derniers fichiers apparaîtront ici." />
     if (view === 'others') return <EmptyState label="Commun" title="Aucun fichier partagé" description="Les fichiers des autres membres apparaîtront ici." />
     return (

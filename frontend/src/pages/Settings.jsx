@@ -316,7 +316,54 @@ function SecurityTab() {
           <Button variant="secondary" onClick={totp.setup}>Activer la double authentification</Button>
         )}
       </Section>
+
+      <SessionsSection />
     </div>
+  )
+}
+
+// « Chrome · macOS » à partir du User-Agent (l'ordre compte : Edge et Opera contiennent « Chrome »)
+function describeAgent(ua = '') {
+  const browser = [['Edg/', 'Edge'], ['OPR/', 'Opera'], ['Firefox/', 'Firefox'], ['Chrome/', 'Chrome'], ['Safari/', 'Safari']].find(([k]) => ua.includes(k))?.[1]
+  const os = [['iPhone', 'iPhone'], ['iPad', 'iPad'], ['Android', 'Android'], ['Mac OS X', 'macOS'], ['Windows', 'Windows'], ['Linux', 'Linux']].find(([k]) => ua.includes(k))?.[1]
+  return [browser, os].filter(Boolean).join(' · ') || 'Appareil inconnu'
+}
+
+function SessionsSection() {
+  const { data: sessions = [], refetch } = useQuery({ queryKey: ['sessions'], queryFn: () => api.get('/auth/sessions').then((r) => r.data) })
+  const others = sessions.filter((s) => !s.current).length
+
+  const revoke = async (id) => {
+    try { await api.delete(`/auth/sessions/${id}`); toast.success('Appareil déconnecté') } catch (err) { toast.error(apiError(err)) } finally { refetch() }
+  }
+  const revokeOthers = async () => {
+    try { await api.post('/auth/sessions/revoke-others'); toast.success('Autres appareils déconnectés') } catch (err) { toast.error(apiError(err)) } finally { refetch() }
+  }
+
+  return (
+    <Section title="Appareils connectés" description="Un appareil déconnecté perd l'accès dans les 15 minutes au plus.">
+      <div>
+        {sessions.map((s) => (
+          <Row key={s.id}>
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 text-sm text-fg">
+                  {describeAgent(s.user_agent)}
+                  {s.current && <Badge color="green">Cet appareil</Badge>}
+                </p>
+                <p className="text-xs text-muted">{s.ip_address || 'IP inconnue'} · actif le {formatDate(s.created_at)}</p>
+              </div>
+              {!s.current && <Button size="sm" variant="ghost" onClick={() => revoke(s.id)}>Déconnecter</Button>}
+            </div>
+          </Row>
+        ))}
+      </div>
+      {others > 0 && (
+        <div className="mt-4 flex justify-end">
+          <Button variant="danger-soft" onClick={revokeOthers}>Déconnecter les {others} autres appareils</Button>
+        </div>
+      )}
+    </Section>
   )
 }
 

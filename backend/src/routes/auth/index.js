@@ -27,6 +27,7 @@ import { encryptSecret, decryptSecret } from '../../services/secrets.service.js'
 import { log, notifyAdmins } from '../../utils/logger.js'
 import { extractIp } from '../../utils/fingerprint.js'
 import { authenticate } from '../../middleware/auth.js'
+import { isUuid } from '../../utils/validation.js'
 import { sendEmail } from '../../services/email/email.service.js'
 import {
   PASSWORD_MIN_LENGTH,
@@ -328,6 +329,42 @@ export default async function authRoutes(fastify) {
     if (userId) await log({ category: 'auth', level: 'info', action: 'logout', userId, ipAddress: extractIp(request) })
 
     return reply.send({ message: 'Déconnecté avec succès' })
+  })
+
+  // ─── Sessions actives ────────────────────────────────────────────────────
+  // Chaque rafraîchissement remplace le jeton : un jeton valide = un appareil connecté,
+  // et created_at = sa dernière activité. Le cookie (chemin /api/auth) repère la session courante.
+  fastify.get('/sessions', { preHandler: [authenticate] }, async (request, reply) => {
+    const currentHash = request.cookies?.refresh_token ? hashToken(request.cookies.refresh_token) : null
+    const { rows } = await pool.query(
+      `SELECT id, ip_address, user_agent, created_at, token_hash = $2 AS current
+       FROM refresh_tokens
+       WHERE user_id = $1 AND revoked = false AND expires_at > NOW()
+       ORDER BY created_at DESC`,
+      [request.currentUser.id, currentHash]
+    )
+    return reply.send(rows)
+  })
+
+  fastify.delete('/sessions/:id', { preHandler: [authenticate] }, async (request, reply) => {
+    if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Session introuvable' })
+    const { rowCount } = await pool.query(
+      'UPDATE refresh_tokens SET revoked = true WHERE id = $1 AND user_id = $2 AND revoked = false',
+      [request.params.id, request.currentUser.id]
+    )
+    if (!rowCount) return reply.code(404).send({ error: 'Session introuvable' })
+    await log({ category: 'auth', level: 'info', action: 'session_revoked', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { sessionId: request.params.id } })
+    return reply.send({ success: true })
+  })
+
+  fastify.post('/sessions/revoke-others', { preHandler: [authenticate] }, async (request, reply) => {
+    const currentHash = request.cookies?.refresh_token ? hashToken(request.cookies.refresh_token) : ''
+    const { rowCount } = await pool.query(
+      'UPDATE refresh_tokens SET revoked = true WHERE user_id = $1 AND revoked = false AND token_hash <> $2',
+      [request.currentUser.id, currentHash]
+    )
+    await log({ category: 'auth', level: 'info', action: 'sessions_revoked_others', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { count: rowCount } })
+    return reply.send({ revoked: rowCount })
   })
 
   // ─── OAuth2 Discord ──────────────────────────────────────────────────────

@@ -292,7 +292,7 @@ function TabBackups({ config }) {
   const keys = [
     'backup.schedule', 'backup.keep_n',
     'backup.local.enabled', 'backup.backblaze.enabled',
-    'b2.key_id', 'b2.key', 'b2.bucket',
+    'b2.key_id', 'b2.key', 'b2.bucket', 'b2.passphrase',
   ]
   const { form, set, save, bar } = useConfigForm(config, keys)
   // Le serveur sauvegarde en local tant que ce n'est pas explicitement désactivé
@@ -319,6 +319,10 @@ function TabBackups({ config }) {
             </Row>
             <Row stack label="Bucket" htmlFor="b2-bucket">
               <TextInput id="b2-bucket" className="font-mono text-[13px]" {...field('b2.bucket')} placeholder="mon-bucket" />
+            </Row>
+            <Row stack label="Phrase de chiffrement" htmlFor="b2-passphrase"
+              description="Les archives sont chiffrées avant l'envoi. Notez cette phrase ailleurs : sans elle, impossible de les relire si le serveur est perdu.">
+              <PasswordInput id="b2-passphrase" {...field('b2.passphrase')} placeholder="Une phrase longue et unique" />
             </Row>
           </>
         )}

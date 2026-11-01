@@ -444,6 +444,64 @@ export function AdminBackups({ isSuperAdmin }) {
           ))}
         </div>
       )}
+
+      {isSuperAdmin && <RemoteBackups onFetched={refresh} />}
+    </div>
+  )
+}
+
+// Archives présentes sur Backblaze B2 : à rapatrier sur le serveur avant de les restaurer
+function RemoteBackups({ onFetched }) {
+  const [open, setOpen] = useState(false)
+  const [fetching, setFetching] = useState(null)
+  const { data: files = [], isFetching, error } = useQuery({
+    queryKey: ['backups-remote'],
+    queryFn: () => api.get('/admin/backups/remote').then((r) => r.data),
+    enabled: open,
+    retry: false,
+  })
+
+  const fetchOne = async (f) => {
+    setFetching(f.name)
+    try {
+      await api.post('/admin/backups/remote/fetch', { name: f.name, encrypted: f.encrypted }, { timeout: 0 })
+      toast.success('Archive rapatriée. Restaurez-la depuis la liste ci-dessus.')
+      onFetched()
+    } catch (err) { toast.error(apiError(err, 'Récupération impossible')) } finally { setFetching(null) }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="label-mono">Archives sur Backblaze B2</p>
+          <p className="mt-1 text-xs text-muted">Après la perte du serveur : rapatriez une archive ici, puis restaurez-la.</p>
+        </div>
+        {!open && <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Afficher</Button>}
+      </div>
+      {open && (
+        <div className="mt-4">
+          {isFetching ? <ListSkeleton /> : error ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{apiError(error, 'Lecture de B2 impossible')}</p>
+          ) : !files.length ? <p className="text-sm text-subtle">Aucune archive sur B2.</p> : (
+            <div className="table-wrapper divide-y divide-line">
+              {files.map((f) => (
+                <div key={`${f.encrypted}-${f.name}`} className="flex items-center gap-4 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-fg">{formatDateTime(f.modified)}</p>
+                    <p className="truncate font-mono text-xs text-muted">{f.name}</p>
+                  </div>
+                  <span className="hidden text-xs tabular-nums text-muted sm:block">{formatSize(f.size)}</span>
+                  <Badge color={f.encrypted ? 'green' : 'amber'}>{f.encrypted ? 'Chiffrée' : 'En clair'}</Badge>
+                  <Button size="sm" variant="outline" icon={Download} loading={fetching === f.name} disabled={!!fetching} onClick={() => fetchOne(f)}>
+                    Rapatrier
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
