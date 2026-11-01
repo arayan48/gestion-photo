@@ -78,6 +78,7 @@ let lastStorageWarning = 0
 export default async function fileRoutes(fastify) {
   // ─── Upload ───────────────────────────────────────────────────────────────
   fastify.post('/upload', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     preHandler: [authenticate, requirePermission('files.upload')],
   }, async (request, reply) => {
     const user = request.currentUser
@@ -820,7 +821,7 @@ export default async function fileRoutes(fastify) {
   })
 
   // ─── Actions groupées ─────────────────────────────────────────────────────
-  // Une seule requête pour N fichiers (évite de saturer le rate-limit Nginx)
+  // Une seule requête pour N fichiers (évite de saturer la limite de requêtes)
   const BULK_ACTIONS = ['move', 'trash', 'restore', 'delete_permanent', 'favorite', 'unfavorite', 'link_on', 'link_off']
   fastify.post('/bulk', { preHandler: [authenticate] }, async (request, reply) => {
     const { action, fileIds, folderId } = request.body || {}

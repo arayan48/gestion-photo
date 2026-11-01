@@ -7,6 +7,8 @@ import staticPlugin from '@fastify/static'
 import websocket from '@fastify/websocket'
 import rateLimit from '@fastify/rate-limit'
 import { join } from 'path'
+import { existsSync } from 'fs'
+import { redis } from './config/redis.js'
 import pool from './config/database.js'
 import { config } from './config/env.js'
 import { initStorage } from './config/storage.js'
@@ -92,9 +94,18 @@ const fastify = Fastify({
   logger: {
     level: config.nodeEnv === 'development' ? 'info' : 'warn',
   },
-  // Ne faire confiance qu'aux proxys du réseau privé (Nginx dans Docker) pour X-Forwarded-For.
+  // Ne faire confiance qu'aux proxys du réseau privé (tunnel Cloudflare, Traefik…) pour X-Forwarded-For.
   // `true` ferait confiance à l'en-tête envoyé par n'importe quel client (usurpation d'IP).
   trustProxy: process.env.TRUST_PROXY || 'loopback,linklocal,uniquelocal',
+  // Liens publics : /media/<jeton> → /api/files/public/<jeton>
+  rewriteUrl: (req) => req.url.replace(/^\/media\//, '/api/files/public/'),
+})
+
+// En-têtes de sécurité sur toutes les réponses
+fastify.addHook('onSend', async (request, reply) => {
+  reply.header('X-Frame-Options', 'SAMEORIGIN')
+  reply.header('X-Content-Type-Options', 'nosniff')
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
 })
 
 // ── Gestion centralisée des erreurs ──────────────────────────────────────────
@@ -112,7 +123,7 @@ fastify.setErrorHandler((err, request, reply) => {
 })
 
 // ── Plugins ──────────────────────────────────────────────────────────────────
-// Le frontend est servi sur la même origine (Nginx) : CORS seulement pour l'URL publique configurée
+// Le frontend est servi sur la même origine (par Fastify) : CORS seulement pour l'URL publique configurée
 await fastify.register(cors, {
   origin: (origin, cb) => {
     if (!origin) return cb(null, false)
@@ -129,12 +140,17 @@ await fastify.register(jwt, {
   secret: config.jwt.accessSecret,
 })
 
+// Compteurs dans Redis : partagés entre instances et conservés au redémarrage
 await fastify.register(rateLimit, {
-  max: 200,
+  max: 300,
   timeWindow: '1 minute',
-  errorResponseBuilder: () => ({
-    error: 'Trop de requêtes. Veuillez réessayer dans quelques instants.',
-  }),
+  redis: redis ?? undefined,
+  skipOnError: true,
+  // Miniatures, avatars et interface : pas de limite (une galerie en charge des centaines)
+  allowList: (request) => !request.url.startsWith('/api/') && !request.url.startsWith('/ws'),
+  // Levée comme une erreur : sans statusCode, le gestionnaire d'erreurs répondrait 500
+  errorResponseBuilder: (request, context) =>
+    Object.assign(new Error('Trop de requêtes. Veuillez réessayer dans quelques instants.'), { statusCode: context.statusCode }),
 })
 
 await fastify.register(multipart, {
@@ -152,6 +168,11 @@ await fastify.register(staticPlugin, {
   // (reply.sendFile() avec une racine explicite n'est pas concerné par ce filtre.)
   allowedPath: (pathName, root) =>
     root !== config.storage.path || /^\/(thumbnails|avatars)\/[^/]+$/.test(pathName),
+  // Miniatures et avatars en cache 7 jours (navigateur et Cloudflare). Pas les autres
+  // fichiers envoyés par reply.sendFile() : ce sont des originaux privés.
+  setHeaders: (res, path) => {
+    if (/[/\\](thumbnails|avatars)[/\\][^/\\]+$/.test(path)) res.setHeader('Cache-Control', 'public, max-age=604800')
+  },
 })
 
 await fastify.register(websocket)
@@ -168,6 +189,30 @@ fastify.register(async (instance) => {
   instance.addHook('preHandler', authenticate)
   registerWebsocketRoutes(instance)
 })
+
+// ── Interface (build Vite copié dans l'image) ─────────────────────────────────
+// Absente en développement : c'est Vite qui sert l'interface.
+const publicDir = process.env.PUBLIC_DIR || join(process.cwd(), 'public')
+if (existsSync(publicDir)) {
+  await fastify.register(staticPlugin, {
+    root: publicDir,
+    prefix: '/',
+    decorateReply: false,
+    wildcard: false,
+    index: false,
+    preCompressed: true, // fichiers .br/.gz générés au build
+    setHeaders: (res, path) => {
+      res.setHeader('Cache-Control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
+    },
+  })
+  // Routes React : toute page inconnue renvoie index.html (jamais mis en cache)
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.method !== 'GET' || /^\/(api|ws|storage)(\/|$)/.test(request.url)) {
+      return reply.code(404).send({ error: 'Introuvable' })
+    }
+    return reply.header('Cache-Control', 'no-cache').sendFile('index.html', publicDir)
+  })
+}
 
 // ── Health check ──────────────────────────────────────────────────────────────
 fastify.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -200,6 +245,7 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     try {
       await fastify.close()
       await pool.end()
+      redis?.disconnect()
     } finally {
       process.exit(0)
     }

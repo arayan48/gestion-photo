@@ -1,4 +1,5 @@
 import pool from '../config/database.js'
+import { cached } from '../config/redis.js'
 import { extractIp } from '../utils/fingerprint.js'
 
 function isLocalOrPrivateIp(ip) {
@@ -21,12 +22,13 @@ export async function checkIpWhitelist(request, reply) {
   // IPs locales et réseau privé toujours autorisés
   if (isLocalOrPrivateIp(ip)) return
 
-  const { rows } = await pool.query(
-    'SELECT 1 FROM ip_whitelist WHERE ip_address = $1',
-    [ip]
-  )
+  // Liste entière en cache : chaque lien public la consulte (invalidée à chaque modification)
+  const allowed = await cached('ip_whitelist', 300, async () => {
+    const { rows } = await pool.query('SELECT ip_address FROM ip_whitelist')
+    return rows.map((r) => r.ip_address)
+  })
 
-  if (!rows.length) {
+  if (!allowed.includes(ip)) {
     return reply.code(403).send({ error: 'Accès refusé : IP non autorisée' })
   }
 }

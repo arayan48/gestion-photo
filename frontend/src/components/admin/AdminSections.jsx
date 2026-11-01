@@ -274,7 +274,7 @@ export function AdminWhitelist() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 border-l-2 border-accent-500 bg-overlay/40 px-4 py-3">
-        <p className="min-w-0 flex-1 text-[13px] text-muted">Toute requête vers <code className="rounded bg-overlay px-1 font-mono text-xs text-fg">/media/:token</code> provenant d'une IP absente de cette liste reçoit une erreur 403 (Nginx et API).</p>
+        <p className="min-w-0 flex-1 text-[13px] text-muted">Toute requête vers <code className="rounded bg-overlay px-1 font-mono text-xs text-fg">/media/:token</code> provenant d'une IP absente de cette liste reçoit une erreur 403.</p>
         {manage && <Button onClick={() => setModal('add')}>Ajouter une IP</Button>}
       </div>
       {isLoading ? <ListSkeleton /> : !list.length ? (

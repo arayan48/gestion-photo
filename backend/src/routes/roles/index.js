@@ -1,4 +1,5 @@
 import pool from '../../config/database.js'
+import { invalidate } from '../../config/redis.js'
 import { authenticate, requireSuperAdmin } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp } from '../../utils/fingerprint.js'
@@ -102,6 +103,7 @@ export default async function roleRoutes(fastify) {
       client.release()
     }
 
+    await invalidate(`perms:${id}`)
     await log({ category: 'users', level: 'info', action: 'role_updated', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { roleId: id, permissionKeys } })
     return reply.send({ message: 'Rôle mis à jour.' })
   })
@@ -115,6 +117,7 @@ export default async function roleRoutes(fastify) {
     if (rows[0].is_super_admin) return reply.code(403).send({ error: 'Impossible de supprimer le rôle Super Admin' })
 
     await pool.query('DELETE FROM roles WHERE id = $1', [id])
+    await invalidate(`perms:${id}`)
     await log({ category: 'users', level: 'warning', action: 'role_deleted', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { roleId: id } })
     return reply.send({ message: 'Rôle supprimé.' })
   })

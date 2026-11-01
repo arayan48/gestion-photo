@@ -68,7 +68,7 @@ Démarrer les conteneurs :
 docker compose up -d --build
 ```
 
-Les migrations de la base sont appliquées automatiquement au démarrage du backend.
+Les migrations de la base sont appliquées automatiquement au démarrage.
 
 ## Premier lancement
 
@@ -90,8 +90,8 @@ docker compose down
 docker compose down
 docker compose up -d
 
-# Accéder au shell du backend
-docker compose exec backend sh
+# Accéder au shell de l'application
+docker compose exec obscura sh
 
 # Voir l'état des conteneurs
 docker compose ps

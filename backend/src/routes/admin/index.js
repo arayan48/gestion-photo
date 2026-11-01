@@ -1,5 +1,6 @@
 import { isIP } from 'net'
 import pool from '../../config/database.js'
+import { invalidate } from '../../config/redis.js'
 import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp, normalizeIp } from '../../utils/fingerprint.js'
@@ -94,6 +95,7 @@ export default async function adminRoutes(fastify) {
     )
     if (!rows.length) return reply.code(409).send({ error: 'Cette IP est déjà dans la liste blanche' })
 
+    await invalidate('ip_whitelist')
     await log({ category: 'security', level: 'info', action: 'ip_whitelisted', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { ip, label } })
     return reply.code(201).send(rows[0])
   })
@@ -112,6 +114,7 @@ export default async function adminRoutes(fastify) {
       [ip, optionalString(label, 100), id]
     )
     if (!rowCount) return reply.code(404).send({ error: 'Entrée introuvable' })
+    await invalidate('ip_whitelist')
     await log({ category: 'security', level: 'info', action: 'ip_whitelist_updated', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { id, ip, label } })
     return reply.send({ message: 'Entrée mise à jour.' })
   })
@@ -122,6 +125,7 @@ export default async function adminRoutes(fastify) {
     if (!isUuid(request.params.id)) return reply.code(404).send({ error: 'Entrée introuvable' })
     const { rows } = await pool.query('DELETE FROM ip_whitelist WHERE id = $1 RETURNING ip_address', [request.params.id])
     if (!rows.length) return reply.code(404).send({ error: 'Entrée introuvable' })
+    await invalidate('ip_whitelist')
     await log({ category: 'security', level: 'warning', action: 'ip_removed_whitelist', userId: request.currentUser.id, ipAddress: extractIp(request), metadata: { ip: rows[0].ip_address } })
     return reply.send({ message: 'IP retirée de la liste blanche.' })
   })

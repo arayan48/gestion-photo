@@ -5,7 +5,7 @@ import { useAuthStore } from './auth.store.js'
 import { toast } from './toast.store.js'
 
 // Gestionnaire d'envoi global : file d'attente, 3 envois parallèles, annulation,
-// nouvelle tentative automatique si Nginx limite le débit (429 / 503)
+// nouvelle tentative automatique si le serveur limite le débit (429 / 503)
 const CONCURRENCY = 3
 const MAX_RETRIES = 3
 const controllers = new Map()

@@ -29,7 +29,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: backend, changeOrigin: true },
       '/storage': { target: backend, changeOrigin: true },
-      // Liens publics : même réécriture que Nginx (/media/<jeton> → /api/files/public/<jeton>)
+      // Liens publics : même réécriture que le serveur (/media/<jeton> → /api/files/public/<jeton>)
       '/media': { target: backend, changeOrigin: true, rewrite: (path) => path.replace(/^\/media\//, '/api/files/public/') },
       '/ws': { target: backend.replace(/^http/, 'ws'), ws: true },
     },

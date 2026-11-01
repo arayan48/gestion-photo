@@ -2,6 +2,7 @@ import { unlink } from 'fs/promises'
 import { join } from 'path'
 import { nanoid } from 'nanoid'
 import pool from '../../config/database.js'
+import { invalidate } from '../../config/redis.js'
 import { authenticate, requirePermission, userHasPermission } from '../../middleware/auth.js'
 import { log } from '../../utils/logger.js'
 import { extractIp } from '../../utils/fingerprint.js'
@@ -261,6 +262,7 @@ export default async function userRoutes(fastify) {
 
     params.push(target.id)
     await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`, params)
+    await invalidate(`user:${target.id}`)
 
     // Un compte suspendu perd immédiatement ses sessions
     if (suspend === true) await revokeAllUserTokens(target.id)
@@ -290,6 +292,7 @@ export default async function userRoutes(fastify) {
       [target.id]
     )
     const { rows: [deleted] } = await pool.query('DELETE FROM users WHERE id = $1 RETURNING avatar_path', [target.id])
+    await invalidate(`user:${target.id}`)
 
     for (const file of files) await deleteMediaFiles(file)
     if (deleted?.avatar_path?.startsWith('/storage/avatars/')) {

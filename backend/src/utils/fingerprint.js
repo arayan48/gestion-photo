@@ -12,7 +12,7 @@ export function normalizeIp(ip) {
 }
 
 // L'IP client est résolue par Fastify (option trustProxy) : seuls les proxys de confiance
-// (Nginx sur le réseau Docker) peuvent la fournir via X-Forwarded-For. Lire l'en-tête
+// (tunnel Cloudflare, Traefik… sur le réseau privé) peuvent la fournir via X-Forwarded-For. Lire l'en-tête
 // directement permettrait à n'importe quel client d'usurper une IP (whitelist, bans…).
 export function extractIp(request) {
   return normalizeIp(request.ip)

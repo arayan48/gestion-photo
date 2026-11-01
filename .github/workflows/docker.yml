@@ -1,7 +1,7 @@
 name: Docker
 
-# Publie les images sur GHCR pour l'installation via l'App Store ZimaOS (arayan48/appstore).
-# Tag vX.Y.Z → images vX.Y.Z ; lancement manuel → latest.
+# Publie l'image sur GHCR pour l'installation via l'App Store ZimaOS (arayan48/appstore).
+# Tag vX.Y.Z → image vX.Y.Z ; lancement manuel → latest.
 on:
   push:
     tags: [ "v*" ]
@@ -11,20 +11,11 @@ permissions: {}
 
 jobs:
   build:
-    name: Image ${{ matrix.image }}
+    name: Image obscura
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - image: backend
-            target: production
-          - image: frontend
-            target: production
-          - image: nginx
-            target: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +26,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/obscura-${{ matrix.image }}
+          images: ghcr.io/${{ github.repository_owner }}/obscura
           flavor: |
             latest=false
           tags: |
@@ -56,11 +47,10 @@ jobs:
       - name: Build Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ./${{ matrix.image }}
-          target: ${{ matrix.target }}
+          context: .
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

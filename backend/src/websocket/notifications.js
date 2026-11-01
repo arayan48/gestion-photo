@@ -42,7 +42,7 @@ export function registerWebsocketRoutes(fastify) {
 
     registerClient(userId, socket)
 
-    // Ping régulier : les proxys (Traefik, Nginx…) coupent les connexions muettes,
+    // Ping régulier : les proxys (Traefik, Cloudflare…) coupent les connexions muettes,
     // et une connexion morte (mobile en veille) est détectée puis libérée
     let alive = true
     socket.on('pong', () => { alive = true })

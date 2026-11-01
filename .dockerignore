@@ -1,0 +1,16 @@
+# Ne jamais embarquer dans l'image : dépendances de l'hôte (binaires natifs
+# d'un autre OS, ex. Windows), builds locaux, données, secrets
+**/node_modules
+**/dist
+**/.vite
+**/npm-debug.log*
+**/storage
+backend/data
+**/master.key
+**/.env
+**/.env.*
+**/*.log
+.git
+.github
+docs
+*.md

@@ -189,7 +189,8 @@ export default async function authRoutes(fastify) {
   })
 
   // ─── Connexion ──────────────────────────────────────────────────────────
-  fastify.post('/login', async (request, reply) => {
+  // Anti brute-force : 10 essais par minute et par IP (le ban progressif fait le reste)
+  fastify.post('/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { email, password, totp, browserFingerprint } = request.body || {}
     const ip = extractIp(request)
     const userAgent = request.headers['user-agent'] || ''

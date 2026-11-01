@@ -45,13 +45,14 @@ Plateforme d'hébergement de médias auto-hébergée. Stockez vos images et vid�
 
 ## Installation
 
-Trois façons de déployer, avec les mêmes images :
+Obscura est **une seule application** (API + interface) accompagnée de PostgreSQL et Redis. Quatre façons de la déployer :
 
 | Fichier | Usage |
 | --- | --- |
-| `docker-compose.yml` | **Production** sur un VPS / serveur : nginx publie 80/443, HTTPS Let's Encrypt automatique |
+| `docker-compose.yml` | **Production** sur un VPS, un serveur ou un NAS : un seul port HTTP, HTTPS par tunnel Cloudflare ou reverse proxy |
 | `docker-compose.coolify.yml` | **Coolify** (ou tout proxy qui gère déjà le TLS) : aucun port publié |
 | `docker-compose.dev.yml` | **Développement** : rechargement à chaud, interface sur `http://localhost:5173` |
+| App Store ZimaOS | Source `https://arayan48.github.io/appstore/store.json`, image `ghcr.io/arayan48/obscura` |
 
 ### 1. Cloner le dépôt
 
@@ -77,12 +78,10 @@ openssl rand -base64 32   # → copier dans DB_PASSWORD
 | Variable | Description |
 | --- | --- |
 | `DB_PASSWORD` | Mot de passe PostgreSQL (**obligatoire**, le démarrage échoue sinon) |
-| `DOMAIN` | Domaine public (ex. `photos.mondomaine.fr`) : active le HTTPS Let's Encrypt automatique |
-| `LETSENCRYPT_EMAIL` | Email pour les alertes d'expiration du certificat (recommandé) |
 | `DB_NAME`, `DB_USER` | Nom de la base et utilisateur (défaut : `obscura`) |
 | `MASTER_KEY` | *Optionnel* — clé de chiffrement des secrets (sinon générée automatiquement) |
-| `HTTP_PORT`, `HTTPS_PORT` | *Optionnel* — ports publiés sur l'hôte (défaut : 80 / 443) |
-| `TRUSTED_PROXIES` | *Optionnel* — proxys placés devant nginx (Cloudflare…), voir ci-dessous |
+| `HTTP_PORT` | *Optionnel* — port publié sur l'hôte (défaut : 80) |
+| `TRUST_PROXY` | *Optionnel* — proxys de confiance pour la vraie IP des visiteurs, voir ci-dessous |
 
 Tout le reste se configure dans l'interface (voir [Configuration](#configuration)).
 
@@ -94,23 +93,23 @@ docker compose up -d --build
 
 Les services démarrés :
 
+- `obscura` — l'application : API Fastify, WebSocket et interface React (seul service exposé)
 - `postgres` — base de données
-- `backend` — API Fastify (interne, non exposée)
-- `frontend` — interface React (interne, servie via nginx)
-- `nginx` — reverse proxy, seul service exposé (ports 80 / 443)
-- `certbot` — obtient et renouvelle le certificat HTTPS (inactif si `DOMAIN` est vide)
+- `redis` — cache (comptes, permissions, liste blanche IP) et compteurs des limites de requêtes
 
-Les migrations de la base sont appliquées **automatiquement** à chaque démarrage du backend.
+Les migrations de la base sont appliquées **automatiquement** à chaque démarrage.
 
 ### 5. HTTPS
 
 **HTTPS est obligatoire en production** : le cookie de session n'est envoyé qu'en HTTPS. Sans lui, la connexion expire au bout de 15 minutes.
 
-- **Avec `DOMAIN`** : faites pointer le DNS du domaine vers le serveur et ouvrez les ports 80 et 443. Le certificat est obtenu en moins d'une minute après le démarrage, puis renouvelé automatiquement. nginx bascule seul en HTTPS et redirige HTTP → HTTPS. Suivi : `docker compose logs certbot nginx`.
-- **Derrière un proxy qui gère déjà le TLS** (Caddy, Traefik, nginx de l'hôte…) : laissez `DOMAIN` vide et faites pointer le proxy vers le port `HTTP_PORT`.
+Obscura sert du HTTP sur `HTTP_PORT`. Pour HTTPS, placez devant lui :
+
+- **Un tunnel Cloudflare** (recommandé, aucun port à ouvrir) : dans Cloudflare Zero Trust → Networks → Tunnels, ajoutez un *public hostname* qui pointe vers `http://IP-du-serveur:HTTP_PORT`.
+- **Ou un reverse proxy** qui gère le TLS (Caddy, Traefik, nginx de l'hôte…) vers le port `HTTP_PORT`.
 - **Test en réseau local en HTTP** (IP sans domaine) : ajoutez `COOKIE_SECURE=false` au `.env`. Ne jamais l'utiliser sur Internet.
 
-**Vraie IP des visiteurs** : les bans et la liste blanche IP reposent sur l'IP du visiteur. Si un proxy est placé devant nginx, nginx lit l'en-tête `X-Forwarded-For` qu'il envoie, mais seulement depuis les adresses de `TRUSTED_PROXIES` (par défaut les réseaux privés : proxy sur le même serveur ou sur le réseau Docker). Derrière **Cloudflare**, ajoutez ses plages d'IP ([cloudflare.com/ips](https://www.cloudflare.com/ips/)) à `TRUSTED_PROXIES`.
+**Vraie IP des visiteurs** : les bans et la liste blanche IP reposent sur l'IP du visiteur. Obscura lit l'en-tête `X-Forwarded-For`, mais seulement s'il vient d'un proxy de confiance (`TRUST_PROXY`, par défaut les réseaux privés : tunnel Cloudflare ou proxy sur le même serveur / réseau Docker).
 
 ### 6. Premier lancement
 
@@ -130,7 +129,7 @@ docker compose up -d --build
 1. Nouvelle ressource → dépôt Git → build pack **Docker Compose**.
 2. **Docker Compose Location** : `/docker-compose.coolify.yml`.
 3. Variables d'environnement : `DB_PASSWORD` (obligatoire), `MASTER_KEY` (optionnel). Cochez « Runtime only » si Coolify affiche un avertissement sur `NODE_ENV`.
-4. Domaine : **uniquement sur le service `nginx`**, port 80 (ex. `https://photos.mondomaine.fr`). Ne mettez pas de domaine sur `backend` ni `frontend` : nginx route `/api`, `/ws` et `/media` vers le backend, et le reste vers le frontend.
+4. Domaine : **uniquement sur le service `obscura`**, port 3000 (ex. `https://photos.mondomaine.fr`).
 5. Déployez, puis ouvrez le domaine pour faire le setup.
 
 Coolify termine le TLS. La vraie IP des visiteurs est lue dans l'en-tête envoyé par son proxy, sans réglage supplémentaire.
@@ -167,7 +166,7 @@ Depuis **Admin → Configuration** (Super Admin ou rôle avec `system.manage_con
 > ⚠️ Sauvegardez la clé maître **à part** : elle n'est volontairement pas incluse dans les sauvegardes, pour qu'une archive volée ne suffise pas à lire les secrets. Sans elle, il faudra ressaisir les secrets et les utilisateurs devront réactiver leur 2FA.
 >
 > ```bash
-> docker compose cp backend:/app/data/master.key ./master.key.backup
+> docker compose cp obscura:/app/data/master.key ./master.key.backup
 > ```
 
 ### Migration depuis une ancienne version
@@ -183,7 +182,7 @@ Les anciennes variables (`APP_URL`, `JWT_ACCESS_SECRET`, `DISCORD_*`, `EMAIL_*`,
 | Backend | Node.js + Fastify |
 | Base de données | PostgreSQL 16 |
 | Frontend | React + Vite + Tailwind CSS, Radix UI (menus, dialogues), Framer Motion, TanStack Query, dnd-kit, cmdk, Recharts |
-| Reverse proxy | Nginx |
+| Cache | Redis |
 | Conteneurisation | Docker + Docker Compose |
 | Traitement médias | Sharp (images) + FFmpeg (vidéos) |
 

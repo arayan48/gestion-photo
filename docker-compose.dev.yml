@@ -19,16 +19,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
   backend:
-    build:
-      context: ./backend
-      target: development
+    build: ./backend
     environment:
       NODE_ENV: development
       DB_HOST: postgres
       DB_NAME: ${DB_NAME:-obscura}
       DB_USER: ${DB_USER:-obscura}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -37,13 +40,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     ports:
       - "127.0.0.1:3000:3000"
 
   frontend:
-    build:
-      context: ./frontend
-      target: development
+    build: ./frontend
     volumes:
       - ./frontend:/app
       - /app/node_modules
