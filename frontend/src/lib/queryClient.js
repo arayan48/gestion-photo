@@ -12,5 +12,6 @@ export const invalidateFiles = () => {
   queryClient.invalidateQueries({ queryKey: ['file'] }) // fiches détaillées (panneau Informations)
   queryClient.invalidateQueries({ queryKey: ['folders'] })
   queryClient.invalidateQueries({ queryKey: ['folder-tree'] })
+  queryClient.invalidateQueries({ queryKey: ['breadcrumb'] }) // dossier courant renommé ou supprimé
   queryClient.invalidateQueries({ queryKey: ['my-stats'] })
 }

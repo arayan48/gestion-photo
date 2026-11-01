@@ -214,7 +214,7 @@ export default function AdminUsers() {
         <EmptyState icon={Users} title="Aucun utilisateur" description={search ? 'Aucun résultat pour cette recherche.' : undefined} compact />
       ) : (
         <div className="table-wrapper">
-          <div className="hidden grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px] items-center gap-4 border-b border-line px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-subtle lg:grid">
+          <div className="hidden grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px] items-center gap-4 border-b border-line px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-subtle xl:grid">
             <Checkbox checked={allSel} indeterminate={selected.size > 0 && !allSel} onChange={() => setSelected(allSel ? new Set() : new Set(users.map((u) => u.id)))} />
             <span>Utilisateur</span><span>Rôle</span><span>Statut</span><span>Stockage</span><span>Inscrit</span><span />
           </div>
@@ -223,7 +223,7 @@ export default function AdminUsers() {
               const pct = Math.min(100, Math.round((Number(u.storage_used) / Number(u.storage_quota || 1)) * 100))
               return (
                 <ContextMenu key={u.id} items={() => menu(u)}>
-                  <div className={cn('grid grid-cols-[32px_minmax(0,1fr)_40px] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-overlay/50 lg:grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px]', selected.has(u.id) && 'bg-accent-500/[0.06]')}>
+                  <div className={cn('grid grid-cols-[32px_minmax(0,1fr)_40px] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-overlay/50 xl:grid-cols-[32px_minmax(0,2fr)_minmax(0,1fr)_120px_180px_120px_40px]', selected.has(u.id) && 'bg-accent-500/[0.06]')}>
                     <Checkbox checked={selected.has(u.id)} onChange={() => toggle(u.id)} />
                     <div className="flex min-w-0 items-center gap-3">
                       <Avatar src={u.avatar_path} name={u.pseudo} size={36} />
@@ -236,19 +236,19 @@ export default function AdminUsers() {
                         <p className="truncate text-xs text-muted">{u.email}</p>
                       </div>
                     </div>
-                    <div className="col-start-2 flex flex-wrap items-center gap-1.5 lg:col-start-auto">
+                    <div className="col-start-2 flex flex-wrap items-center gap-1.5 xl:col-start-auto">
                       <Badge color={u.is_super_admin ? 'amber' : 'accent'}>{u.role_name || 'Aucun rôle'}</Badge>
-                      <span className="lg:hidden">{u.is_banned ? <Badge color="red" dot>Suspendu</Badge> : u.is_active ? <Badge color="green" dot>Actif</Badge> : <Badge color="amber" dot>Inactif</Badge>}</span>
+                      <span className="xl:hidden">{u.is_banned ? <Badge color="red" dot>Suspendu</Badge> : u.is_active ? <Badge color="green" dot>Actif</Badge> : <Badge color="amber" dot>Inactif</Badge>}</span>
                     </div>
-                    <span className="hidden lg:block">{u.is_banned ? <Badge color="red" dot>Suspendu</Badge> : u.is_active ? <Badge color="green" dot>Actif</Badge> : <Badge color="amber" dot>Inactif</Badge>}</span>
-                    <div className="col-start-2 lg:col-start-auto">
+                    <span className="hidden xl:block">{u.is_banned ? <Badge color="red" dot>Suspendu</Badge> : u.is_active ? <Badge color="green" dot>Actif</Badge> : <Badge color="amber" dot>Inactif</Badge>}</span>
+                    <div className="col-start-2 xl:col-start-auto">
                       <div className="mb-1 flex justify-between text-[11px] tabular-nums text-muted">
                         <span>{formatSize(u.storage_used)}</span><span>{formatSize(u.storage_quota)}</span>
                       </div>
                       <Progress value={pct} />
                     </div>
-                    <span className="hidden text-xs text-muted lg:block">{formatRelative(u.created_at)}</span>
-                    <div className="col-start-3 row-start-1 flex justify-end lg:col-start-auto lg:row-start-auto">
+                    <span className="hidden text-xs text-muted xl:block">{formatRelative(u.created_at)}</span>
+                    <div className="col-start-3 row-start-1 flex justify-end xl:col-start-auto xl:row-start-auto">
                       <DropdownMenu items={() => menu(u)} trigger={<button className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-overlay hover:text-fg" aria-label="Actions"><MoreHorizontal size={17} /></button>} />
                     </div>
                   </div>

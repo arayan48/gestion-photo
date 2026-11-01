@@ -86,6 +86,8 @@ try {
   await importLegacyEnvSettings()
   await encryptPlaintextSecrets()
   config.jwt.accessSecret = await ensureJwtSecret()
+  // Avant @fastify/static : sa racine doit exister à l'enregistrement (premier démarrage)
+  await ensureStorageDirs()
 } catch (err) {
   console.error('❌ Échec de l\'initialisation :', err)
   process.exit(1)
@@ -225,7 +227,6 @@ async function start() {
     await seedPermissions()
 
     // Initialiser le stockage
-    await ensureStorageDirs()
     await initStorage()
 
     // Démarrer les cron jobs

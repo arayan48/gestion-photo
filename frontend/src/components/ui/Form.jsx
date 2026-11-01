@@ -203,12 +203,18 @@ export function OtpInput({ value, onChange, length = 6, autoFocus, disabled }) {
           inputMode="numeric"
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
           autoFocus={autoFocus && i === 0}
-          maxLength={1}
           aria-label={`Chiffre ${i + 1}`}
           onChange={(e) => {
-            const v = e.target.value.replace(/\D/g, '').slice(-1)
-            setAt(i, v)
-            if (v && i < length - 1) refs.current[i + 1]?.focus()
+            const typed = e.target.value.replace(/\D/g, '')
+            // Code entier dans une case (remplissage auto iOS/Android, frappe rapide) : on le répartit
+            if (typed.length > 1) {
+              const next = (value.slice(0, i) + typed).slice(0, length)
+              onChange(next)
+              refs.current[Math.min(next.length, length - 1)]?.focus()
+              return
+            }
+            setAt(i, typed)
+            if (typed && i < length - 1) refs.current[i + 1]?.focus()
           }}
           onKeyDown={(e) => {
             if (e.key === 'Backspace' && !d && i > 0) refs.current[i - 1]?.focus()

@@ -256,7 +256,7 @@ function SecurityTab() {
   }
 
   const totp = {
-    setup: async () => { try { setQr((await api.post('/auth/totp/setup')).data.qrCode) } catch (err) { toast.error(apiError(err)) } },
+    setup: async () => { try { setQr((await api.post('/auth/totp/setup')).data) } catch (err) { toast.error(apiError(err)) } },
     confirm: async () => {
       try { await api.post('/auth/totp/confirm', { code }); await fetchMe(); setQr(null); setCode(''); toast.success('Double authentification activée') } catch { toast.error('Code invalide'); setCode('') }
     },
@@ -295,12 +295,16 @@ function SecurityTab() {
           </div>
         ) : qr ? (
           <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-            <img src={qr} alt="QR code TOTP" className="h-44 w-44 border border-line bg-white p-2" />
+            <img src={qr.qrCode} alt="QR code TOTP" className="h-44 w-44 border border-line bg-white p-2" />
             <div className="flex-1 space-y-4">
               <ol className="list-inside list-decimal space-y-1 text-[13px] text-muted">
                 <li>Scannez le QR code avec votre application.</li>
                 <li>Saisissez le code à 6 chiffres affiché.</li>
               </ol>
+              {/* Sur téléphone, le QR code affiché à l'écran ne peut pas être scanné */}
+              <p className="text-[13px] text-muted">
+                Ou saisissez la clé : <code className="select-all break-all font-mono text-fg">{qr.secret}</code>
+              </p>
               <OtpInput value={code} onChange={setCode} autoFocus />
               <div className="flex gap-2">
                 <Button onClick={totp.confirm} disabled={code.length !== 6}>Activer</Button>

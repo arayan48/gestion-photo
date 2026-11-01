@@ -393,94 +393,25 @@ function ProviderConfig({ name, form, set }) {
       <Field label="Bucket"><input className="input font-mono text-sm" value={form['b2.bucket'] || ''} onChange={(e) => set('b2.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
     </div>
   )
-  if (name === 's3') return (
-    <div className="space-y-3">
-      <Field label="Endpoint" hint="Vide=AWS. Wasabi: s3.wasabisys.com. MinIO: http://...">
-        <input className="input font-mono text-sm" value={form['s3.endpoint'] || ''} onChange={(e) => set('s3.endpoint', e.target.value)} placeholder="https://s3.wasabisys.com (optionnel)" />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Région"><input className="input font-mono text-sm" value={form['s3.region'] || ''} onChange={(e) => set('s3.region', e.target.value)} placeholder="eu-west-1" /></Field>
-        <Field label="Bucket"><input className="input font-mono text-sm" value={form['s3.bucket'] || ''} onChange={(e) => set('s3.bucket', e.target.value)} placeholder="mon-bucket" /></Field>
-      </div>
-      <Field label="Access Key"><input className="input font-mono text-sm" value={form['s3.access_key'] || ''} onChange={(e) => set('s3.access_key', e.target.value)} placeholder="AKIA..." /></Field>
-      <Field label="Secret Key"><PasswordInput value={form['s3.secret_key'] || ''} onChange={(e) => set('s3.secret_key', e.target.value)} placeholder="••••••••" /></Field>
-    </div>
-  )
-  if (name === 'ftp') return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Hôte"><input className="input text-sm" value={form['ftp.host'] || ''} onChange={(e) => set('ftp.host', e.target.value)} placeholder="ftp.exemple.com" /></Field>
-        <Field label="Port"><input className="input text-sm" type="number" value={form['ftp.port'] || '21'} onChange={(e) => set('ftp.port', e.target.value)} /></Field>
-      </div>
-      <Field label="Utilisateur"><input className="input text-sm" value={form['ftp.user'] || ''} onChange={(e) => set('ftp.user', e.target.value)} placeholder="ftpuser" /></Field>
-      <Field label="Mot de passe"><PasswordInput value={form['ftp.password'] || ''} onChange={(e) => set('ftp.password', e.target.value)} placeholder="••••••••" /></Field>
-      <Field label="Chemin"><input className="input font-mono text-sm" value={form['ftp.path'] || ''} onChange={(e) => set('ftp.path', e.target.value)} placeholder="/backups/obscura" /></Field>
-    </div>
-  )
-  if (name === 'sftp') return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Hôte"><input className="input text-sm" value={form['sftp.host'] || ''} onChange={(e) => set('sftp.host', e.target.value)} placeholder="ssh.exemple.com" /></Field>
-        <Field label="Port"><input className="input text-sm" type="number" value={form['sftp.port'] || '22'} onChange={(e) => set('sftp.port', e.target.value)} /></Field>
-      </div>
-      <Field label="Utilisateur"><input className="input text-sm" value={form['sftp.user'] || ''} onChange={(e) => set('sftp.user', e.target.value)} placeholder="sshuser" /></Field>
-      <Field label="Mot de passe"><PasswordInput value={form['sftp.password'] || ''} onChange={(e) => set('sftp.password', e.target.value)} placeholder="Laisser vide si clé SSH" /></Field>
-      <Field label="Clé SSH (contenu)"><textarea className="input resize-none font-mono text-xs" rows={3} value={form['sftp.key'] || ''} onChange={(e) => set('sftp.key', e.target.value)} placeholder="-----BEGIN RSA PRIVATE KEY-----..." /></Field>
-      <Field label="Chemin"><input className="input font-mono text-sm" value={form['sftp.path'] || ''} onChange={(e) => set('sftp.path', e.target.value)} placeholder="/home/user/backups" /></Field>
-    </div>
-  )
-  if (name === 'webdav') return (
-    <div className="space-y-3">
-      <Field label="URL WebDAV"><input className="input text-sm" value={form['webdav.url'] || ''} onChange={(e) => set('webdav.url', e.target.value)} placeholder="https://nextcloud.exemple.com/remote.php/dav/files/user" /></Field>
-      <Field label="Utilisateur"><input className="input text-sm" value={form['webdav.user'] || ''} onChange={(e) => set('webdav.user', e.target.value)} placeholder="user" /></Field>
-      <Field label="Mot de passe"><PasswordInput value={form['webdav.password'] || ''} onChange={(e) => set('webdav.password', e.target.value)} placeholder="••••••••" /></Field>
-    </div>
-  )
-  if (name === 'gdrive') return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <AlertTriangle size={12} className="text-blue-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-blue-700 dark:text-blue-400">Créez une app OAuth2 sur <strong>console.cloud.google.com</strong>.</p>
-      </div>
-      <Field label="Client ID"><input className="input font-mono text-sm" value={form['gdrive.client_id'] || ''} onChange={(e) => set('gdrive.client_id', e.target.value)} placeholder="xxx.apps.googleusercontent.com" /></Field>
-      <Field label="Client Secret"><PasswordInput value={form['gdrive.client_secret'] || ''} onChange={(e) => set('gdrive.client_secret', e.target.value)} placeholder="••••••••" /></Field>
-    </div>
-  )
-  if (name === 'rclone') return (
-    <Field label="Remote rclone" hint="Nom du remote dans rclone.conf suivi du chemin">
-      <input className="input font-mono text-sm" value={form['rclone.remote'] || ''} onChange={(e) => set('rclone.remote', e.target.value)} placeholder="myremote:bucket/path" />
-    </Field>
-  )
   return null
 }
 
 function TabBackblaze({ config }) {
   const allKeys = [
     'backup.schedule', 'backup.keep_n',
-    'backup.local.enabled', 'backup.backblaze.enabled', 'backup.s3.enabled',
-    'backup.ftp.enabled', 'backup.sftp.enabled', 'backup.webdav.enabled',
-    'backup.gdrive.enabled', 'backup.rclone.enabled',
+    'backup.local.enabled', 'backup.backblaze.enabled',
     'b2.key_id', 'b2.key', 'b2.bucket',
-    's3.endpoint', 's3.region', 's3.bucket', 's3.access_key', 's3.secret_key',
-    'ftp.host', 'ftp.port', 'ftp.user', 'ftp.password', 'ftp.path',
-    'sftp.host', 'sftp.port', 'sftp.user', 'sftp.password', 'sftp.path', 'sftp.key',
-    'webdav.url', 'webdav.user', 'webdav.password',
-    'gdrive.client_id', 'gdrive.client_secret', 'rclone.remote',
   ]
   const { form, set, save, saving, saved, error } = useConfigForm(config, allKeys)
 
+  // Seules destinations prises en charge par le serveur (services/backup.service.js)
   const providers = [
     { value: 'local',     label: 'Local',          desc: 'Disque du serveur (toujours recommandé)' },
     { value: 'backblaze', label: 'Backblaze B2',   desc: 'Gratuit jusqu\'à 10 Go' },
-    { value: 's3',        label: 'S3 / Wasabi / MinIO', desc: 'Compatible Amazon S3' },
-    { value: 'ftp',       label: 'FTP',            desc: 'Serveur FTP classique' },
-    { value: 'sftp',      label: 'SFTP',           desc: 'SSH sécurisé' },
-    { value: 'webdav',    label: 'WebDAV',         desc: 'Nextcloud, ownCloud…' },
-    { value: 'gdrive',    label: 'Google Drive',   desc: 'Via OAuth2' },
-    { value: 'rclone',    label: 'rclone custom',  desc: 'Remote rclone personnalisé' },
   ]
 
-  const isOn = (v) => form[`backup.${v}.enabled`] === 'true'
+  // Le serveur sauvegarde en local tant que ce n'est pas explicitement désactivé
+  const isOn = (v) => (v === 'local' ? form['backup.local.enabled'] !== 'false' : form[`backup.${v}.enabled`] === 'true')
   const toggle = (v) => set(`backup.${v}.enabled`, isOn(v) ? 'false' : 'true')
 
   return (
@@ -510,7 +441,7 @@ function TabBackblaze({ config }) {
       <Section title="Planification">
         <Field label="Fréquence">
           <div className="flex flex-wrap gap-2">
-            {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3h)' }, { v: 'weekly', l: 'Hebdomadaire' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
+            {[{ v: 'hourly', l: 'Toutes les heures' }, { v: 'daily', l: 'Quotidien (3 h UTC)' }, { v: 'weekly', l: 'Hebdomadaire (dimanche 3 h UTC)' }, { v: 'manual', l: 'Manuel' }].map(({ v, l }) => (
               <label key={v} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${(form['backup.schedule'] || 'daily') === v ? 'border-accent-500 bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'border-line text-fg hover:border-line-strong'}`}>
                 <input type="radio" name="schedule" value={v} checked={(form['backup.schedule'] || 'daily') === v} onChange={() => set('backup.schedule', v)} className="text-accent-600" />
                 {l}

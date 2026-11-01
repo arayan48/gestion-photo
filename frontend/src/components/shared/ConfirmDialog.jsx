@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { AlertTriangle, HelpCircle, Pencil } from 'lucide-react'
 import { useConfirmStore } from '../../stores/confirm.store.js'
 import { Dialog } from '../ui/Dialog.jsx'
@@ -11,7 +11,13 @@ export default function ConfirmDialog() {
   const inputRef = useRef(null)
   const isPrompt = kind === 'prompt'
 
-  useEffect(() => { if (open) setValue(defaultValue || '') }, [open, defaultValue])
+  // Valeur posée dès le rendu d'ouverture (pas dans un effet) : sinon la sélection du texte
+  // se fait sur un champ encore vide et la saisie s'ajoute à « Nouveau dossier »
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) setValue(defaultValue || '')
+  }
 
   const submit = () => {
     if (isPrompt) {

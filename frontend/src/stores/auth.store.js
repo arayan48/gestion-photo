@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import api, { refreshAccessToken } from '../utils/api.js'
 import { getBrowserFingerprint } from '../lib/fingerprint.js'
 import { applyServerPreferences, flushPendingPreferences } from '../lib/prefsSync.js'
+import { queryClient } from '../lib/queryClient.js'
 
 export const useAuthStore = create(
   persist(
@@ -16,6 +17,9 @@ export const useAuthStore = create(
         const browserFingerprint = await getBrowserFingerprint()
         const { data } = await api.post('/auth/login', { email, password, totp: totp || undefined, browserFingerprint })
         if (data.requireTotp) return { requireTotp: true }
+        // Cache des requêtes vidé à chaque changement de compte : sinon le compte suivant
+        // voit les dossiers et fichiers du précédent (session expirée sans déconnexion)
+        queryClient.clear()
         set({ user: data.user, accessToken: data.accessToken })
         applyServerPreferences(data.user?.preferences)
         return { success: true }
@@ -24,6 +28,7 @@ export const useAuthStore = create(
       logout: async () => {
         await flushPendingPreferences().catch(() => {})
         set({ user: null, accessToken: null })
+        queryClient.clear()
         try { await api.post('/auth/logout') } catch {}
       },
 

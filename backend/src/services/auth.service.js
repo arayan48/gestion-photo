@@ -125,7 +125,9 @@ export async function verifyPasswordResetToken(token) {
   return rows[0]?.email || null
 }
 
-// TOTP
+// TOTP : ±30 s de tolérance (horloge du téléphone décalée, code saisi en fin de période)
+authenticator.options = { window: 1 }
+
 export function generateTotpSecret() {
   return authenticator.generateSecret()
 }

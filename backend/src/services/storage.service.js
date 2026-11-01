@@ -115,7 +115,8 @@ export async function processImage(inputBuffer, qualityPreset) {
 }
 
 export async function generateImageThumbnail(inputPath) {
-  const thumbName = `thumb_${nanoid(16)}.jpg`
+  // WebP et non JPEG : garde la transparence (un PNG transparent donnait une miniature noire)
+  const thumbName = `thumb_${nanoid(16)}.webp`
   const thumbPath = join(STORAGE_BASE, 'thumbnails', thumbName)
 
   // rotate() applique l'orientation EXIF : sans lui, la miniature (qui perd les
@@ -123,7 +124,7 @@ export async function generateImageThumbnail(inputPath) {
   await sharp(inputPath)
     .rotate()
     .resize(400, 300, { fit: 'inside' })
-    .jpeg({ quality: 70 })
+    .webp({ quality: 70 })
     .toFile(thumbPath)
 
   return thumbPath

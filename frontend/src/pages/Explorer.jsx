@@ -150,12 +150,17 @@ export default function Explorer() {
     enabled: view === 'mine',
   })
 
-  const { data: chain = [] } = useQuery({
+  const { data: chain = [], isSuccess: chainLoaded } = useQuery({
     queryKey: ['breadcrumb', folderId],
-    queryFn: () => api.get(`/files/folders/${folderId}/breadcrumb`).then((r) => r.data).catch(() => []),
+    queryFn: () => api.get(`/files/folders/${folderId}/breadcrumb`).then((r) => r.data),
     enabled: !!folderId && view === 'mine',
   })
   const currentFolder = folderId ? chain[chain.length - 1] : null
+
+  // Dossier introuvable (supprimé, lui ou un parent, ou lien obsolète) : retour à la racine
+  useEffect(() => {
+    if (view === 'mine' && folderId && chainLoaded && !chain.length) navigate('/explorer', { replace: true })
+  }, [view, folderId, chainLoaded, chain.length])
 
   // Destination des envois / nouveaux dossiers
   useEffect(() => {

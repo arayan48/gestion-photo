@@ -77,7 +77,7 @@ if (typeof document !== 'undefined') {
 
 // Un 401 sur ces routes est une vraie erreur (mauvais mot de passe, code TOTP…) :
 // tenter un refresh puis rediriger masquerait le message à l'utilisateur
-const NO_REFRESH_URLS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/setup', '/auth/register', '/auth/reset-password', '/auth/forgot-password', '/auth/otp']
+const NO_REFRESH_URLS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/setup', '/auth/register', '/auth/reset-password', '/auth/forgot-password', '/auth/otp', '/auth/totp']
 
 api.interceptors.response.use(
   (res) => res,
